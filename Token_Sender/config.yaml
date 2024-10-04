@@ -1,0 +1,4 @@
+server_ip: "" #Websocket server ip address
+token_save_path: "" #steam token path
+firefox_profile_path: ""
+shutdown: false #Set to true to shutdown the commputer after getting the token

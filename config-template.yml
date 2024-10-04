@@ -1,0 +1,22 @@
+discord:
+  api_key: ""  # Discord API key
+  admin_id: 00000000000000000  # Discord admin ID
+free_epicgames:
+  channel_id: 00000000000000000  # Discord channel ID for Epic Games notifications
+steam_family:
+  family_id: 000000  # Steam family ID
+  channel_id:
+    new_game: 00000000000000000  # Discord channel ID for new game notifications
+    wishlist: 00000000000000000  # Discord channel ID for wishlist
+  user_id:
+    "00000000000000000": "user1"  # Steam user ID and corresponding name
+    "00000000000000000": "user2"  # Steam user ID and corresponding name
+    "00000000000000000": "user3"  # Steam user ID and corresponding name
+    "00000000000000000": "user4"  # Steam user ID and corresponding name
+    "00000000000000000": "user5"  # Steam user ID and corresponding name
+    "00000000000000000": "user6"  # Steam user ID and corresponding name
+  itad_api_key: ""  # ITAD API key
+  websocket_server_ip: "127.0.0.1" #local network ip
+help_message:
+  channel_id: 00000000000000000  # Discord channel ID for help_message notifications
+

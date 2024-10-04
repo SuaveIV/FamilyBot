@@ -1,0 +1,4 @@
+interactions
+PyYAML
+requests
+websockets
