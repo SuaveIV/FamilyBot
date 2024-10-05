@@ -1,4 +1,4 @@
-interactions
+discord-py-interactions
 PyYAML
 requests
 websockets

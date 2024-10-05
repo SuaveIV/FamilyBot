@@ -59,14 +59,14 @@ class common_games(Extension):
             # print(user_list)
             #check if user in csv
             user_found = 0
-            with open('./multifile/register.csv',"r") as f:
+            with open(SCRIPT_PATH + '/register.csv',"r") as f:
                 for line in f.readlines():
                     for user in user_list:
                         if user in line:
                             user_found += 1
             if user_found == len(user_list):
                 game_lists = []
-                with open('./multifile/register.csv',"r") as f:
+                with open(SCRIPT_PATH + '/register.csv',"r") as f:
                     for line in f.readlines():
                         for user in user_list:
                             if user in line:

@@ -26,7 +26,7 @@ async def handle_websocket(websocket, path):
         exp_timestamp = key_info['exp']
 
         # Write the expiration timestamp to a file
-        with open(SCRIPT_PATH + "/tokenExp", "w") as exp_file:
+        with open(SCRIPT_PATH + "/token_Exp", "w") as exp_file:
             exp_file.write(str(exp_timestamp))
 # Async function to start the WebSocket server
 async def start_websocket_server():
