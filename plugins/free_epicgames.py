@@ -3,6 +3,7 @@ from datetime import datetime
 from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
 import requests
 import json
+import time
 from config import *
 
 class free_epicgames(Extension):
@@ -35,6 +36,7 @@ class free_epicgames(Extension):
                     except:
                         game_epic_id = game["urlSlug"]
                     await epic_games_channel.send(base_shop_url + game_epic_id)
+            time.sleep(60)
 
     @prefixed_command(name="force_epic")
     async def force_command(self,ctx: PrefixedContext)-> None:
