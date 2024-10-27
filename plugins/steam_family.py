@@ -145,7 +145,7 @@ class steam_family(Extension):
                     duplicate_games.append(global_wishlist[i])
             # Save the new game list to the file
         wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
-        pinned_messages = await self.bot.fetch_pinned_messages()
+        pinned_messages = await wishlist_channel.fetch_pinned_messages()
         wishlist_new_message = format_message(duplicate_games)
         
         if len(pinned_messages) == 0:                                        
