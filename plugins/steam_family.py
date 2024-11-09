@@ -91,19 +91,27 @@ class steam_family(Extension):
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={new}&cc=fr&l=fr"
                         game_info = requests.get(game_url).text
                         game_info = json.loads(game_info)
-                        game_info = game_info[str(new)]["data"]
-                        # Check if the game is a paid game and is shared with the family
-                        if game_info["type"] == "game" and game_info["is_free"] == False and str(game_info["categories"]).find("{'id': 62,") != -1:
-                            # Send a message to the general channel
-                            await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID,f"Thank you to {FAMILY_USER_DICT[game_owner_list[str(new)]]} for \n https://store.steampowered.com/app/{new}&cc=fr&l=fr")
+                        if game_info[str(new)]["success"]:
+                            try:
+                                game_info = game_info[str(new)]["data"]
+                            
+                            # Check if the game is a paid game and is shared with the family
+                                if game_info["type"] == "game" and game_info["is_free"] == False and str(game_info["categories"]).find("{'id': 62,") != -1:
+                                    # Send a message to the general channel
+                                    await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID,f"Thank you to {FAMILY_USER_DICT[game_owner_list[str(new)]]} for \n https://store.steampowered.com/app/{new}&cc=fr&l=fr")
+                            except:
+                                print(game_info[str(new)])
+                        else:
+                            print(new)
                     # Save the new game list to the file
                     set_saved_games(game_array)
                 else:
                     print('No new games detected')
-            except:
+            except Exception as e:
                 # Log the error and send a message to the user
-                print('Wrong API answer: \n' + answer.text)
-                await self.bot.send_log_dm("Issue with API answer")
+                # print('Wrong API answer: \n' + answer.text)
+                print(e)
+                await self.bot.send_log_dm("Issue with API answer, exception:" + e)
         else:
             # Send a message to the user if the token is expired
             await self.bot.send_log_dm("Token is expired")

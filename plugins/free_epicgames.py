@@ -12,10 +12,10 @@ class free_epicgames(Extension):
 
     force = False
     
-    @Task.create(IntervalTrigger(seconds=10))
+    @Task.create(IntervalTrigger(seconds=60))
     async def send_epic_free_games(self) -> None:
         now = datetime.now()
-        if self.force == True or now.weekday() == 3 and now.hour == 17 and now.minute == 15:
+        if self.force == True or now.weekday() == 3 and now.hour == 17 and now.minute == 30:
             epic_games_channel = await self.bot.fetch_channel(EPIC_CHANNEL_ID)
             epic_url = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=fr&country=FR&allowCountries=FR"
             base_shop_url = "https://store.epicgames.com/fr/p/"
@@ -36,7 +36,7 @@ class free_epicgames(Extension):
                     except:
                         game_epic_id = game["urlSlug"]
                     await epic_games_channel.send(base_shop_url + game_epic_id)
-            time.sleep(60)
+
 
     @prefixed_command(name="force_epic")
     async def force_command(self,ctx: PrefixedContext)-> None:
