@@ -128,14 +128,16 @@ class steam_family(Extension):
                 print(f"{v}'s wishlist is private")
             else:
                 wishlist_json = json.loads(wishlist.text)
-
-                for game, desc in wishlist_json.items():
-                    if (desc["is_free_game"] == False
-                        and not any(str(game) in sublist for sublist in global_wishlist)
-                        and desc["reviews_total"] != "0"):
-                            global_wishlist.append([game, [i]])
-                    elif any(str(game) in sublist for sublist in global_wishlist):
-                        global_wishlist[find_in_2d_list(game, global_wishlist)][1].append(i)
+                try:
+                    for game, desc in wishlist_json.items():
+                        if (desc["is_free_game"] == False
+                            and not any(str(game) in sublist for sublist in global_wishlist)
+                            and desc["reviews_total"] != "0"):
+                                global_wishlist.append([game, [i]])
+                        elif any(str(game) in sublist for sublist in global_wishlist):
+                            global_wishlist[find_in_2d_list(game, global_wishlist)][1].append(i)
+                except:
+                    print(f"issue with {v}'s wishlist on id {i}")
 
         duplicate_games = []
         for i in range(len(global_wishlist)):
