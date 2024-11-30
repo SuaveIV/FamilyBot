@@ -60,7 +60,7 @@ class steam_family(Extension):
             await self.bot.send_log_dm("Force Notification")
             return
     
-    @prefixed_command(name="forcewishlist")
+    @prefixed_command(name="force_wishlist")
     async def force_command(self,ctx: PrefixedContext)-> None:
         if ctx.author_id == ADMIN_DISCORD_ID and ctx.guild is None:
             await self.refresh_wishlist()
@@ -136,11 +136,11 @@ class steam_family(Extension):
             else:
                 wishlist_json = json.loads(wishlist.text)
                 
-                for game in wishlist_json.items():
+                for game in wishlist_json["response"]["items"]:
                     if not any(str(game["appid"]) in sublist for sublist in global_wishlist):
-                            global_wishlist.append([game["appid"], int(user_steam_id)])
+                            global_wishlist.append([str(game["appid"]), [user_steam_id]])
                     else:
-                        global_wishlist[find_in_2d_list(game["appid"], global_wishlist)][1].append(int(user_steam_id))
+                        global_wishlist[find_in_2d_list(str(game["appid"]), global_wishlist)][1].append(user_steam_id)
 
         duplicate_games = []
         for i in range(len(global_wishlist)):
@@ -154,7 +154,7 @@ class steam_family(Extension):
                 game_info = game_info[app_id]["data"]
                 # Check if the game is a paid game and is shared with the family
                 if (str(game_info["categories"]).find("{'id': 62,") != -1
-                    and game_info["is_free_game"] == False 
+                    and game_info["is_free"] == False 
                     and "recommendations" in game_info
                     and app_id not in get_saved_games()):
                     # Send a message to the general channel
@@ -163,6 +163,8 @@ class steam_family(Extension):
         wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
         pinned_messages = await wishlist_channel.fetch_pinned_messages()
         wishlist_new_message = format_message(duplicate_games)
+        print(wishlist_new_message.__len__)
+        print(wishlist_new_message)
         
         if len(pinned_messages) == 0:                                        
             help_message_id = await wishlist_channel.send(wishlist_new_message)

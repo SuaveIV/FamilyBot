@@ -54,9 +54,9 @@ async def send_dm(discord_id: int,message: str) -> None:
 async def edit_msg(chan_id:int, msg_id: int, message: str) -> None:
     channel = client.get_channel(chan_id)
     msg = await channel.fetch_message(msg_id)
-       
+    
     await msg.edit(content=message)
-     
+    
 async def get_pinned_message(chan_id) -> list:
     channel = client.get_channel(chan_id)
     pinned_messages = await channel.fetch_pinned_messages()
@@ -75,6 +75,6 @@ async def on_startup():
     print("Bot is ready!")
     start_webSocket_Server()
     await send_log_dm("bot ready")
-        
+    
 # Run the bot
 client.start()
