@@ -128,21 +128,20 @@ class steam_family(Extension):
     async def refresh_wishlist(self) -> None:
         global_wishlist = []
         
-        for i, v in FAMILY_USER_DICT.items():
+        for user_steam_id, user_name in FAMILY_USER_DICT.items():
             wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?steamid={i}"
             wishlist = requests.get(wishlist_url)
             if wishlist.text == "{\"success\":2}":
-                print(f"{v}'s wishlist is private")
+                print(f"{user_name}'s wishlist is private")
             else:
                 wishlist_json = json.loads(wishlist.text)
                 
                 for game in wishlist_json.items():
                     if not any(str(game["appid"]) in sublist for sublist in global_wishlist):
-                            global_wishlist.append([game["appid"], [i]])
+                            user_id_list = [user_steam_id]
+                            global_wishlist.append([game["appid"], user_id_list])
                     else:
-                        global_wishlist[find_in_2d_list(game["appid"], global_wishlist)][1].append(i)
-            
-                print(f"issue with {v}'s wishlist on id {i}")
+                        global_wishlist[find_in_2d_list(game["appid"], global_wishlist)][1].append(user_steam_id)
 
         duplicate_games = []
         for i in range(len(global_wishlist)):
