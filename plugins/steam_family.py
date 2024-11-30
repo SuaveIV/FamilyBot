@@ -138,10 +138,9 @@ class steam_family(Extension):
                 
                 for game in wishlist_json.items():
                     if not any(str(game["appid"]) in sublist for sublist in global_wishlist):
-                            user_id_list = [user_steam_id]
-                            global_wishlist.append([game["appid"], user_id_list])
+                            global_wishlist.append([game["appid"], int(user_steam_id)])
                     else:
-                        global_wishlist[find_in_2d_list(game["appid"], global_wishlist)][1].append(user_steam_id)
+                        global_wishlist[find_in_2d_list(game["appid"], global_wishlist)][1].append(int(user_steam_id))
 
         duplicate_games = []
         for i in range(len(global_wishlist)):
