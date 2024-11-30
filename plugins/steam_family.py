@@ -129,7 +129,7 @@ class steam_family(Extension):
         global_wishlist = []
         
         for i, v in FAMILY_USER_DICT.items():
-            wishlist_url = f"https://store.steampowered.com/wishlist/profiles/{i}/wishlistdata/?p=0&v=16"
+            wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?steamid={i}"
             wishlist = requests.get(wishlist_url)
             if wishlist.text == "{\"success\":2}":
                 print(f"{v}'s wishlist is private")
