@@ -163,8 +163,6 @@ class steam_family(Extension):
         wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
         pinned_messages = await wishlist_channel.fetch_pinned_messages()
         wishlist_new_message = format_message(duplicate_games)
-        print(wishlist_new_message.__len__)
-        print(wishlist_new_message)
         
         if len(pinned_messages) == 0:                                        
             help_message_id = await wishlist_channel.send(wishlist_new_message)

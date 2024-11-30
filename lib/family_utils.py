@@ -42,9 +42,10 @@ def format_message(wishlist: list,short= False) -> str:
             if not short:
                 message += f" which is {round(game_info['price_overview']['final'] / 100 / len(wishlist[i][1]), 2)}€ per person  \n"
                 message += f"   The lowest price ever was {get_lowest_price(app_id)}€  \n"
-    if message.__len__() > 2000 and not short:
+                
+    if len(message) > 2000 and not short:
         message = format_message(wishlist,True)
-    else:
+    elif len(message) > 2000 and  short:
         message = "# 📝 Family Wishlist  \n Can't create a message or it will be too long"
         
     return message
