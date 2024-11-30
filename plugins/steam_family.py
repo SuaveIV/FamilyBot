@@ -135,23 +135,14 @@ class steam_family(Extension):
                 print(f"{v}'s wishlist is private")
             else:
                 wishlist_json = json.loads(wishlist.text)
-                try:
-                    wishlist_json.items()
-                    wishlistError = False
-                except:
-                    print(wishlist.text)
-                    wishlistError = True
-                    
-                if not wishlistError:
-                    for game, desc in wishlist_json.items():
-                        if (desc["is_free_game"] == False
-                            and not any(str(game) in sublist for sublist in global_wishlist)
-                            and desc["reviews_total"] != "0"):
-                                global_wishlist.append([game, [i]])
-                        elif any(str(game) in sublist for sublist in global_wishlist):
-                            global_wishlist[find_in_2d_list(game, global_wishlist)][1].append(i)
                 
-                    print(f"issue with {v}'s wishlist on id {i}")
+                for game in wishlist_json.items():
+                    if not any(str(game["appid"]) in sublist for sublist in global_wishlist):
+                            global_wishlist.append([game["appid"], [i]])
+                    else:
+                        global_wishlist[find_in_2d_list(game["appid"], global_wishlist)][1].append(i)
+            
+                print(f"issue with {v}'s wishlist on id {i}")
 
         duplicate_games = []
         for i in range(len(global_wishlist)):
@@ -164,7 +155,10 @@ class steam_family(Extension):
                 game_info = json.loads(game_info)
                 game_info = game_info[app_id]["data"]
                 # Check if the game is a paid game and is shared with the family
-                if str(game_info["categories"]).find("{'id': 62,") != -1 and app_id not in get_saved_games():
+                if (str(game_info["categories"]).find("{'id': 62,") != -1
+                    and game_info["is_free_game"] == False 
+                    and "recommendations" in game_info
+                    and app_id not in get_saved_games()):
                     # Send a message to the general channel
                     duplicate_games.append(global_wishlist[i])
             # Save the new game list to the file
