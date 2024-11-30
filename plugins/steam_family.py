@@ -59,6 +59,13 @@ class steam_family(Extension):
             await self.send_new_game()
             await self.bot.send_log_dm("Force Notification")
             return
+    
+    @prefixed_command(name="forcewishlist")
+    async def force_command(self,ctx: PrefixedContext)-> None:
+        if ctx.author_id == ADMIN_DISCORD_ID and ctx.guild is None:
+            await self.refresh_wishlist()
+            await self.bot.send_log_dm("Force Wishlist")
+            return
             
     @Task.create(IntervalTrigger(hours=1))
     async def send_new_game(self) -> None:
@@ -129,6 +136,13 @@ class steam_family(Extension):
             else:
                 wishlist_json = json.loads(wishlist.text)
                 try:
+                    wishlist_json.items()
+                    wishlistError = False
+                except:
+                    print(wishlist.text)
+                    wishlistError = True
+                    
+                if not wishlistError:
                     for game, desc in wishlist_json.items():
                         if (desc["is_free_game"] == False
                             and not any(str(game) in sublist for sublist in global_wishlist)
@@ -136,7 +150,7 @@ class steam_family(Extension):
                                 global_wishlist.append([game, [i]])
                         elif any(str(game) in sublist for sublist in global_wishlist):
                             global_wishlist[find_in_2d_list(game, global_wishlist)][1].append(i)
-                except:
+                
                     print(f"issue with {v}'s wishlist on id {i}")
 
         duplicate_games = []
