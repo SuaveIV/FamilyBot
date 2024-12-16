@@ -47,7 +47,6 @@ class steam_family(Extension):
                                 coop_game.append(game_info["name"])
                     else:
                         print(str(game))
-                await loading_message.delete()
                 await loading_message.edit(content='\n'.join(coop_game))
             else:
                 await ctx.send('Token Expired Try Later')
