@@ -47,7 +47,6 @@ class steam_family(Extension):
                                 coop_game.append(game_info["name"])
                     else:
                         print(str(game))
-                await loading_message.delete()
                 await loading_message.edit(content='\n'.join(coop_game))
             else:
                 await ctx.send('Token Expired Try Later')
@@ -58,6 +57,13 @@ class steam_family(Extension):
         if ctx.author_id == ADMIN_DISCORD_ID and ctx.guild is None:
             await self.send_new_game()
             await self.bot.send_log_dm("Force Notification")
+            return
+    
+    @prefixed_command(name="force_wishlist")
+    async def force_command(self,ctx: PrefixedContext)-> None:
+        if ctx.author_id == ADMIN_DISCORD_ID and ctx.guild is None:
+            await self.refresh_wishlist()
+            await self.bot.send_log_dm("Force Wishlist")
             return
             
     @Task.create(IntervalTrigger(hours=1))
@@ -121,21 +127,19 @@ class steam_family(Extension):
     async def refresh_wishlist(self) -> None:
         global_wishlist = []
         
-        for i, v in FAMILY_USER_DICT.items():
-            wishlist_url = f"https://store.steampowered.com/wishlist/profiles/{i}/wishlistdata/?p=0&v=16"
+        for user_steam_id, user_name in FAMILY_USER_DICT.items():
+            wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?steamid={user_steam_id}"
             wishlist = requests.get(wishlist_url)
             if wishlist.text == "{\"success\":2}":
-                print(f"{v}'s wishlist is private")
+                print(f"{user_name}'s wishlist is private")
             else:
                 wishlist_json = json.loads(wishlist.text)
-
-                for game, desc in wishlist_json.items():
-                    if (desc["is_free_game"] == False
-                        and not any(str(game) in sublist for sublist in global_wishlist)
-                        and desc["reviews_total"] != "0"):
-                            global_wishlist.append([game, [i]])
-                    elif any(str(game) in sublist for sublist in global_wishlist):
-                        global_wishlist[find_in_2d_list(game, global_wishlist)][1].append(i)
+                
+                for game in wishlist_json["response"]["items"]:
+                    if not any(str(game["appid"]) in sublist for sublist in global_wishlist):
+                            global_wishlist.append([str(game["appid"]), [user_steam_id]])
+                    else:
+                        global_wishlist[find_in_2d_list(str(game["appid"]), global_wishlist)][1].append(user_steam_id)
 
         duplicate_games = []
         for i in range(len(global_wishlist)):
@@ -148,7 +152,10 @@ class steam_family(Extension):
                 game_info = json.loads(game_info)
                 game_info = game_info[app_id]["data"]
                 # Check if the game is a paid game and is shared with the family
-                if str(game_info["categories"]).find("{'id': 62,") != -1 and app_id not in get_saved_games():
+                if (str(game_info["categories"]).find("{'id': 62,") != -1
+                    and game_info["is_free"] == False 
+                    and "recommendations" in game_info
+                    and app_id not in get_saved_games()):
                     # Send a message to the general channel
                     duplicate_games.append(global_wishlist[i])
             # Save the new game list to the file

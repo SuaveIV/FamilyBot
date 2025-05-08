@@ -51,6 +51,8 @@ async def get_token():
 
     # Getting webpage source
     driver.get("https://store.steampowered.com/pointssummary/ajaxgetasyncconfig")
+    rawtab = driver.find_element(By.ID, "rawdata-tab")
+    rawtab.click()
     key = driver.page_source
 
     # Extracting token from source
