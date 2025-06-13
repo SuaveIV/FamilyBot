@@ -53,3 +53,5 @@ main.py
 
 # If the old Token_Sender/ requirements.txt still exists and is not desired:
 # Token_Sender/requirements.txt
+
+.git/credentials
