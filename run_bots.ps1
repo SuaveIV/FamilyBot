@@ -42,25 +42,26 @@ if (-not (Test-Path $TokenSenderScript)) {
 }
 
 # --- Construct the commands to run each bot ---
-# We need to launch new PowerShell processes, activate the venv inside them, and then run the Python script.
+# The -Command string will set the ExecutionPolicy for that spawned PowerShell process
+# ONLY for the duration of its execution.
+# This is generally safer than passing -ExecutionPolicy Bypass as an argument to powershell.exe itself
+# as it's within the command string.
 
-# Command for FamilyBot: Activate venv, then run python script with uv
+# Command for FamilyBot: Set policy for the process, then activate venv, then run python script with uv
 $FamilyBotCommand = @"
-powershell.exe -NoProfile -Command "cd '$ProjectRoot'; . '$ActivateScript'; uv run python '$FamilyBotScript'"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force; cd '$ProjectRoot'; . '$ActivateScript'; uv run python '$FamilyBotScript'"
 "@
 
-# Command for Token Sender: Activate venv, then run python script with uv
+# Command for Token Sender: Set policy for the process, then activate venv, then run python script with uv
 $TokenSenderCommand = @"
-powershell.exe -NoProfile -Command "cd '$ProjectRoot'; . '$ActivateScript'; uv run python '$TokenSenderScript'"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force; cd '$ProjectRoot'; . '$ActivateScript'; uv run python '$TokenSenderScript'"
 "@
 
 # --- Launch processes ---
 
 Write-Host "Launching FamilyBot (main bot + WebSocket server)..." -ForegroundColor Yellow
 try {
-    # Start-Process -NoNewWindow would make it run in the current window, which we don't want
-    # We want new, independent windows
-    Start-Process powershell.exe -ArgumentList "-NoProfile", "-Command", "$FamilyBotCommand"
+    Start-Process powershell.exe -ArgumentList "-NoProfile", "-Command", "$FamilyBotCommand" -ErrorAction Stop
     Write-Host "FamilyBot launched in a new window." -ForegroundColor Green
 } catch {
     Write-Host "ERROR: Failed to launch FamilyBot." -ForegroundColor Red
@@ -69,7 +70,8 @@ try {
 
 Write-Host "Launching Token Sender bot..." -ForegroundColor Yellow
 try {
-    Start-Process powershell.exe -ArgumentList "-NoProfile", "-Command", "$TokenSenderCommand"
+    Start-Process powershell.exe -ArgumentList "-NoProfile", "-Command", "$TokenSenderCommand" -ErrorAction Stop
+    Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host "Token Sender bot launched in a new window." -ForegroundColor Green
 } catch {
     Write-Host "ERROR: Failed to launch Token Sender bot." -ForegroundColor Red

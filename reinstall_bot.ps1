@@ -1,3 +1,5 @@
+# In FamilyBot/reinstall_bot.ps1
+
 <#
 .SYNOPSIS
     Performs a complete clean reinstall of the FamilyBot's virtual environment and dependencies.
@@ -23,10 +25,21 @@
 # --- Configuration ---
 $ProjectRoot = Get-Location
 $VenvPath = Join-Path $ProjectRoot ".venv"
-$PythonExecutable = Join-Path $VenvPath "Scripts" "python.exe"
 $ActivateScript = Join-Path $VenvPath "Scripts" "Activate.ps1"
 
 Write-Host "--- Starting FamilyBot Reinstall Process ---" -ForegroundColor Cyan
+
+# --- NEW CHECK: Verify uv is installed ---
+Write-Host "Verifying 'uv' is installed and accessible..." -ForegroundColor Yellow
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Host "ERROR: 'uv' command not found." -ForegroundColor Red
+    Write-Host "Please install 'uv' globally before running this script." -ForegroundColor Red
+    Write-Host "Instructions: curl -LsSf https://astral.sh/uv/install.sh | sh (or pip install uv)" -ForegroundColor Red
+    exit 1
+} else {
+    Write-Host "'uv' found." -ForegroundColor Green
+}
+# --- END NEW CHECK ---
 
 # 1. Deactivate current virtual environment if active
 Write-Host "1. Deactivating virtual environment (if active)..." -ForegroundColor Yellow
@@ -47,7 +60,7 @@ if ($env:VIRTUAL_ENV) {
 Write-Host "2. Deleting existing virtual environment folder: $VenvPath" -ForegroundColor Yellow
 if (Test-Path $VenvPath) {
     try {
-        Remove-Item -Path $VenvPath -Recurse -Force -ErrorAction Stop # PowerShell cmdlet error handling
+        Remove-Item -Path $VenvPath -Recurse -Force -ErrorAction Stop
         Write-Host "   Deleted .venv folder." -ForegroundColor Green
     } catch {
         Write-Host "   ERROR: Failed to delete .venv folder. Please close any processes using files in .venv and try again." -ForegroundColor Red
@@ -61,7 +74,7 @@ if (Test-Path $VenvPath) {
 # 3. Deleting all __pycache__ folders
 Write-Host "3. Deleting all __pycache__ folders..." -ForegroundColor Yellow
 try {
-    Get-ChildItem -Path $ProjectRoot -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force -ErrorAction Stop # PowerShell cmdlet error handling
+    Get-ChildItem -Path $ProjectRoot -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force -ErrorAction Stop
     Write-Host "   Deleted __pycache__ folders." -ForegroundColor Green
 } catch {
     Write-Host "   ERROR: Failed to delete __pycache__ folders." -ForegroundColor Red
@@ -72,9 +85,7 @@ try {
 # 4. Creating a new virtual environment using uv
 Write-Host "4. Creating a new virtual environment using uv..." -ForegroundColor Yellow
 try {
-    # Call uv venv directly without any additional PowerShell parameters
-    # The try/catch block will rely on uv's exit code for error detection
-    uv venv # <<< Clean call
+    uv venv
     Write-Host "   New virtual environment created." -ForegroundColor Green
 } catch {
     Write-Host "   ERROR: Failed to create virtual environment with uv." -ForegroundColor Red
@@ -95,7 +106,7 @@ if (Test-Path $ActivateScript) {
 # 5. Activating the new virtual environment
 Write-Host "5. Activating the new virtual environment..." -ForegroundColor Yellow
 try {
-    . $ActivateScript -ErrorAction Stop # This is a PowerShell script, so -ErrorAction Stop applies here
+    . $ActivateScript -ErrorAction Stop
     if ($env:VIRTUAL_ENV -like "*\.venv") {
         Write-Host "   Virtual environment activated." -ForegroundColor Green
     } else {
@@ -110,16 +121,15 @@ try {
 # 6. Installing all project dependencies
 Write-Host "6. Installing all project dependencies with 'uv pip install -e .'..." -ForegroundColor Yellow
 try {
-    # Call uv pip install with the -- to separate uv's arguments from pip's arguments
-    # Let PowerShell's try/catch handle errors based on uv's exit code
-    uv pip install -e . # <<< Clean call for uv pip install
+    uv pip install -e .
     Write-Host "   All dependencies installed successfully." -ForegroundColor Green
 } catch {
     Write-Host "   ERROR: Failed to install project dependencies." -ForegroundColor Red
-    Write-Host "   Error message from uv: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
     exit 1
 }
 
 Write-Host "--- Reinstall Process Complete ---" -ForegroundColor Cyan
 Write-Host "You can now run your bot: uv run python .\src\familybot\FamilyBot.py" -ForegroundColor Cyan
 Write-Host "And your token sender: uv run python .\src\familybot\Token_Sender\getToken.py" -ForegroundColor Cyan
+Write-Host "Alternatively, to run the bots, use the 'run_bots.ps1' or `run_bots.bat` script." -ForegroundColor Cyan
