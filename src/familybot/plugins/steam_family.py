@@ -1,12 +1,13 @@
-# Import core interactions components needed for the Extension and Tasks
-from interactions import Extension, Task, IntervalTrigger, listen # Client is not needed unless you use it directly (e.g., Client.create_context)
-# Import prefixed command specific items from their extension ONLY
+# In src/familybot/plugins/steam_family.py
+
+from interactions import Extension, Client, listen, Task, IntervalTrigger
 from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
 import requests
 import json
 import logging
 import os
 from datetime import datetime, timedelta
+import sqlite3 # Import sqlite3 for specific error handling
 
 # Import necessary items from your config and lib modules
 from familybot.config import (
@@ -15,6 +16,7 @@ from familybot.config import (
 )
 from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list, format_message
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
+from familybot.lib.database import get_db_connection # Import get_db_connection
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -53,6 +55,25 @@ class steam_family(Extension):
             await self._send_admin_dm(f"Critical error {api_name}: {e}")
         return None
 
+    async def _load_all_registered_users_from_db(self) -> dict:
+        """Loads all registered users (discord_id: steam_id) from the database."""
+        users = {}
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT discord_id, steam_id FROM users")
+            for row in cursor.fetchall():
+                users[row["discord_id"]] = row["steam_id"]
+            logger.debug(f"Loaded {len(users)} registered users from database.")
+        except sqlite3.Error as e:
+            logger.error(f"Error reading all registered users from DB: {e}")
+            await self._send_admin_dm(f"Error reading all registered users from DB: {e}")
+        finally:
+            if conn:
+                conn.close()
+        return users
+
     """
     [help]|!coop| it returns all the family shared multiplayer games in the shared library with a given numbers of copies| !coop NUMBER_OF_COPIES | ***This command can be used in bot DM***
     """
@@ -68,13 +89,13 @@ class steam_family(Extension):
             await ctx.send("The number after the command must be greater than 1.")
             return
 
-        # Removed STEAMWORKS_API_KEY check for this command, as it now relies on webapi_token via get_family_game_list_url()
+        # Uses webapi_token via get_family_game_list_url()
 
         loading_message = await ctx.send(f"Searching for games with {number} copies...")
 
         games_json = None
         try:
-            url_family_list = get_family_game_list_url() # This function now uses webapi_token
+            url_family_list = get_family_game_list_url()
             answer = requests.get(url_family_list, timeout=15)
             games_json = await self._handle_api_response("GetFamilySharedApps", answer)
             if not games_json:
@@ -120,7 +141,7 @@ class steam_family(Extension):
             else:
                 await loading_message.edit(content=f"No common shared multiplayer games found with {number} copies.")
 
-        except ValueError as e: # Catch ValueError if webapi_token is missing/invalid
+        except ValueError as e:
             logger.error(f"Error in coop_command: {e}")
             await loading_message.edit(content=f"Error: {e}. Cannot retrieve family games.")
             await self._send_admin_dm(f"Error in coop_command: {e}")
@@ -153,11 +174,10 @@ class steam_family(Extension):
     @Task.create(IntervalTrigger(hours=1))
     async def send_new_game(self) -> None:
         logger.info("Running send_new_game task...")
-        # Removed STEAMWORKS_API_KEY check for this task, as it now relies on webapi_token
 
         games_json = None
         try:
-            url_family_list = get_family_game_list_url() # This function now uses webapi_token
+            url_family_list = get_family_game_list_url()
             answer = requests.get(url_family_list, timeout=15)
             games_json = await self._handle_api_response("GetFamilySharedApps", answer)
             if not games_json: return
@@ -167,8 +187,15 @@ class steam_family(Extension):
                 logger.warning("No apps found in family game list response for new game check.")
                 return
 
-            game_owner_list = {}
-            game_array = []
+            # Combine users from config and database for owner names
+            known_steam_users = {steam_id: name for steam_id, name in FAMILY_USER_DICT.items()}
+            db_registered_users_discord_to_steam = await self._load_all_registered_users_from_db()
+            for discord_id, steam_id in db_registered_users_discord_to_steam.items():
+                if steam_id not in known_steam_users:
+                    known_steam_users[steam_id] = f"Discord User <@{discord_id}>"
+
+            game_owner_list = {} # Maps appid to owner_steamid
+            game_array = [] # List of appids from current API response
             for game in game_list:
                 if game.get("exclude_reason") != 3:
                     appid = str(game.get("appid"))
@@ -176,22 +203,44 @@ class steam_family(Extension):
                     if len(game.get("owner_steamids", [])) == 1:
                         game_owner_list[appid] = str(game["owner_steamids"][0])
 
-            game_file_list = get_saved_games()
-            new_games = set(game_array) - set(game_file_list)
+            # get_saved_games() now returns a list of (appid, detected_at) tuples
+            saved_games_with_timestamps = get_saved_games()
+            saved_appids = {item[0] for item in saved_games_with_timestamps}
+
+            new_appids = set(game_array) - saved_appids
+
+            # For new games, create a list of (appid, current_timestamp)
+            # For existing games, retain their original (appid, detected_at) from the DB
+            all_games_for_db_update = []
+            current_utc_iso = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
+
+            for appid in game_array:
+                if appid in new_appids:
+                    all_games_for_db_update.append((appid, current_utc_iso))
+                else:
+                    found_timestamp = next((ts for ap, ts in saved_games_with_timestamps if ap == appid), None)
+                    if found_timestamp:
+                        all_games_for_db_update.append((appid, found_timestamp))
+                    else:
+                        all_games_for_db_update.append((appid, current_utc_iso))
 
             # --- NEW LOGIC: Rate-limiting for large number of new games ---
-            new_games_list = sorted(list(new_games)) # Sort for consistent "latest"
-            if len(new_games_list) > 10: # If more than 10 new games
-                logger.warning(f"Detected {len(new_games_list)} new games. Processing only the latest 10 to avoid rate limits.")
-                await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Detected {len(new_games_list)} new games in the Family Library. Processing only the latest 10 to avoid API rate limits. More may be announced in subsequent checks.")
-                new_games_to_process = new_games_list[-10:] # Get the latest 10
+            new_games_to_notify_raw = [(appid, current_utc_iso) for appid in new_appids]
+            new_games_to_notify_raw.sort(key=lambda x: x[1], reverse=True) # Sort by timestamp, latest first
+
+            if len(new_games_to_notify_raw) > 10:
+                logger.warning(f"Detected {len(new_games_to_notify_raw)} new games. Processing only the latest 10 (by AppID) to avoid rate limits.")
+                await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Detected {len(new_games_to_notify_raw)} new games in the Family Library. Processing only the latest 10 (most recently added) to avoid API rate limits. More may be announced in subsequent checks.")
+                new_games_to_process = new_games_to_notify_raw[:10] # Get the top 10 (latest)
             else:
-                new_games_to_process = new_games_list
+                new_games_to_process = new_games_to_notify_raw
             # --- End NEW LOGIC ---
 
             if new_games_to_process:
-                logger.info(f"Processing {len(new_games_to_process)} new games.")
-                for new_appid in new_games_to_process: # Iterate over the potentially limited list
+                logger.info(f"Processing {len(new_games_to_process)} new games for notification.")
+                for new_appid_tuple in new_games_to_process:
+                    new_appid = new_appid_tuple[0]
+
                     game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=fr&l=fr"
                     logger.info(f"Fetching app details for new game AppID: {new_appid}")
                     app_info_response = requests.get(game_url, timeout=10)
@@ -207,15 +256,12 @@ class steam_family(Extension):
 
                     if game_data.get("type") == "game" and game_data.get("is_free") == False and is_family_shared_game:
                         owner_steam_id = game_owner_list.get(str(new_appid))
-                        owner_name = FAMILY_USER_DICT.get(owner_steam_id, "Unknown Owner")
+                        owner_name = known_steam_users.get(owner_steam_id, f"Unknown Owner ({owner_steam_id})")
                         await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Thank you to {owner_name} for \n https://store.steampowered.com/app/{new_appid}")
                     else:
                         logger.debug(f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'.")
 
-                # set_saved_games(game_array) # Moved to after processing
-                # Save the ENTIRE game_array here, not just the processed subset
-                # This ensures future checks don't re-detect already processed games
-                set_saved_games(game_array)
+                set_saved_games(all_games_for_db_update)
             else:
                 logger.info('No new games detected.')
 
@@ -237,7 +283,18 @@ class steam_family(Extension):
 
         global_wishlist = []
 
-        for user_steam_id, user_name in FAMILY_USER_DICT.items():
+        # Combine users from config and database for owner names
+        known_steam_users_for_wishlist = {steam_id: name for steam_id, name in FAMILY_USER_DICT.items()}
+        db_registered_users_discord_to_steam = await self._load_all_registered_users_from_db()
+        for discord_id, steam_id in db_registered_users_discord_to_steam.items():
+            if steam_id not in known_steam_users_for_wishlist:
+                known_steam_users_for_wishlist[steam_id] = f"Discord User <@{discord_id}>"
+
+        all_unique_steam_ids = set(FAMILY_USER_DICT.keys()).union(set(db_registered_users_discord_to_steam.values()))
+
+        for user_steam_id in all_unique_steam_ids:
+            user_name = known_steam_users_for_wishlist.get(user_steam_id, f"Unknown User ({user_steam_id})")
+
             wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
             logger.info(f"Fetching wishlist for {user_name} (Steam ID: {user_steam_id})")
 
@@ -328,7 +385,7 @@ class steam_family(Extension):
             logger.error(f"Error fetching pinned messages from channel {WISHLIST_CHANNEL_ID}: {e}")
             await self._send_admin_dm(f"Error fetching pinned messages: {e}")
 
-        wishlist_new_message = format_message(duplicate_games_for_display, short=False)
+        wishlist_new_message = format_message(duplicate_games_for_display, short=False, known_users=known_steam_users_for_wishlist)
 
         try:
             if not pinned_messages:
