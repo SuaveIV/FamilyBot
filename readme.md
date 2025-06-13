@@ -5,7 +5,7 @@ This project is a modified version of the original "FamilyBot" created by Chachi
 
 ## Introduction
 
-Family Bot is a Discord bot primarily designed to notify about new games that are added to the Steam Family library. Pluggins can be made to add functionalities [interactions.py](https://interactions-py.github.io/interactions.py/) library.
+Family Bot is a Discord bot primarily designed to notify about new games that are added to the Steam Family library. Plugins can be made to add functionalities using the [interactions.py](https://interactions-py.github.io/interactions.py/) library.
 
 ## Installation
 
@@ -154,7 +154,7 @@ You can also launch each bot manually in its own separate terminal window. This 
 
 * **Step 1: Activate the Virtual Environment**
     Open a new terminal window, navigate to your `FamilyBot/` project root directory, and run:
-  * **For Windows (PowerShell 7):**
+* **For Windows (PowerShell 7):**
 
 ```powershell
         . .\.venv\Scripts\Activate.ps1
@@ -166,25 +166,25 @@ You can also launch each bot manually in its own separate terminal window. This 
         source ./.venv/bin/activate
 ```
 
- You should see `(.venv)` appear at the beginning of your terminal prompt.
+You should see `(.venv)` appear at the beginning of your terminal prompt.
 
 * **Step 2: Run the Bot Executables**
-    Once the virtual environment is active in a terminal window, run the respective bot:
+  Once the virtual environment is active in a terminal window, run the respective bot:
   * **To run the main bot (FamilyBot.py + WebSocket server):**
 
-```powershell
-        uv run python .\src\familybot\FamilyBot.py
-```
+    ```powershell
+    uv run python .\src\familybot\FamilyBot.py
+    ```
 
-(Use `./src/familybot/FamilyBot.py` for macOS/Linux Bash)
+    (Use `./src/familybot/FamilyBot.py` for macOS/Linux Bash)
 
-* **To run the token sender bot (getToken.py):**
+  * **To run the token sender bot (getToken.py):**
 
-```powershell
-        uv run python .\src\familybot\Token_Sender\getToken.py
-```
+    ```powershell
+    uv run python .\src\familybot\Token_Sender\getToken.py
+    ```
 
-(Use `./src/familybot/Token_Sender/getToken.py` for macOS/Linux Bash)
+    (Use `./src/familybot/Token_Sender/getToken.py` for macOS/Linux Bash)
 
 ---
 
