@@ -1,7 +1,6 @@
-# Explicitly import what's needed from interactions
-from interactions import Extension, Task, IntervalTrigger, listen # Removed Client, if not directly used here
-# Import prefixed command specific items from their extension
-from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext # CORRECT IMPORT
+# In src/familybot/plugins/steam_family.py
+
+from interactions import Extension, Task, IntervalTrigger, prefixed_command, PrefixedContext, listen
 import requests
 import json
 import logging
@@ -20,6 +19,7 @@ from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 class steam_family(Extension):
     def __init__(self, bot):
@@ -67,16 +67,13 @@ class steam_family(Extension):
             await ctx.send("The number after the command must be greater than 1.")
             return
 
-        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
-            logger.error("STEAMWORKS_API_KEY is not configured for coop command.")
-            await ctx.send("Steam API key is not configured. Please contact an admin.")
-            return
+        # Removed STEAMWORKS_API_KEY check for this command, as it now relies on webapi_token via get_family_game_list_url()
 
         loading_message = await ctx.send(f"Searching for games with {number} copies...")
 
         games_json = None
         try:
-            url_family_list = get_family_game_list_url() # This function needs to incorporate STEAMWORKS_API_KEY
+            url_family_list = get_family_game_list_url() # This function now uses webapi_token
             answer = requests.get(url_family_list, timeout=15)
             games_json = await self._handle_api_response("GetFamilySharedApps", answer)
             if not games_json:
@@ -122,6 +119,10 @@ class steam_family(Extension):
             else:
                 await loading_message.edit(content=f"No common shared multiplayer games found with {number} copies.")
 
+        except ValueError as e: # Catch ValueError if webapi_token is missing/invalid
+            logger.error(f"Error in coop_command: {e}")
+            await loading_message.edit(content=f"Error: {e}. Cannot retrieve family games.")
+            await self._send_admin_dm(f"Error in coop_command: {e}")
         except Exception as e:
             logger.critical(f"An unexpected error occurred in coop_command: {e}", exc_info=True)
             await loading_message.edit(content="An unexpected error occurred during common games search.")
@@ -151,14 +152,11 @@ class steam_family(Extension):
     @Task.create(IntervalTrigger(hours=1))
     async def send_new_game(self) -> None:
         logger.info("Running send_new_game task...")
-        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
-            logger.error("STEAMWORKS_API_KEY is not configured for send_new_game task.")
-            await self._send_admin_dm("Steam API key is not configured for new game task.")
-            return
-
+        # Removed STEAMWORKS_API_KEY check for this task, as it now relies on webapi_token
+        
         games_json = None
         try:
-            url_family_list = get_family_game_list_url()
+            url_family_list = get_family_game_list_url() # This now uses webapi_token
             answer = requests.get(url_family_list, timeout=15)
             games_json = await self._handle_api_response("GetFamilySharedApps", answer)
             if not games_json: return
@@ -207,6 +205,9 @@ class steam_family(Extension):
             else:
                 logger.info('No new games detected.')
 
+        except ValueError as e: # Catch ValueError if webapi_token is missing/invalid
+            logger.error(f"Error in send_new_game: {e}")
+            await self._send_admin_dm(f"Error in send_new_game: {e}")
         except Exception as e:
             logger.critical(f"An unexpected error occurred in send_new_game task main block: {e}", exc_info=True)
             await self._send_admin_dm(f"Critical error send_new_game task: {e}")
@@ -214,6 +215,8 @@ class steam_family(Extension):
     @Task.create(IntervalTrigger(hours=24))
     async def refresh_wishlist(self) -> None:
         logger.info("Running refresh_wishlist task...")
+        # THIS COMMAND *STILL NEEDS* STEAMWORKS_API_KEY
+        # It hits IWishlistService/GetWishlist/v1/, which requires the key= parameter.
         if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
             logger.error("STEAMWORKS_API_KEY is not configured for wishlist task.")
             await self._send_admin_dm("Steam API key is not configured for wishlist task.")
@@ -228,7 +231,7 @@ class steam_family(Extension):
             wishlist_json = None
             try:
                 wishlist_response = requests.get(wishlist_url, timeout=15)
-                if wishlist_response.text == "{\"success\":2}": # Steam API returns {"success":2} for private/empty wishlists
+                if wishlist_response.text == "{\"success\":2}":
                     logger.info(f"{user_name}'s wishlist is private or empty.")
                     continue
 

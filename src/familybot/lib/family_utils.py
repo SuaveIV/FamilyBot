@@ -3,8 +3,9 @@
 import json
 import requests
 import logging
-from familybot.config import FAMILY_STEAM_ID, STEAMWORKS_API_KEY, FAMILY_USER_DICT
-from familybot.lib.utils import get_lowest_price # Assuming get_lowest_price is here
+from familybot.config import FAMILY_STEAM_ID, FAMILY_USER_DICT # Import FAMILY_USER_DICT here
+from familybot.lib.utils import get_lowest_price
+from familybot.lib.token_manager import get_token # <<< IMPORT get_token here
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -20,21 +21,22 @@ def find_in_2d_list(to_find: str, list_2d: list) -> int or None:
     return None
 
 def get_family_game_list_url() -> str:
-    """Generates the URL for the Steamworks GetSharedLibraryApps API."""
-    if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
-        logger.error("STEAMWORKS_API_KEY is not configured for get_family_game_list_url.")
-        raise ValueError("Steamworks API Key is missing or invalid.")
+    """Generates the URL for the Steamworks GetSharedLibraryApps API using webapi_token."""
+    token = get_token() # Retrieve the webapi_token
+    if not token:
+        logger.error("webapi_token is empty or not available. Cannot fetch family game list.")
+        # Consider raising an error to be caught by the calling function
+        raise ValueError("webapi_token is missing or invalid.")
 
-    # The API endpoint 'IFamilyGroupsService/GetSharedLibraryApps/v1/' needs 'key='
-    # and the 'family_groupid' from your config.
+    # Use 'access_token' parameter with the webapi_token for this specific endpoint
     url_family_list = (
         f"https://api.steampowered.com/IFamilyGroupsService/GetSharedLibraryApps/v1/"
-        f"?key={STEAMWORKS_API_KEY}"
+        f"?access_token={token}" # <<< Changed back to access_token={token}
         f"&family_groupid={FAMILY_STEAM_ID}"
-        f"&include_own=true" # Changed from original to include own games in shared library
+        f"&include_own=true" # Changed to true to include games you own in the shared library list
         f"&include_free=false"
         f"&language=french"
-        f"&format=json" # Explicitly request JSON
+        f"&format=json"
     )
     logger.debug(f"Generated family game list URL: {url_family_list}")
     return url_family_list
@@ -63,7 +65,7 @@ def format_message(wishlist: list, short=False) -> str:
             else:
                 logger.warning(f"App details success false for AppID {app_id} in format_message. Response: {game_info_json}")
                 message_parts.append(f"**Unknown Game ({app_id})** (Details Unavailable) \n")
-                continue # Skip to next item
+                continue
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error fetching app details for {app_id} in format_message: {e}")
@@ -120,7 +122,7 @@ def format_message(wishlist: list, short=False) -> str:
 
     if len(final_message) > 1900 and not short:
         logger.warning(f"Formatted message too long ({len(final_message)} chars). Retrying with short format.")
-        return format_message(wishlist, True) # Recurse with short=True
+        return format_message(wishlist, True)
     elif len(final_message) > 1900 and short:
         logger.warning("Shortened message still too long. Sending generic message.")
         return "# 📝 Family Wishlist \n Can't create a message or it will be too long"
