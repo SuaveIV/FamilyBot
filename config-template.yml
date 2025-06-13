@@ -1,22 +1,33 @@
-discord:
-  api_key: ""  # Discord API key
-  admin_id: 00000000000000000  # Discord admin ID
-free_epicgames:
-  channel_id: 00000000000000000  # Discord channel ID for Epic Games notifications
-steam_family:
-  family_id: 000000  # Steam family ID
-  channel_id:
-    new_game: 00000000000000000  # Discord channel ID for new game notifications
-    wishlist: 00000000000000000  # Discord channel ID for wishlist
-  user_id:
-    "00000000000000000": "user1"  # Steam user ID and corresponding name
-    "00000000000000000": "user2"  # Steam user ID and corresponding name
-    "00000000000000000": "user3"  # Steam user ID and corresponding name
-    "00000000000000000": "user4"  # Steam user ID and corresponding name
-    "00000000000000000": "user5"  # Steam user ID and corresponding name
-    "00000000000000000": "user6"  # Steam user ID and corresponding name
-  itad_api_key: ""  # ITAD API key
-  websocket_server_ip: "127.0.0.1" #local network ip
-help_message:
-  channel_id: 00000000000000000  # Discord channel ID for help_message notifications
+# FamilyBot/config-template.yml
 
+# --- Discord Bot Configuration ---
+discord:
+  api_key: ""  # REQUIRED: Your Discord Bot Token. Get this from discord.com/developers/applications -> Bot -> Reset Token.
+  admin_id: 00000000000000000  # REQUIRED: Your Discord User ID (SteamID64) to receive admin DMs for errors/notifications.
+
+# --- Free Epic Games Plugin Configuration ---
+free_epicgames:
+  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where free Epic Games announcements will be sent.
+
+# --- Steam Family Plugin Configuration ---
+steam_family:
+  family_id: 000000  # REQUIRED: Your Steam Family Group ID. Get this from steamapi.xpaw.me after getting your Steamworks API Key.
+  channel_id:
+    new_game: 00000000000000000  # REQUIRED: Discord Channel ID for new Steam Family game notifications.
+    wishlist: 00000000000000000  # REQUIRED: Discord Channel ID for shared wishlist updates.
+  user_id:
+    # REQUIRED: Map Steam User IDs (SteamID64) to friendly names for your family members.
+    # The SteamID64 must be a string (enclosed in quotes).
+    # You can add as many entries as needed.
+    "00000000000000000": "User1Name"
+    "00000000000000000": "User2Name"
+    # Example: "76561198000000000": "John"
+  steamworks_api_key: "" # REQUIRED: Your Steamworks Web API Key. Get this from steamcommunity.com/dev/apikey.
+                          # Used for GetOwnedGames, GetWishlist, GetSharedLibraryApps.
+  itad_api_key: ""  # REQUIRED: IsThereAnyDeal.com API Key. Get this from isthereanydeal.com/apps/my/.
+  websocket_server_ip: "127.0.0.1" # OPTIONAL: IP address for the bot's internal WebSocket server.
+                                   # Use "127.0.0.1" for local development. Change if deploying to a different machine.
+
+# --- Help Message Plugin Configuration ---
+help_message:
+  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where the bot's help message will be posted/updated.

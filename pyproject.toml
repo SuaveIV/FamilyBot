@@ -1,0 +1,21 @@
+# FamilyBot/pyproject.toml
+
+[project]
+name = "familybot"
+version = "0.1.0"
+description = "Family Bot is a discord bot mainly made to get the new games that are added to the Steam Family library."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "discord-py-interactions",
+    "requests",
+    "selenium==4.24.0",
+    "webdriver-manager==4.0.1",
+    "websockets==12.0",
+    "PyYAML==6.0.2",
+]
+
+[tool.setuptools]
+# This tells setuptools to look for your package(s) inside the 'src' directory.
+# Since your main package is now 'familybot' inside 'src/', this is correct.
+package-dir = {"" = "src"}
