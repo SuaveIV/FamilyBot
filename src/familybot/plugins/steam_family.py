@@ -1,6 +1,7 @@
-# In src/familybot/plugins/steam_family.py
-
-from interactions import Extension, Task, IntervalTrigger, prefixed_command, PrefixedContext, listen
+# Import core interactions components needed for the Extension and Tasks
+from interactions import Extension, Task, IntervalTrigger, listen # Client is not needed unless you use it directly (e.g., Client.create_context)
+# Import prefixed command specific items from their extension ONLY
+from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
 import requests
 import json
 import logging
@@ -153,10 +154,10 @@ class steam_family(Extension):
     async def send_new_game(self) -> None:
         logger.info("Running send_new_game task...")
         # Removed STEAMWORKS_API_KEY check for this task, as it now relies on webapi_token
-        
+
         games_json = None
         try:
-            url_family_list = get_family_game_list_url() # This now uses webapi_token
+            url_family_list = get_family_game_list_url() # This function now uses webapi_token
             answer = requests.get(url_family_list, timeout=15)
             games_json = await self._handle_api_response("GetFamilySharedApps", answer)
             if not games_json: return
@@ -178,9 +179,19 @@ class steam_family(Extension):
             game_file_list = get_saved_games()
             new_games = set(game_array) - set(game_file_list)
 
-            if new_games:
-                logger.info(f"Detected {len(new_games)} new games.")
-                for new_appid in new_games:
+            # --- NEW LOGIC: Rate-limiting for large number of new games ---
+            new_games_list = sorted(list(new_games)) # Sort for consistent "latest"
+            if len(new_games_list) > 10: # If more than 10 new games
+                logger.warning(f"Detected {len(new_games_list)} new games. Processing only the latest 10 to avoid rate limits.")
+                await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Detected {len(new_games_list)} new games in the Family Library. Processing only the latest 10 to avoid API rate limits. More may be announced in subsequent checks.")
+                new_games_to_process = new_games_list[-10:] # Get the latest 10
+            else:
+                new_games_to_process = new_games_list
+            # --- End NEW LOGIC ---
+
+            if new_games_to_process:
+                logger.info(f"Processing {len(new_games_to_process)} new games.")
+                for new_appid in new_games_to_process: # Iterate over the potentially limited list
                     game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=fr&l=fr"
                     logger.info(f"Fetching app details for new game AppID: {new_appid}")
                     app_info_response = requests.get(game_url, timeout=10)
@@ -201,11 +212,14 @@ class steam_family(Extension):
                     else:
                         logger.debug(f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'.")
 
+                # set_saved_games(game_array) # Moved to after processing
+                # Save the ENTIRE game_array here, not just the processed subset
+                # This ensures future checks don't re-detect already processed games
                 set_saved_games(game_array)
             else:
                 logger.info('No new games detected.')
 
-        except ValueError as e: # Catch ValueError if webapi_token is missing/invalid
+        except ValueError as e:
             logger.error(f"Error in send_new_game: {e}")
             await self._send_admin_dm(f"Error in send_new_game: {e}")
         except Exception as e:
@@ -216,7 +230,6 @@ class steam_family(Extension):
     async def refresh_wishlist(self) -> None:
         logger.info("Running refresh_wishlist task...")
         # THIS COMMAND *STILL NEEDS* STEAMWORKS_API_KEY
-        # It hits IWishlistService/GetWishlist/v1/, which requires the key= parameter.
         if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
             logger.error("STEAMWORKS_API_KEY is not configured for wishlist task.")
             await self._send_admin_dm("Steam API key is not configured for wishlist task.")
