@@ -38,7 +38,7 @@ class steam_family(Extension):
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
-    async def _handle_api_response(self, api_name: str, response: requests.Response) -> dict or None:
+    async def _handle_api_response(self, api_name: str, response: requests.Response) -> dict | None:
         """Helper to process API responses, handle errors, and return JSON data."""
         try:
             response.raise_for_status()
@@ -54,7 +54,7 @@ class steam_family(Extension):
             logger.critical(f"An unexpected error occurred processing {api_name} response: {e}", exc_info=True)
             await self._send_admin_dm(f"Critical error {api_name}: {e}")
         return None
-
+    
     async def _load_all_registered_users_from_db(self) -> dict:
         """Loads all registered users (discord_id: steam_id) from the database."""
         users = {}
