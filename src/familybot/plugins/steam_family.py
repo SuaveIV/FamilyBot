@@ -1,10 +1,11 @@
-# In src/familybot/plugins/steam_family.py
-
-from interactions import Extension, Task, IntervalTrigger, prefixed_command, PrefixedContext, listen
+# Explicitly import what's needed from interactions
+from interactions import Extension, Task, IntervalTrigger, listen # Removed Client, if not directly used here
+# Import prefixed command specific items from their extension
+from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext # CORRECT IMPORT
 import requests
 import json
 import logging
-import os # For os.path.join
+import os
 from datetime import datetime, timedelta
 
 # Import necessary items from your config and lib modules
@@ -19,7 +20,6 @@ from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 
 class steam_family(Extension):
     def __init__(self, bot):

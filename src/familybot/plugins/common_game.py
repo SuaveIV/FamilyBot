@@ -58,7 +58,7 @@ class common_games(Extension):
             return {}
 
     """
-    [help]|!register|make the link between a discord account and a steam one| !register YOUR_STEAM_ID | to get your steam id you cans go on this page and put the url of your steam profile page: https://steamid.pro/fr/. ***This command can be used in bot DM***
+    [help]|!register|make the link between a discord account and a steam one| !register YOUR_STEAM_ID | to get your steam id you cans go on this page and put the url of your steam profile page: https://steamdb.info/calculator/. ***This command can be used in bot DM***
     """
     @prefixed_command(name="register")
     async def register(self, ctx: PrefixedContext, steam_id: str):
