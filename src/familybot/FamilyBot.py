@@ -13,6 +13,8 @@ from interactions.ext import prefixed_commands
 # Import modules from your project's new package structure
 from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID
 from familybot.WebSocketServer import start_websocket_server_task # Import the async server task
+from familybot.lib.database import init_db # <<< Import init_db
+
 
 # Setup global logging for the entire bot (this will be the root logger)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -119,12 +121,22 @@ client.get_pinned_message = get_pinned_message
 @listen()
 async def on_startup():
     logger.info("Bot is ready! Starting background tasks...")
+    # Initialize the database
+    try:
+        init_db()
+        logger.info("Database initialized successfully.")
+    except Exception as e:
+        logger.critical(f"Failed to initialize database: {e}", exc_info=True)
+        await send_log_dm(f"CRITICAL ERROR: Database failed to initialize: {e}")
+        # Consider exiting if database is critical for bot function
+        sys.exit(1)
+
     # Start the WebSocket server as an asyncio task
     ws_server_task = asyncio.create_task(start_websocket_server_task())
     _running_tasks.append(ws_server_task)
     logger.info("WebSocket server task scheduled.")
     await send_log_dm("Bot ready")
-
+    
 @listen()
 async def on_disconnect():
     logger.info("Bot disconnected. Initiating graceful shutdown of background tasks.")

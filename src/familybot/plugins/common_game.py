@@ -1,27 +1,61 @@
 # In src/familybot/plugins/common_game.py
 
-from interactions import Extension, Client, listen, Task, IntervalTrigger # Client, Task, IntervalTrigger are likely not needed here; keep if used elsewhere
+from interactions import Extension, Client, listen, Task, IntervalTrigger
 from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
 import json
 import requests
-import os # For os.path.join
-import logging # For better logging
+import os
+import logging
+import sqlite3 # Import sqlite3 for specific error handling
 
-# Import necessary items from your config and lib modules
 from familybot.config import ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
 from familybot.lib.utils import get_common_elements_in_lists
+from familybot.lib.database import get_db_connection # <<< Import get_db_connection
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Define the path to register.csv using PROJECT_ROOT
-REGISTER_CSV_PATH = os.path.join(PROJECT_ROOT, 'register.csv')
+# Define the path to OLD register.csv for migration (if it exists)
+OLD_REGISTER_CSV_PATH = os.path.join(PROJECT_ROOT, 'register.csv')
+
+
+def _migrate_users_to_db(conn: sqlite3.Connection):
+    """Internal function to migrate existing register.csv data to the database."""
+    if os.path.exists(OLD_REGISTER_CSV_PATH):
+        logger.info(f"Attempting to migrate users from old file: {OLD_REGISTER_CSV_PATH}")
+        try:
+            with open(OLD_REGISTER_CSV_PATH, 'r') as f:
+                users_to_insert = []
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split(',')
+                    if len(parts) == 2:
+                        discord_id, steam_id = parts
+                        users_to_insert.append((discord_id, steam_id))
+
+                if users_to_insert:
+                    cursor = conn.cursor()
+                    cursor.executemany("INSERT OR IGNORE INTO users (discord_id, steam_id) VALUES (?, ?)", users_to_insert)
+                    conn.commit()
+                    logger.info(f"Migrated {len(users_to_insert)} users from {OLD_REGISTER_CSV_PATH} to database.")
+                    # Optionally, remove the old file after successful migration
+                    # os.remove(OLD_REGISTER_CSV_PATH)
+                    # logger.info(f"Removed old register.csv file: {OLD_REGISTER_CSV_PATH}")
+                else:
+                    logger.info("No users found in old register.csv for migration.")
+        except Exception as e:
+            logger.error(f"Error during register.csv migration to DB: {e}", exc_info=True)
+    else:
+        logger.info("No old register.csv found for migration. Skipping.")
+
 
 class common_games(Extension):
     def __init__(self, bot):
-        self.bot = bot # Store bot instance for sending DMs
+        self.bot = bot
         logger.info("common Games Plugin loaded")
 
     async def _send_admin_dm(self, message: str) -> None:
@@ -33,64 +67,70 @@ class common_games(Extension):
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
     async def _load_registered_users(self) -> dict:
-        """Loads registered users from register.csv into a dictionary."""
+        """Loads registered users from the database into a dictionary."""
         users = {}
+        conn = None
         try:
-            with open(REGISTER_CSV_PATH, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    parts = line.split(',')
-                    if len(parts) == 2:
-                        discord_id, steam_id = parts
-                        users[discord_id] = steam_id
-                    else:
-                        logger.warning(f"Malformed line in register.csv: '{line}'")
-            return users
-        except FileNotFoundError:
-            logger.error(f"register.csv not found at {REGISTER_CSV_PATH}")
-            await self._send_admin_dm(f"Error: register.csv not found at {REGISTER_CSV_PATH}")
-            return {}
-        except Exception as e:
-            logger.error(f"Error reading register.csv: {e}")
-            await self._send_admin_dm(f"Error reading register.csv: {e}")
-            return {}
+            conn = get_db_connection()
+            _migrate_users_to_db(conn) # Attempt migration if file exists on first read
+            cursor = conn.cursor()
+            cursor.execute("SELECT discord_id, steam_id FROM users")
+            for row in cursor.fetchall():
+                users[row["discord_id"]] = row["steam_id"]
+            logger.debug(f"Loaded {len(users)} users from database.")
+        except sqlite3.Error as e:
+            logger.error(f"Error reading registered users from DB: {e}")
+            await self._send_admin_dm(f"Error reading registered users from DB: {e}")
+        finally:
+            if conn:
+                conn.close()
+        return users
 
     """
-    [help]|!register|make the link between a discord account and a steam one| !register YOUR_STEAM_ID | to get your steam id you cans go on this page and put the url of your steam profile page: https://steamdb.info/calculator/. ***This command can be used in bot DM***
+    [help]|!register|make the link between a discord account and a steam one| !register YOUR_STEAM_ID | To get your Steam ID (SteamID64), go to https://steamdb.info/calculator/ and paste your Steam profile URL. ***This command can be used in bot DM***
     """
     @prefixed_command(name="register")
     async def register(self, ctx: PrefixedContext, steam_id: str):
         discord_id = str(ctx.author_id)
-        registered_users = await self._load_registered_users()
+        registered_users = await self._load_registered_users() # Check existing from DB
 
         if len(steam_id) != 17 or not steam_id.isdigit():
             logger.warning(f"Invalid Steam ID provided by {discord_id}: {steam_id}")
             await ctx.send("You've made a mistake on your Steam ID. Please ensure it's a 17-digit number (e.g., from steamid.pro) or contact an admin.")
             return
 
-        if discord_id in registered_users or steam_id in registered_users.values():
-            await ctx.send("You are already registered with this Discord ID or Steam ID.")
+        if discord_id in registered_users:
+            await ctx.send("You are already registered with this Discord ID.")
+            return
+        if steam_id in registered_users.values():
+            await ctx.send("This Steam ID is already registered to another Discord user.")
             return
 
+        conn = None
         try:
-            with open(REGISTER_CSV_PATH, 'a') as f:
-                f.write(f"{discord_id},{steam_id}\n")
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO users (discord_id, steam_id) VALUES (?, ?)", (discord_id, steam_id))
+            conn.commit()
             await ctx.send("You have been successfully registered!")
-            logger.info(f"Registered Discord ID {discord_id} with Steam ID {steam_id}")
+            logger.info(f"Registered Discord ID {discord_id} with Steam ID {steam_id} in DB.")
+        except sqlite3.IntegrityError: # Specific error for UNIQUE constraint violation
+            logger.warning(f"Attempted to register existing Discord ID {discord_id} or Steam ID {steam_id} (IntegrityError).")
+            await ctx.send("An error occurred: This Discord ID or Steam ID might already be registered. Try `!list_users`.")
         except Exception as e:
-            logger.error(f"Error writing to register.csv for {discord_id}: {e}")
+            logger.error(f"Error writing to database for {discord_id}: {e}", exc_info=True)
             await ctx.send("An error occurred during registration. Please try again or contact an admin.")
-            await self._send_admin_dm(f"Error registering user {discord_id} to register.csv: {e}")
-
+            await self._send_admin_dm(f"Error registering user {discord_id} to DB: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     """
     [help]|!common_games|get the multiplayer games that the given person have in common and send the result in dm| !common_games @user1 @user2 ... | the users put in the command needs to be registered before. ***This command can be used in bot DM***
     """
     @prefixed_command(name="common_games")
     async def get_common_games(self, ctx: PrefixedContext, *args):
-        target_discord_ids = [str(ctx.author_id)] # Always include author's ID
+        target_discord_ids = [str(ctx.author_id)]
         for arg in args:
             if arg.startswith("<@") and arg.endswith(">"):
                 clean_id = arg.strip("<@!>")
@@ -102,7 +142,6 @@ class common_games(Extension):
 
         registered_users = await self._load_registered_users()
         steam_ids_to_check = []
-        # Separate check for missing users to give better feedback
         missing_discord_ids = []
 
         for discord_id in target_discord_ids:
@@ -138,8 +177,6 @@ class common_games(Extension):
 
                 if not user_game_list_json:
                     logger.warning(f"No games found or 'games' key missing for Steam ID {steam_id}. Full response: {response_data}")
-                    # A user might genuinely have no games, or a private profile.
-                    # We continue here, as we can still find common games among other users.
                     continue
 
                 for game in user_game_list_json:
@@ -149,19 +186,15 @@ class common_games(Extension):
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request error fetching games for Steam ID {steam_id}: {e}")
                 await self.bot.send_dm(ctx.author_id, f"Error fetching games for Steam ID {steam_id}. Steam API issue. Check logs.")
-                # Don't return here, continue with other users if possible
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decode error for Steam ID {steam_id}. Response: {answer.text[:200]}")
                 await self.bot.send_dm(ctx.author_id, f"Error processing Steam API response for Steam ID {steam_id}. Check logs.")
-                # Don't return here
             except KeyError as e:
                 logger.error(f"Missing key in Steam API response for Steam ID {steam_id}: {e}. Response: {response_data}")
                 await self.bot.send_dm(ctx.author_id, f"Unexpected response format from Steam API for Steam ID {steam_id}. Check logs.")
-                # Don't return here
             except Exception as e:
                 logger.critical(f"An unexpected error occurred during game fetching for Steam ID {steam_id}: {e}", exc_info=True)
                 await self._send_admin_dm(f"Critical error fetching games for {steam_id}: {e}")
-                # Don't return here
 
         if not game_lists or len(game_lists) < len(steam_ids_to_check):
             if len(steam_ids_to_check) > 1:
@@ -175,7 +208,7 @@ class common_games(Extension):
             await self.bot.send_dm(ctx.author_id, "No common games found among the specified users.")
             return
 
-        message_parts = ["Common Multiplayer Games:\n"] # Use a list to build parts
+        message_parts = ["Common Multiplayer Games:\n"]
         for game_appid in common_game_appids:
             game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=fr&l=fr"
             logger.info(f"Fetching app details for AppID: {game_appid}")
@@ -209,11 +242,10 @@ class common_games(Extension):
                 logger.error(f"Unexpected error processing game {game_appid}: {e}", exc_info=True)
 
         final_message = "".join(message_parts)
-        if len(final_message) <= 25: # If only "Common Multiplayer Games:\n"
+        if len(final_message) <= 25:
             final_message += "None found."
 
-        # Send the final message, handling Discord's message limits if it becomes too long
-        if len(final_message) > 1950: # Adjust buffer as needed, Discord limit is 2000
+        if len(final_message) > 1950:
             truncated_message = final_message[:1950] + "\n... (Message too long, truncated)"
             await self.bot.send_dm(ctx.author_id, truncated_message)
             self.bot.send_log_dm(f"Common games message for {ctx.author_id} was truncated.")
@@ -233,14 +265,12 @@ class common_games(Extension):
 
         list_message = "Here are the users currently registered:\n"
         for discord_id in registered_users.keys():
-            # Attempt to fetch user name for better display, but use ID as fallback
             try:
                 user_obj = await self.bot.fetch_user(discord_id)
                 list_message += f"- {user_obj.username} (<@{discord_id}>)\n"
             except Exception:
                 list_message += f"- <@{discord_id}> (User Not Found/Error)\n"
 
-        # Handle message length
         if len(list_message) > 1950:
             list_message = list_message[:1950] + "\n... (List too long, truncated)"
         

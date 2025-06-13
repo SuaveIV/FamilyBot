@@ -55,3 +55,6 @@ main.py
 # Token_Sender/requirements.txt
 
 .git/credentials
+
+# Database file
+bot_data.db
