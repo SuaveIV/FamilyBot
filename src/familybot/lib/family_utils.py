@@ -53,7 +53,7 @@ def format_message(wishlist: list, short=False) -> str:
 
         message_parts.append(f"- {users_wanting} want ")
 
-        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=fr&l=fr"
+        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=fr"
         game_info_data = None
         try:
             game_info_response = requests.get(game_url, timeout=10)
@@ -96,10 +96,10 @@ def format_message(wishlist: list, short=False) -> str:
                 final_price = price_overview.get("final") # Price in cents
                 if final_price is not None and item[1]:
                     price_per_person = round(final_price / 100 / len(item[1]), 2)
-                    message_parts.append(f" which is {price_per_person}€ per person \n")
+                    message_parts.append(f" which is {price_per_person}$ per person \n")
                 try:
                     lowest_price = get_lowest_price(int(app_id))
-                    message_parts.append(f"   The lowest price ever was {lowest_price}€ \n")
+                    message_parts.append(f"   The lowest price ever was {lowest_price}$ \n")
                 except Exception as e:
                     logger.warning(f"Could not get lowest price for {app_id}: {e}")
                     message_parts.append(f"   Lowest price info unavailable. \n")
@@ -110,10 +110,10 @@ def format_message(wishlist: list, short=False) -> str:
                 final_price = price_overview.get("final")
                 if final_price is not None and item[1]:
                     price_per_person = round(final_price / 100 / len(item[1]), 2)
-                    message_parts.append(f" which is {price_per_person}€ per person \n")
+                    message_parts.append(f" which is {price_per_person}$ per person \n")
                 try:
                     lowest_price = get_lowest_price(int(app_id))
-                    message_parts.append(f"   The lowest price ever was {lowest_price}€ \n")
+                    message_parts.append(f"   The lowest price ever was {lowest_price}$ \n")
                 except Exception as e:
                     logger.warning(f"Could not get lowest price for {app_id}: {e}")
                     message_parts.append(f"   Lowest price info unavailable. \n")

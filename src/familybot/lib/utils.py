@@ -4,6 +4,7 @@ import requests
 import json
 import logging
 from familybot.config import ITAD_API_KEY # Import ITAD_API_KEY from config
+from familybot.lib.database import get_cached_itad_price, cache_itad_price
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -12,12 +13,20 @@ if not logger.handlers:
 
 
 def get_lowest_price(steam_app_id: int) -> str:
-    """Fetches the lowest historical price for a given Steam App ID from IsThereAnyDeal."""
+    """Fetches the lowest historical price for a given Steam App ID from IsThereAnyDeal with caching."""
     if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
         logger.error("ITAD_API_KEY is missing or a placeholder. Cannot fetch lowest price.")
         return "N/A"
 
+    # Try to get cached price first
+    cached_price = get_cached_itad_price(str(steam_app_id))
+    if cached_price:
+        logger.debug(f"Using cached ITAD price for {steam_app_id}: {cached_price['lowest_price_formatted'] or cached_price['lowest_price']}")
+        return cached_price['lowest_price_formatted'] or cached_price['lowest_price'] or "N/A"
+
+    # If not cached, fetch from ITAD API
     try:
+        logger.info(f"Fetching ITAD price from API for Steam App ID: {steam_app_id}")
         url_lookup = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={steam_app_id}"
         lookup_response = requests.get(url_lookup, timeout=5)
         lookup_response.raise_for_status()
@@ -28,7 +37,7 @@ def get_lowest_price(steam_app_id: int) -> str:
             logger.warning(f"No ITAD game_id found for Steam App ID {steam_app_id}. Response: {answer_lookup}")
             return "N/A"
 
-        url_storelow = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=FR&shops=61"
+        url_storelow = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
         data = [game_id]
         storelow_response = requests.post(url_storelow, json=data, timeout=5)
         storelow_response.raise_for_status()
@@ -36,7 +45,16 @@ def get_lowest_price(steam_app_id: int) -> str:
 
         if answer_storelow and answer_storelow[0].get("lows") and answer_storelow[0]["lows"]:
             price_amount = answer_storelow[0]["lows"][0]["price"]["amount"]
-            logger.debug(f"Lowest price for {steam_app_id}: {price_amount}€")
+            shop_name = answer_storelow[0]["lows"][0].get("shop", {}).get("name", "Unknown Store")
+            
+            # Cache the price data for 6 hours
+            cache_itad_price(str(steam_app_id), {
+                'lowest_price': str(price_amount),
+                'lowest_price_formatted': f"${price_amount}",
+                'shop_name': shop_name
+            }, cache_hours=6)
+            
+            logger.debug(f"Cached ITAD price for {steam_app_id}: ${price_amount} from {shop_name}")
             return str(price_amount)
         else:
             logger.info(f"No historical lowest price found for Steam App ID {steam_app_id}.")

@@ -22,6 +22,7 @@ from familybot.lib.database import (
     get_db_connection, get_cached_game_details, cache_game_details,
     get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library
 )
+from familybot.lib.utils import get_lowest_price
 from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
@@ -228,7 +229,7 @@ class steam_family(Extension):
                 else:
                     # If not cached, fetch from API
                     await self._rate_limit_steam_store_api() # Apply store API rate limit
-                    game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=fr&l=fr"
+                    game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
                     logger.info(f"Fetching app details from API for AppID: {game_appid} for coop check")
                     app_info_response = requests.get(game_url, timeout=10)
                     game_info_json = await self._handle_api_response("AppDetails", app_info_response)
@@ -247,7 +248,25 @@ class steam_family(Extension):
                     if is_family_shared_category:
                         is_multiplayer = any(cat.get("id") in [1, 36, 38] for cat in game_data.get("categories", []))
                         if is_multiplayer:
-                            coop_game_names.append(game_data.get("name", f"Unknown Game ({game_appid})"))
+                            game_name = game_data.get("name", f"Unknown Game ({game_appid})")
+                            
+                            # Add pricing information if available
+                            try:
+                                current_price = game_data.get('price_overview', {}).get('final_formatted', 'N/A')
+                                lowest_price = get_lowest_price(int(game_appid))
+                                
+                                price_info = []
+                                if current_price != 'N/A':
+                                    price_info.append(f"Current: {current_price}")
+                                if lowest_price != 'N/A':
+                                    price_info.append(f"Lowest: {lowest_price}€")
+                                
+                                if price_info:
+                                    game_name += f" ({' | '.join(price_info)})"
+                            except Exception as e:
+                                logger.warning(f"Could not get pricing info for coop game {game_appid}: {e}")
+                            
+                            coop_game_names.append(game_name)
                     else:
                         logger.debug(f"Game {game_appid} is not categorized as family shared (ID 62).")
 
@@ -285,6 +304,149 @@ class steam_family(Extension):
             await self.bot.send_log_dm("Force Wishlist") # type: ignore
         else:
             await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
+
+    """
+    [help]|!deals|check current deals for family wishlist games|!deals|Shows games from family wishlists that are currently on sale or at historical low prices. ***This command can be used in bot DM***
+    """
+    @prefixed_command(name="deals")
+    async def check_deals_command(self, ctx: PrefixedContext):
+        loading_message = await ctx.send("🔍 Checking for current deals on family wishlist games...")
+        
+        try:
+            current_family_members = await self._load_family_members_from_db()
+            all_unique_steam_ids_to_check = set(current_family_members.keys())
+            
+            # Collect all wishlist games from family members
+            global_wishlist = []
+            for user_steam_id in all_unique_steam_ids_to_check:
+                user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
+                
+                # Try to get cached wishlist first
+                cached_wishlist = get_cached_wishlist(user_steam_id)
+                if cached_wishlist is not None:
+                    logger.info(f"Using cached wishlist for deals check: {user_name_for_log} ({len(cached_wishlist)} items)")
+                    for app_id in cached_wishlist:
+                        if app_id not in [item[0] for item in global_wishlist]:
+                            global_wishlist.append([app_id, [user_steam_id]])
+                        else:
+                            # Add user to existing entry
+                            for item in global_wishlist:
+                                if item[0] == app_id:
+                                    item[1].append(user_steam_id)
+                                    break
+            
+            if not global_wishlist:
+                await loading_message.edit(content="No wishlist games found to check for deals.")
+                return
+            
+            deals_found = []
+            games_checked = 0
+            max_games_to_check = 15  # Limit to avoid rate limits
+            
+            for item in global_wishlist[:max_games_to_check]:
+                app_id = item[0]
+                interested_users = item[1]
+                games_checked += 1
+                
+                try:
+                    # Get cached game details first
+                    cached_game = get_cached_game_details(app_id)
+                    if cached_game:
+                        game_data = cached_game
+                    else:
+                        # If not cached, fetch from API
+                        await self._rate_limit_steam_store_api()
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=fr&l=fr"
+                        app_info_response = requests.get(game_url, timeout=10)
+                        game_info_json = await self._handle_api_response("AppDetails (Deals)", app_info_response)
+                        if not game_info_json: continue
+                        
+                        game_data = game_info_json.get(str(app_id), {}).get("data")
+                        if not game_data: continue
+                        
+                        # Cache the game details
+                        cache_game_details(app_id, game_data, permanent=True)
+                    
+                    game_name = game_data.get("name", f"Unknown Game ({app_id})")
+                    price_overview = game_data.get("price_overview")
+                    
+                    if not price_overview:
+                        continue
+                    
+                    # Check if game is on sale
+                    discount_percent = price_overview.get("discount_percent", 0)
+                    current_price = price_overview.get("final_formatted", "N/A")
+                    original_price = price_overview.get("initial_formatted", current_price)
+                    
+                    # Get historical low price
+                    lowest_price = get_lowest_price(int(app_id))
+                    
+                    # Determine if this is a good deal
+                    is_good_deal = False
+                    deal_reason = ""
+                    
+                    if discount_percent >= 50:  # 50% or more discount
+                        is_good_deal = True
+                        deal_reason = f"🔥 **{discount_percent}% OFF**"
+                    elif discount_percent >= 25 and lowest_price != "N/A":
+                        # Check if current price is close to historical low
+                        try:
+                            current_price_num = float(price_overview.get("final", 0)) / 100
+                            lowest_price_num = float(lowest_price)
+                            if current_price_num <= lowest_price_num * 1.1:  # Within 10% of historical low
+                                is_good_deal = True
+                                deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if is_good_deal:
+                        user_names = [current_family_members.get(uid, f"Unknown") for uid in interested_users]
+                        deal_info = {
+                            'name': game_name,
+                            'app_id': app_id,
+                            'current_price': current_price,
+                            'original_price': original_price,
+                            'discount_percent': discount_percent,
+                            'lowest_price': lowest_price,
+                            'deal_reason': deal_reason,
+                            'interested_users': user_names
+                        }
+                        deals_found.append(deal_info)
+                
+                except Exception as e:
+                    logger.warning(f"Error checking deals for game {app_id}: {e}")
+                    continue
+            
+            # Format and send results
+            if deals_found:
+                message_parts = [f"🎯 **Found {len(deals_found)} good deals** (checked {games_checked} games):\n"]
+                
+                for deal in deals_found[:10]:  # Limit to 10 deals to avoid message length issues
+                    message_parts.append(f"**{deal['name']}**")
+                    message_parts.append(f"{deal['deal_reason']}")
+                    message_parts.append(f"💰 {deal['current_price']}")
+                    if deal['discount_percent'] > 0:
+                        message_parts.append(f" ~~{deal['original_price']}~~")
+                    if deal['lowest_price'] != "N/A":
+                        message_parts.append(f" | Lowest ever: {deal['lowest_price']}€")
+                    message_parts.append(f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}")
+                    if len(deal['interested_users']) > 3:
+                        message_parts.append(f" +{len(deal['interested_users']) - 3} more")
+                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n")
+                
+                if len(deals_found) > 10:
+                    message_parts.append(f"\n... and {len(deals_found) - 10} more deals!")
+                
+                final_message = "".join(message_parts)
+            else:
+                final_message = f"No significant deals found among {games_checked} wishlist games checked. Try again later!"
+            
+            await loading_message.edit(content=final_message)
+            
+        except Exception as e:
+            logger.critical(f"An unexpected error occurred in check_deals_command: {e}", exc_info=True)
+            await loading_message.edit(content="An error occurred while checking for deals. Please try again later.")
+            await self._send_admin_dm(f"Critical error in deals command: {e}")
 
     @Task.create(IntervalTrigger(hours=1))
     async def send_new_game(self) -> None:
@@ -386,7 +548,29 @@ class steam_family(Extension):
                     if game_data.get("type") == "game" and game_data.get("is_free") == False and is_family_shared_game:
                         owner_steam_id = game_owner_list.get(str(new_appid))
                         owner_name = current_family_members.get(owner_steam_id, f"Unknown Owner ({owner_steam_id})")
-                        await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Thank you to {owner_name} for \n https://store.steampowered.com/app/{new_appid}")  # type: ignore
+                        
+                        # Build the base message
+                        game_name = game_data.get("name", f"Unknown Game")
+                        message = f"Thank you to {owner_name} for **{game_name}**\nhttps://store.steampowered.com/app/{new_appid}"
+                        
+                        # Add pricing information if available
+                        try:
+                            current_price = game_data.get('price_overview', {}).get('final_formatted', 'N/A')
+                            lowest_price = get_lowest_price(int(new_appid))
+                            
+                            if current_price != 'N/A' or lowest_price != 'N/A':
+                                price_info = []
+                                if current_price != 'N/A':
+                                    price_info.append(f"Current: {current_price}")
+                                if lowest_price != 'N/A':
+                                    price_info.append(f"Lowest ever: {lowest_price}€")
+                                
+                                if price_info:
+                                    message += f"\n💰 {' | '.join(price_info)}"
+                        except Exception as e:
+                            logger.warning(f"Could not get pricing info for new game {new_appid}: {e}")
+                        
+                        await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, message)  # type: ignore
                     else:
                         logger.debug(f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'.")
 

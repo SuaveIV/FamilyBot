@@ -226,7 +226,7 @@ class common_games(Extension):
 
         message_parts = ["Common Multiplayer Games:\n"]
         for game_appid in common_game_appids:
-            game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=fr&l=fr"
+            game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=fr"
             logger.info(f"Fetching app details for AppID: {game_appid}")
             try:
                 app_info_response = requests.get(game_url, timeout=5)
