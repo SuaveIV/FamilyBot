@@ -512,6 +512,133 @@ class steam_family(Extension):
             await ctx.send(f"❌ **Error purging cache:** {e}")
             await self._send_admin_dm(f"Cache purge error: {e}")
 
+    @prefixed_command(name="full_library_scan")
+    async def full_library_scan_command(self, ctx: PrefixedContext):
+        """
+        Admin command to scan all family members' complete game libraries.
+        Uses rate limiting to avoid API limits and caches all owned games.
+        """
+        if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
+            await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
+            return
+
+        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+            await ctx.send("❌ Steam API key is not configured. Cannot perform full library scan.")
+            return
+
+        start_time = datetime.now()
+        await ctx.send("🔄 **Starting full library scan...**\nThis will scan all family members' complete game libraries with rate limiting to avoid API limits.\n⏱️ This may take several minutes depending on library sizes.")
+        
+        try:
+            current_family_members = await self._load_family_members_from_db()
+            all_unique_steam_ids_to_check = set(current_family_members.keys())
+            
+            if not all_unique_steam_ids_to_check:
+                await ctx.send("❌ No family members found to scan.")
+                return
+
+            total_members = len(all_unique_steam_ids_to_check)
+            await ctx.send(f"📊 **Found {total_members} family members to scan.**")
+
+            total_games_processed = 0
+            total_games_cached = 0
+            processed_members = 0
+            error_count = 0
+
+            for user_steam_id in all_unique_steam_ids_to_check:
+                user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
+                processed_members += 1
+                
+                try:
+                    # Get user's owned games
+                    await self._rate_limit_steam_api()
+                    owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}&include_appinfo=1&include_played_free_games=1"
+                    logger.info(f"Full library scan: Fetching owned games for {user_name_for_log}")
+                    
+                    owned_games_response = requests.get(owned_games_url, timeout=15)
+                    owned_games_json = await self._handle_api_response(f"GetOwnedGames ({user_name_for_log})", owned_games_response)
+                    
+                    if not owned_games_json:
+                        error_count += 1
+                        continue
+
+                    games = owned_games_json.get("response", {}).get("games", [])
+                    if not games:
+                        logger.info(f"Full library scan: No games found for {user_name_for_log} (private profile?)")
+                        continue
+
+                    user_games_cached = 0
+                    await ctx.send(f"⏳ **Processing {user_name_for_log}**: {len(games)} games found...")
+
+                    # Process each game with rate limiting
+                    for game in games:
+                        app_id = str(game.get("appid"))
+                        if not app_id:
+                            continue
+
+                        total_games_processed += 1
+
+                        # Check if we already have cached details
+                        cached_game = get_cached_game_details(app_id)
+                        if cached_game:
+                            logger.debug(f"Full library scan: Using cached details for AppID: {app_id}")
+                            continue
+
+                        # Fetch game details from Steam Store API
+                        try:
+                            await self._rate_limit_steam_store_api()
+                            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                            logger.debug(f"Full library scan: Fetching details for AppID: {app_id}")
+                            
+                            game_info_response = requests.get(game_url, timeout=10)
+                            game_info_json = await self._handle_api_response("AppDetails (Library Scan)", game_info_response)
+                            
+                            if not game_info_json:
+                                continue
+
+                            game_data = game_info_json.get(str(app_id), {}).get("data")
+                            if not game_data:
+                                logger.debug(f"Full library scan: No data for AppID {app_id}")
+                                continue
+
+                            # Cache the game details permanently
+                            cache_game_details(app_id, game_data, permanent=True)
+                            user_games_cached += 1
+                            total_games_cached += 1
+
+                        except Exception as e:
+                            logger.warning(f"Full library scan: Error processing game {app_id} for {user_name_for_log}: {e}")
+                            continue
+
+                    await ctx.send(f"✅ **{user_name_for_log} complete**: {user_games_cached} new games cached ({processed_members}/{total_members})")
+
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"Full library scan: Error processing {user_name_for_log}: {e}", exc_info=True)
+                    await ctx.send(f"❌ **Error processing {user_name_for_log}**: {e}")
+
+            # Final summary
+            end_time = datetime.now()
+            scan_duration = end_time - start_time
+            
+            summary_msg = f"✅ **Full library scan complete!**\n"
+            summary_msg += f"⏱️ **Duration:** {scan_duration.total_seconds():.1f} seconds\n"
+            summary_msg += f"👥 **Members processed:** {processed_members}/{total_members}\n"
+            summary_msg += f"🎮 **Games processed:** {total_games_processed}\n"
+            summary_msg += f"💾 **New games cached:** {total_games_cached}\n"
+            if error_count > 0:
+                summary_msg += f"❌ **Errors:** {error_count}\n"
+            summary_msg += f"🚀 **All future commands will benefit from cached game data!**"
+            
+            await ctx.send(summary_msg)
+            logger.info(f"Full library scan completed: {processed_members} members, {total_games_cached} games cached, {scan_duration.total_seconds():.1f}s duration")
+            await self.bot.send_log_dm("Full Library Scan") # type: ignore
+
+        except Exception as e:
+            logger.critical(f"Full library scan: Critical error during scan: {e}", exc_info=True)
+            await ctx.send(f"❌ **Critical error during full library scan:** {e}")
+            await self._send_admin_dm(f"Full library scan critical error: {e}")
+
     @prefixed_command(name="full_wishlist_scan")
     async def full_wishlist_scan_command(self, ctx: PrefixedContext):
         """

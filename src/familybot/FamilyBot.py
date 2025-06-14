@@ -366,6 +366,8 @@ if __name__ == "__main__":
                        help='Purge family library cache to force fresh family game data')
     parser.add_argument('--purge-all', action='store_true',
                        help='Purge all cache data (game details, wishlist, family library, etc.)')
+    parser.add_argument('--full-library-scan', action='store_true',
+                       help='Scan all family members\' complete game libraries and cache game details')
     
     args = parser.parse_args()
     
@@ -386,6 +388,11 @@ if __name__ == "__main__":
         print("🗑️ Purging all cache data...")
         purge_all_cache()
         sys.exit(0)
+    elif args.full_library_scan:
+        print("❌ Full library scan requires the bot to be running.")
+        print("Please start the bot and use the Discord command: !full_library_scan")
+        print("This command requires Discord interaction for progress updates and admin verification.")
+        sys.exit(1)
     
     # Normal bot startup
     # interactions.py's client.start() is a blocking call that runs the event loop
