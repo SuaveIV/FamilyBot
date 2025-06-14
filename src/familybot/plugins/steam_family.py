@@ -479,6 +479,39 @@ class steam_family(Extension):
             await ctx.send(f"❌ **Critical error during force deals:** {e}")
             await self._send_admin_dm(f"Force deals critical error: {e}")
 
+    @prefixed_command(name="purge_cache")
+    async def purge_cache_command(self, ctx: PrefixedContext):
+        """
+        Admin command to purge game details cache and force fresh data with USD pricing.
+        """
+        if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
+            await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
+            return
+
+        await ctx.send("🗑️ **Purging game details cache...**\nThis will clear all cached game data to force fresh USD pricing and new boolean fields on next fetch.")
+        
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Get count before deletion
+            cursor.execute("SELECT COUNT(*) FROM game_details_cache")
+            cache_count = cursor.fetchone()[0]
+            
+            # Clear the game details cache
+            cursor.execute("DELETE FROM game_details_cache")
+            conn.commit()
+            conn.close()
+            
+            await ctx.send(f"✅ **Cache purge complete!**\nDeleted {cache_count} cached game entries.\n\n🔄 **Next steps:**\n- Run `!full_wishlist_scan` to rebuild cache with USD pricing\n- Run `!coop 2` to cache multiplayer games\n- All future API calls will use USD pricing and new boolean fields")
+            logger.info(f"Admin purged game details cache: {cache_count} entries deleted")
+            await self.bot.send_log_dm("Cache Purge") # type: ignore
+            
+        except Exception as e:
+            logger.error(f"Error purging cache: {e}", exc_info=True)
+            await ctx.send(f"❌ **Error purging cache:** {e}")
+            await self._send_admin_dm(f"Cache purge error: {e}")
+
     @prefixed_command(name="full_wishlist_scan")
     async def full_wishlist_scan_command(self, ctx: PrefixedContext):
         """
