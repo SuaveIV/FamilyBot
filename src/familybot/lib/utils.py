@@ -3,6 +3,8 @@
 import requests
 import json
 import logging
+import time
+from typing import Optional
 from familybot.config import ITAD_API_KEY # Import ITAD_API_KEY from config
 from familybot.lib.database import get_cached_itad_price, cache_itad_price
 
@@ -93,3 +95,81 @@ def get_common_elements_in_lists(list_of_lists: list) -> list:
             return []
 
     return sorted(list(common_elements_set))
+
+
+class ProgressTracker:
+    """
+    Tracks progress and generates formatted progress messages with time estimation.
+    
+    Args:
+        total_items: Total number of items to process
+        progress_interval: Percentage interval for reporting (default: 10)
+    """
+    
+    # Constants
+    DEFAULT_PROGRESS_INTERVAL = 10
+    MIN_ELAPSED_TIME_FOR_ESTIMATION = 1  # Seconds
+    SECONDS_PER_MINUTE = 60
+    
+    def __init__(self, total_items: int, progress_interval: int = DEFAULT_PROGRESS_INTERVAL) -> None:
+        if total_items < 0:
+            raise ValueError("total_items must be non-negative")
+        if not 1 <= progress_interval <= 100:
+            raise ValueError("progress_interval must be between 1 and 100")
+            
+        self.total_items = total_items
+        self.progress_interval = progress_interval
+        self.start_time = time.time()
+        self.last_reported_percent = 0
+        
+    def should_report_progress(self, processed_count: int) -> bool:
+        """Check if progress should be reported based on interval."""
+        if self.total_items == 0:
+            return False
+            
+        current_percent = min(100, int(processed_count * 100 / self.total_items))
+        return current_percent // self.progress_interval > self.last_reported_percent // self.progress_interval
+    
+    def get_progress_message(self, processed_count: int, context_info: str = "") -> str:
+        """Generate formatted progress message with time estimation."""
+        if self.total_items == 0:
+            return "No items to process"
+            
+        # Calculate once and reuse
+        progress_ratio = processed_count / self.total_items
+        current_percent = min(100, int(progress_ratio * 100))
+        elapsed_time = time.time() - self.start_time
+        
+        # Build base message
+        progress_msg = f"📊 **Progress: {current_percent}%** ({processed_count}/{self.total_items}"
+        if context_info:
+            progress_msg += f" {context_info}"
+        progress_msg += ")"
+        
+        # Add time estimation if we have meaningful progress
+        if current_percent > 0 and elapsed_time > self.MIN_ELAPSED_TIME_FOR_ESTIMATION:
+            time_msg = self._safe_time_calculation(elapsed_time, progress_ratio)
+            progress_msg += time_msg
+        
+        self.last_reported_percent = current_percent
+        return progress_msg
+    
+    def _safe_time_calculation(self, elapsed_time: float, progress_ratio: float) -> str:
+        """Safely calculate time remaining with error handling."""
+        try:
+            if progress_ratio <= 0 or elapsed_time <= 0:
+                return ""
+                
+            estimated_total = elapsed_time / progress_ratio
+            remaining = max(0, estimated_total - elapsed_time)
+            
+            if remaining >= self.SECONDS_PER_MINUTE:
+                return f" | ⏱️ ~{int(remaining / self.SECONDS_PER_MINUTE)} min remaining"
+            elif remaining >= 1:
+                return f" | ⏱️ ~{int(remaining)} sec remaining"
+            else:
+                return " | ⏱️ Almost done!"
+                
+        except (ZeroDivisionError, OverflowError, ValueError):
+            logger.warning("Error calculating time estimation")
+            return ""

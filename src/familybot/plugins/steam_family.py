@@ -22,7 +22,7 @@ from familybot.lib.database import (
     get_db_connection, get_cached_game_details, cache_game_details,
     get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library
 )
-from familybot.lib.utils import get_lowest_price
+from familybot.lib.utils import get_lowest_price, ProgressTracker
 from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
@@ -186,6 +186,8 @@ class steam_family(Extension):
     """
     @prefixed_command(name="coop")
     async def coop_command(self, ctx: PrefixedContext, number_str: str | None = None):
+        start_time = time.time()  # Add this near the start of each command function
+
         if number_str is None:
             await ctx.send("❌ **Missing required parameter!**\n\n**Usage:** `!coop NUMBER_OF_COPIES`\n**Example:** `!coop 2` (to find games with 2+ copies)\n\n**Note:** The number must be greater than 1.")
             return
@@ -332,6 +334,7 @@ class steam_family(Extension):
             await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
             return
 
+        start_time = time.time()  # Initialize start time for tracking progress
         await ctx.send("🔍 **Forcing deals check and posting to wishlist channel...**")
         
         try:
@@ -364,13 +367,21 @@ class steam_family(Extension):
             deals_found = []
             games_checked = 0
             max_games_to_check = 25  # Higher limit for force command
-            
-            await ctx.send(f"📊 **Checking {min(len(global_wishlist), max_games_to_check)} games for deals...**")
-            
-            for item in global_wishlist[:max_games_to_check]:
+            total_games = min(len(global_wishlist), max_games_to_check)
+            progress_tracker = ProgressTracker(total_games)
+
+            await ctx.send(f"📊 **Checking {total_games} games for deals...**")
+
+            for index, item in enumerate(global_wishlist[:max_games_to_check]):
                 app_id = item[0]
                 interested_users = item[1]
                 games_checked += 1
+                
+                # Report progress using ProgressTracker
+                if progress_tracker.should_report_progress(index + 1):
+                    context_info = f"games checked | {len(deals_found)} deals found"
+                    progress_msg = progress_tracker.get_progress_message(index + 1, context_info)
+                    await ctx.send(progress_msg)
                 
                 try:
                     # Get cached game details first
@@ -568,10 +579,15 @@ class steam_family(Extension):
                         continue
 
                     user_games_cached = 0
+                    user_games_skipped = 0
                     await ctx.send(f"⏳ **Processing {user_name_for_log}**: {len(games)} games found...")
 
-                    # Process each game with rate limiting
-                    for game in games:
+                    # Calculate 10% intervals for progress updates
+                    total_user_games = len(games)
+                    progress_interval = max(1, total_user_games // 10)  # Update every 10%
+                    
+                    # Process each game with rate limiting and progress updates
+                    for i, game in enumerate(games):
                         app_id = str(game.get("appid"))
                         if not app_id:
                             continue
@@ -582,6 +598,7 @@ class steam_family(Extension):
                         cached_game = get_cached_game_details(app_id)
                         if cached_game:
                             logger.debug(f"Full library scan: Using cached details for AppID: {app_id}")
+                            user_games_skipped += 1
                             continue
 
                         # Fetch game details from Steam Store API
@@ -654,6 +671,7 @@ class steam_family(Extension):
             return
 
         start_time = datetime.now()
+        start_time_float = time.time()  # Add float timestamp for progress calculations
         await ctx.send("🔄 **Starting comprehensive wishlist scan...**\nThis will process ALL common wishlist games with slower rate limiting to avoid API limits.\n⏱️ This may take several minutes depending on the number of games.")
         
         try:
@@ -745,12 +763,19 @@ class steam_family(Extension):
             skipped_count = 0
             error_count = 0
 
-            # Send progress updates every 10 games
-            progress_interval = max(1, min(10, total_games // 10))
-            
+            # Initialize progress tracker
+            total_games = len(sorted_all_duplicate_games)
+            progress_tracker = ProgressTracker(total_games)
+            progress_interval = max(1, total_games // 10)  # Send progress message every ~10% of games
+
             for item in sorted_all_duplicate_games:
                 app_id = item[0]
                 processed_count += 1
+                
+                # Report progress using ProgressTracker
+                if progress_tracker.should_report_progress(processed_count):
+                    progress_msg = progress_tracker.get_progress_message(processed_count, "games")
+                    await ctx.send(progress_msg)
                 
                 try:
                     # Check if we have cached game details first
@@ -1118,7 +1143,7 @@ class steam_family(Extension):
                                     price_info.append(f"Lowest ever: ${lowest_price}")
                                 
                                 if price_info:
-                                    message += f"\n💰 {' | '.join(price_info)}"
+                                    message += f"\n💰 {'|'.join(price_info)}"
                         except Exception as e:
                             logger.warning(f"Could not get pricing info for new game {new_appid}: {e}")
                         
