@@ -67,6 +67,9 @@ def init_db():
                 is_free BOOLEAN,
                 categories TEXT,
                 price_data TEXT,
+                is_multiplayer BOOLEAN DEFAULT 0,
+                is_coop BOOLEAN DEFAULT 0,
+                is_family_shared BOOLEAN DEFAULT 0,
                 cached_at TEXT NOT NULL,
                 expires_at TEXT,
                 permanent BOOLEAN DEFAULT 1
@@ -134,37 +137,52 @@ def init_db():
         ''')
         logger.info("Database: 'itad_price_cache' table checked/created.")
 
-        # --- NEW LOGIC for adding 'detected_at' to existing tables ---
-        # 1. Check if the column exists
-        cursor.execute("PRAGMA table_info(saved_games)")
-        columns = [col[1] for col in cursor.fetchall()] # col[1] is the column name
+        # --- MIGRATION LOGIC for adding columns to existing tables ---
         
-        if 'detected_at' not in columns:
+        # 1. Check and add 'detected_at' to saved_games
+        cursor.execute("PRAGMA table_info(saved_games)")
+        saved_games_columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'detected_at' not in saved_games_columns:
             logger.info("Database: 'detected_at' column not found in 'saved_games'. Attempting to add.")
             try:
-                # Add the column as NULLable first (this is allowed in SQLite ALTER TABLE)
                 cursor.execute("ALTER TABLE saved_games ADD COLUMN detected_at TEXT")
-                logger.info("Database: Added 'detected_at' column as NULLable to 'saved_games' table.")
+                logger.info("Database: Added 'detected_at' column to 'saved_games' table.")
                 
-                # Update existing rows with the current timestamp
                 cursor.execute("UPDATE saved_games SET detected_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW') WHERE detected_at IS NULL")
-                conn.commit() # Commit the update before setting NOT NULL
+                conn.commit()
                 logger.info("Database: Updated existing rows in 'saved_games' with timestamps.")
-
-                # If you absolutely need it NOT NULL, you'd then try to make it NOT NULL.
-                # However, SQLite doesn't easily convert NULLable to NOT NULL without a full table rebuild.
-                # For this case, it's often sufficient to ensure future inserts always provide it,
-                # and you've already populated existing ones.
-                # If a true NOT NULL constraint is needed, a more complex migration (rename, create new, copy data) is required.
-                # For simplicity here, we'll leave it as NULLable if added this way, and rely on INSERTs.
-                
             except sqlite3.OperationalError as e:
                 logger.error(f"Database: Failed to add/update 'detected_at' column: {e}")
             except Exception as e:
                 logger.error(f"Database: Unexpected error during 'detected_at' column migration: {e}", exc_info=True)
         else:
             logger.debug("Database: 'detected_at' column already exists in 'saved_games'.")
-        # --- END NEW LOGIC ---
+
+        # 2. Check and add new columns to game_details_cache
+        cursor.execute("PRAGMA table_info(game_details_cache)")
+        game_cache_columns = [col[1] for col in cursor.fetchall()]
+        
+        new_columns = [
+            ('is_multiplayer', 'BOOLEAN DEFAULT 0'),
+            ('is_coop', 'BOOLEAN DEFAULT 0'),
+            ('is_family_shared', 'BOOLEAN DEFAULT 0')
+        ]
+        
+        for column_name, column_def in new_columns:
+            if column_name not in game_cache_columns:
+                logger.info(f"Database: '{column_name}' column not found in 'game_details_cache'. Attempting to add.")
+                try:
+                    cursor.execute(f"ALTER TABLE game_details_cache ADD COLUMN {column_name} {column_def}")
+                    logger.info(f"Database: Added '{column_name}' column to 'game_details_cache' table.")
+                except sqlite3.OperationalError as e:
+                    logger.error(f"Database: Failed to add '{column_name}' column: {e}")
+                except Exception as e:
+                    logger.error(f"Database: Unexpected error during '{column_name}' column migration: {e}", exc_info=True)
+            else:
+                logger.debug(f"Database: '{column_name}' column already exists in 'game_details_cache'.")
+        
+        # --- END MIGRATION LOGIC ---
 
         conn.commit() # Final commit
     except sqlite3.Error as e:
@@ -183,7 +201,8 @@ def get_cached_game_details(appid: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT name, type, is_free, categories, price_data, permanent
+            SELECT name, type, is_free, categories, price_data, permanent, 
+                   is_multiplayer, is_coop, is_family_shared
             FROM game_details_cache 
             WHERE appid = ? AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         """, (appid,))
@@ -195,7 +214,10 @@ def get_cached_game_details(appid: str):
                 'type': row['type'],
                 'is_free': bool(row['is_free']),
                 'categories': json.loads(row['categories']) if row['categories'] else [],
-                'price_data': json.loads(row['price_data']) if row['price_data'] else None
+                'price_data': json.loads(row['price_data']) if row['price_data'] else None,
+                'is_multiplayer': bool(row['is_multiplayer']) if row['is_multiplayer'] is not None else False,
+                'is_coop': bool(row['is_coop']) if row['is_coop'] is not None else False,
+                'is_family_shared': bool(row['is_family_shared']) if row['is_family_shared'] is not None else False
             }
         return None
     except Exception as e:
@@ -204,6 +226,27 @@ def get_cached_game_details(appid: str):
     finally:
         if conn:
             conn.close()
+
+
+def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
+    """Analyze Steam categories to determine multiplayer, co-op, and family sharing status."""
+    is_multiplayer = False
+    is_coop = False
+    is_family_shared = False
+    
+    for cat in categories:
+        cat_id = cat.get("id")
+        if cat_id == 1:  # Multi-player
+            is_multiplayer = True
+        elif cat_id == 36:  # Online Multi-Player
+            is_multiplayer = True
+        elif cat_id == 38:  # Online Co-op
+            is_multiplayer = True
+            is_coop = True
+        elif cat_id == 62:  # Family Sharing
+            is_family_shared = True
+    
+    return is_multiplayer, is_coop, is_family_shared
 
 
 def cache_game_details(appid: str, game_data: dict, permanent: bool = True, cache_hours: int | None = None):
@@ -224,24 +267,31 @@ def cache_game_details(appid: str, game_data: dict, permanent: bool = True, cach
         else:
             expires_at_str = None  # NULL for permanent cache
         
+        # Analyze categories to determine multiplayer/co-op/family sharing status
+        categories = game_data.get('categories', [])
+        is_multiplayer, is_coop, is_family_shared = _analyze_game_categories(categories)
+        
         cursor.execute("""
             INSERT OR REPLACE INTO game_details_cache 
-            (appid, name, type, is_free, categories, price_data, cached_at, expires_at, permanent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (appid, name, type, is_free, categories, price_data, is_multiplayer, is_coop, is_family_shared, cached_at, expires_at, permanent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             appid,
             game_data.get('name'),
             game_data.get('type'),
             game_data.get('is_free', False),
-            json.dumps(game_data.get('categories', [])),
+            json.dumps(categories),
             json.dumps(game_data.get('price_overview')) if game_data.get('price_overview') else None,
+            1 if is_multiplayer else 0,
+            1 if is_coop else 0,
+            1 if is_family_shared else 0,
             now.isoformat() + 'Z',
             expires_at_str,
             1 if permanent else 0
         ))
         conn.commit()
         cache_type = "permanently" if permanent else f"for {cache_hours} hours"
-        logger.debug(f"Cached game details for {appid} {cache_type}")
+        logger.debug(f"Cached game details for {appid} {cache_type} (MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})")
     except Exception as e:
         logger.error(f"Error caching game details for {appid}: {e}")
     finally:

@@ -261,10 +261,11 @@ class steam_family(Extension):
                     cache_game_details(game_appid, game_data, permanent=True)
 
                 if game_data.get("type") == "game" and game_data.get("is_free") == False:
-                    is_family_shared_category = any(cat.get("id") == 62 for cat in game_data.get("categories", []))
-                    if is_family_shared_category:
-                        is_multiplayer = any(cat.get("id") in [1, 36, 38] for cat in game_data.get("categories", []))
-                        if is_multiplayer:
+                    # Use cached boolean fields for faster performance
+                    is_family_shared = game_data.get("is_family_shared", False)
+                    is_multiplayer = game_data.get("is_multiplayer", False)
+                    
+                    if is_family_shared and is_multiplayer:
                             game_name = game_data.get("name", f"Unknown Game ({game_appid})")
                             
                             # Add pricing information if available
@@ -619,12 +620,12 @@ class steam_family(Extension):
                         # Cache the game details permanently
                         cache_game_details(app_id, game_data, permanent=True)
 
-                    # Apply the same filtering criteria as regular refresh
-                    is_family_shared_category = any(cat.get("id") == 62 for cat in game_data.get("categories", []))
+                    # Use cached boolean fields for faster performance
+                    is_family_shared = game_data.get("is_family_shared", False)
 
                     if (game_data.get("type") == "game"
                         and game_data.get("is_free") == False
-                        and is_family_shared_category
+                        and is_family_shared
                         and "recommendations" in game_data
                         and app_id not in saved_game_appids
                         ):
@@ -1088,11 +1089,12 @@ class steam_family(Extension):
                     logger.warning(f"No game data found for wishlist AppID {app_id} in app details response.")
                     continue
 
-                is_family_shared_category = any(cat.get("id") == 62 for cat in game_data.get("categories", []))
+                # Use cached boolean fields for faster performance
+                is_family_shared = game_data.get("is_family_shared", False)
 
                 if (game_data.get("type") == "game"
                     and game_data.get("is_free") == False
-                    and is_family_shared_category
+                    and is_family_shared
                     and "recommendations" in game_data
                     and app_id not in saved_game_appids
                     ):
