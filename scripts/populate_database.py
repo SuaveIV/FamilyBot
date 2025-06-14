@@ -139,7 +139,7 @@ class DatabasePopulator:
                 # Explicitly cast to tqdm type for Pylance, or check if it's a tqdm instance
                 # This helps Pylance understand that `member_iterator` has `set_postfix_str`
                 if isinstance(member_iterator, tqdm):
-                    member_iterator.set_postfix_str(f"Processing {name}") # type: ignore
+                    member_iterator.set_postfix_str(f"Processing {name}") # pyright: ignore [reportAttributeAccessIssue]
                 else: # Fallback for non-tqdm iterators if any custom ones are used
                     print(f"\n📊 Processing {name}...")
             else:
