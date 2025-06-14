@@ -37,9 +37,9 @@ _family_members_migrated_this_run = False
 class steam_family(Extension):
     # --- RATE LIMITING CONSTANTS ---
     MAX_WISHLIST_GAMES_TO_PROCESS = 20 # Limit appdetails calls to 20 games per run
-    STEAM_API_RATE_LIMIT = 1.0 # Minimum seconds between Steam API calls (e.g., GetOwnedGames, GetFamilySharedApps)
-    STEAM_STORE_API_RATE_LIMIT = 1.5 # Minimum seconds between Steam Store API calls (e.g., appdetails)
-    FULL_SCAN_RATE_LIMIT = 4.0 # Minimum seconds between Steam Store API calls for full wishlist scans
+    STEAM_API_RATE_LIMIT = 3.0 # Minimum seconds between Steam API calls (e.g., GetOwnedGames, GetFamilySharedApps) - increased to prevent 429 errors
+    STEAM_STORE_API_RATE_LIMIT = 2.0 # Minimum seconds between Steam Store API calls (e.g., appdetails) - increased to prevent 429 errors
+    FULL_SCAN_RATE_LIMIT = 5.0 # Minimum seconds between Steam Store API calls for full wishlist scans - increased to prevent 429 errors
     # --- END RATE LIMITING CONSTANTS ---
 
     def __init__(self, bot: FamilyBotClient):
@@ -763,10 +763,9 @@ class steam_family(Extension):
             skipped_count = 0
             error_count = 0
 
-            # Initialize progress tracker
+            # Initialize progress tracker with more frequent updates for better user feedback
             total_games = len(sorted_all_duplicate_games)
-            progress_tracker = ProgressTracker(total_games)
-            progress_interval = max(1, total_games // 10)  # Send progress message every ~10% of games
+            progress_tracker = ProgressTracker(total_games, progress_interval=5)  # Report every 5% instead of 10%
 
             for item in sorted_all_duplicate_games:
                 app_id = item[0]
@@ -774,7 +773,10 @@ class steam_family(Extension):
                 
                 # Report progress using ProgressTracker
                 if progress_tracker.should_report_progress(processed_count):
-                    progress_msg = progress_tracker.get_progress_message(processed_count, "games")
+                    context_info = f"games | ✅ {len(duplicate_games_for_display)} qualified | ⏭️ {skipped_count} skipped"
+                    if error_count > 0:
+                        context_info += f" | ❌ {error_count} errors"
+                    progress_msg = progress_tracker.get_progress_message(processed_count, context_info)
                     await ctx.send(progress_msg)
                 
                 try:
@@ -820,17 +822,6 @@ class steam_family(Extension):
                         skipped_count += 1
                         logger.debug(f"Full scan: Skipped {app_id}: filtering criteria not met")
 
-                    # Send progress update
-                    if processed_count % progress_interval == 0 or processed_count == total_games:
-                        progress_msg = f"⏳ **Progress: {processed_count}/{total_games}** games processed"
-                        if len(duplicate_games_for_display) > 0:
-                            progress_msg += f" | ✅ {len(duplicate_games_for_display)} qualified games found"
-                        if skipped_count > 0:
-                            progress_msg += f" | ⏭️ {skipped_count} skipped"
-                        if error_count > 0:
-                            progress_msg += f" | ❌ {error_count} errors"
-                        
-                        await ctx.send(progress_msg)
 
                 except Exception as e:
                     error_count += 1
