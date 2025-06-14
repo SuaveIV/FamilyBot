@@ -13,6 +13,7 @@ dependencies = [
     "webdriver-manager==4.0.1",
     "websockets==12.0",
     "PyYAML==6.0.2",
+    "tqdm",
 ]
 
 [tool.setuptools]

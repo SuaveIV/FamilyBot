@@ -1,124 +1,225 @@
-# FamilyBot Utility Scripts
+# FamilyBot Scripts
 
-This directory contains utility scripts for managing FamilyBot cache and maintenance operations.
+This directory contains utility scripts for managing FamilyBot's cache and database operations.
+
+## Database Population Script
+
+### `populate_database.py` - Standalone Database Population
+
+A comprehensive script that populates the FamilyBot database with game data without requiring Discord interaction. Perfect for initial setup or complete database rebuilds.
+
+#### Features
+
+- **Beautiful progress bars** with tqdm (install with `pip install tqdm`)
+- **Rate limiting** to respect Steam API limits
+- **Smart caching** - skips already processed games
+- **Flexible options** - library-only, wishlist-only, or both
+- **Dry run mode** - see what would be done without making changes
+- **Multiple rate limiting modes** - fast, normal, or slow
+
+#### Usage
+
+```bash
+# Install tqdm for progress bars (recommended)
+pip install tqdm
+# OR run the installer script
+python scripts/install_tqdm.py
+
+# Basic usage - populate everything
+python scripts/populate_database.py
+
+# Advanced options
+python scripts/populate_database.py --library-only    # Only scan family libraries
+python scripts/populate_database.py --wishlist-only   # Only scan wishlists
+python scripts/populate_database.py --fast           # Faster rate limiting
+python scripts/populate_database.py --slow           # Slower rate limiting  
+python scripts/populate_database.py --dry-run        # Show what would be done
+```
+
+#### Time Estimates
+
+For a large combined library (2800+ games):
+
+- **Library scan**: 50-70 minutes (one-time investment)
+- **Wishlist scan**: 5-15 minutes
+- **Total first run**: ~60-85 minutes
+- **Subsequent runs**: Much faster due to caching
+
+#### Recommended Workflow After Cache Purging
+
+```bash
+# 1. Clear all caches
+.\scripts\purge_all_cache.ps1
+
+# 2. Populate database (with progress bars!)
+python scripts/populate_database.py
+
+# 3. Verify everything works
+python -m src.familybot.FamilyBot
+# Then test: !coop 2, !deals
+```
 
 ## Cache Purge Scripts
 
-These scripts allow you to clear various types of cached data to force fresh API calls and resolve issues with outdated data (especially EUR pricing from previous French API calls).
+These scripts help you clear various types of cached data to force fresh data retrieval or troubleshoot issues.
 
 ### Available Scripts
 
-#### Game Details Cache
+#### Game Details Cache Purging
 
-- **`purge_cache.ps1`** / **`purge_cache.sh`**
-  - Purges game details cache to force fresh USD pricing and new boolean fields
-  - Use this after the EUR→USD API change to get accurate pricing
-  - **Recommended after major updates**
+- **`purge_cache.ps1`** / **`purge_cache.sh`** - Purges game details cache
+  - Clears all cached Steam game information (names, prices, categories, etc.)
+  - Forces fresh USD pricing on next API calls
+  - Useful when you want to refresh pricing data or fix currency issues
 
-#### Wishlist Cache
+#### Wishlist Cache Purging  
 
-- **`purge_wishlist.ps1`** / **`purge_wishlist.sh`**
-  - Purges wishlist cache to force fresh wishlist data
-  - Use when wishlist data seems stale or incorrect
+- **`purge_wishlist.ps1`** / **`purge_wishlist.sh`** - Purges wishlist cache
+  - Clears all cached family member wishlist data
+  - Forces fresh wishlist data on next refresh
+  - Useful when family members have updated their wishlists
 
-#### Family Library Cache
+#### Family Library Cache Purging
 
-- **`purge_family_library.ps1`** / **`purge_family_library.sh`**
-  - Purges family library cache to force fresh family game data
-  - Use when family shared games aren't showing correctly
+- **`purge_family_library.ps1`** / **`purge_family_library.sh`** - Purges family library cache
+  - Clears cached family shared library data
+  - Forces fresh library data on next check
+  - Useful when new games have been added to family sharing
 
-#### All Cache Data
+#### Complete Cache Purging
 
-- **`purge_all_cache.ps1`** / **`purge_all_cache.sh`**
-  - **⚠️ CAUTION:** Purges ALL cache data (game details, wishlist, family library, user games, ITAD prices)
-  - Use for complete cache reset when multiple issues are present
-  - **This will force re-fetching of all data**
+- **`purge_all_cache.ps1`** / **`purge_all_cache.sh`** - Purges ALL cache data
+  - Combines all the above purge operations
+  - Completely resets all cached data
+  - **Use with caution** - will require time to rebuild all caches
 
-## Usage
+## Usage Examples
 
-### Windows (PowerShell)
+### PowerShell (Windows)
 
 ```powershell
-# Run from FamilyBot root directory
+# Purge specific cache types
 .\scripts\purge_cache.ps1
 .\scripts\purge_wishlist.ps1
 .\scripts\purge_family_library.ps1
+
+# Purge everything
 .\scripts\purge_all_cache.ps1
+
+# Populate database
+python scripts/populate_database.py
 ```
 
-### Linux/Unix (Bash)
+### Bash (Linux/macOS)
 
 ```bash
-# Run from FamilyBot root directory
+# Make scripts executable (first time only)
+chmod +x scripts/*.sh
+
+# Purge specific cache types
 ./scripts/purge_cache.sh
 ./scripts/purge_wishlist.sh
 ./scripts/purge_family_library.sh
+
+# Purge everything
 ./scripts/purge_all_cache.sh
+
+# Populate database
+python scripts/populate_database.py
 ```
 
-### Command Line (Direct)
+## Command Line Interface
+
+You can also use the main bot script with command line arguments:
 
 ```bash
-# Cache purging (standalone operations)
+# Cache purging operations
 python -m src.familybot.FamilyBot --purge-cache
-python -m src.familybot.FamilyBot --purge-wishlist
+python -m src.familybot.FamilyBot --purge-wishlist  
 python -m src.familybot.FamilyBot --purge-family-library
 python -m src.familybot.FamilyBot --purge-all
 
 # Scan operations (require Discord bot for progress updates)
-python -m src.familybot.FamilyBot --full-library-scan    # Redirects to Discord command
-python -m src.familybot.FamilyBot --full-wishlist-scan   # Redirects to Discord command
+python -m src.familybot.FamilyBot --full-library-scan
+python -m src.familybot.FamilyBot --full-wishlist-scan
 ```
 
-**Note:** Scan commands require the bot to be running for real-time progress updates and admin verification. Use the Discord commands `!full_library_scan` and `!full_wishlist_scan` instead.
+## Discord Commands
 
-## Available Discord Commands
+For interactive operations, you can use these Discord commands (admin only, DM required):
 
-### Cache Management Commands (Admin Only, DM Required)
+- **`!purge_cache`** - Purge game details cache
+- **`!full_library_scan`** - Comprehensive library scan with rate limiting
+- **`!full_wishlist_scan`** - Complete wishlist scan of all common games
+- **`!force_deals`** - Check deals and post to wishlist channel
 
-- **`!purge_cache`** - Purge game details cache via Discord
-- **`!full_wishlist_scan`** - Comprehensive scan of ALL common wishlist games
-- **`!full_library_scan`** - Scan all family members' complete game libraries
-- **`!force_deals`** - Check current deals and post to wishlist channel
+## When to Use Each Script
 
-### Regular Commands
+### Database Population Script (`populate_database.py`)
 
-- **`!coop NUMBER`** - Find family shared multiplayer games with specified copies
-- **`!deals`** - Check current deals on family wishlist games
-- **`!force`** - Force new game notification check (admin only)
-- **`!force_wishlist`** - Force wishlist refresh (admin only)
+- **When**: Initial setup, after purging all caches, or major Steam account changes
+- **Why**: Efficiently populates entire database with beautiful progress tracking
+- **Advantage**: No Discord required, faster than Discord commands, better progress feedback
 
-## When to Use
+### Game Details Cache (`purge_cache`)
 
-### After EUR→USD API Change
+- **When**: Pricing seems outdated or incorrect
+- **Why**: Forces fresh USD pricing and updated game information
+- **Rebuild**: Use `populate_database.py` or automatic during normal bot operations
 
-Run `purge_cache` to clear old French pricing data and force USD pricing with new boolean fields.
+### Wishlist Cache (`purge_wishlist`)
 
-### Stale Data Issues
+- **When**: Family members have updated their Steam wishlists
+- **Why**: Ensures bot sees the latest wishlist changes
+- **Rebuild**: Use `populate_database.py --wishlist-only` or automatic every 24 hours
 
-- **Wishlist problems**: Use `purge_wishlist`
-- **Family library issues**: Use `purge_family_library`
-- **Multiple cache issues**: Use `purge_all_cache`
+### Family Library Cache (`purge_family_library`)
 
-### After Database Schema Updates
+- **When**: New games added to family sharing aren't showing up
+- **Why**: Forces fresh check of family shared library
+- **Rebuild**: Automatic every hour
 
-Run `purge_cache` to ensure all games get the new boolean fields (is_multiplayer, is_coop, is_family_shared).
+### All Cache (`purge_all`)
+
+- **When**: Major issues or after significant Steam account changes
+- **Why**: Complete reset for troubleshooting
+- **Rebuild**: Use `populate_database.py` for fastest rebuild
 
 ## Safety Features
 
-- **Confirmation prompts** before deletion
-- **Detailed counts** of data being purged
-- **Next steps guidance** after purging
-- **Preserves user data** (family members, saved games, user registrations)
+- **Confirmation prompts** - All scripts ask for confirmation before proceeding
+- **Backup recommendations** - Scripts remind you about rebuilding caches
+- **Error handling** - Graceful failure with helpful error messages
+- **Dry run support** - Database population script supports `--dry-run` for testing
+- **Progress tracking** - Real-time progress bars with tqdm
 
-## Rebuilding Cache
+## Performance Impact
 
-After purging, the bot will automatically rebuild cache as needed. To speed up the process:
+- **Cache purging**: Instant operation
+- **Database population**:
+  - With `populate_database.py`: ~60-85 minutes for full 2800+ game library
+  - Game details: ~1-2 hours via Discord commands
+  - Wishlist: ~5-15 minutes
+  - Family library: ~30 minutes
 
-1. Start the bot: `python -m src.familybot.FamilyBot`
-2. Run `!full_wishlist_scan` for comprehensive wishlist rebuild
-3. Run `!full_library_scan` to cache all family members' complete game libraries
-4. Run `!coop 2` to cache multiplayer games
-5. Use `!force_deals` to cache deal information
+## Dependencies
 
-All future API calls will use USD pricing and include the new performance-optimized boolean fields.
+- **tqdm** - For beautiful progress bars in `populate_database.py`
+
+  ```bash
+  pip install tqdm
+  # OR
+  python scripts/install_tqdm.py
+  ```
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. **Check permissions** - Ensure scripts are executable
+2. **Verify paths** - Run from the FamilyBot root directory
+3. **Database access** - Ensure `data/` directory is writable
+4. **Python environment** - Verify all dependencies are installed
+5. **Missing tqdm** - Install with `pip install tqdm` for progress bars
+
+For more help, check the main README.md or Discord commands documentation.
