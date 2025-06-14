@@ -1,6 +1,6 @@
 # In src/familybot/plugins/common_game.py
 
-from interactions import Extension, Client, listen, Task, IntervalTrigger
+from interactions import Extension, listen, Task, IntervalTrigger
 from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
 import json
 import requests
@@ -11,6 +11,7 @@ import sqlite3 # Import sqlite3 for specific error handling
 from familybot.config import ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
 from familybot.lib.utils import get_common_elements_in_lists
 from familybot.lib.database import get_db_connection # <<< Import get_db_connection
+from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -54,15 +55,16 @@ def _migrate_users_to_db(conn: sqlite3.Connection):
 
 
 class common_games(Extension):
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: FamilyBotClient):
+        self.bot: FamilyBotClient = bot  # Explicit type annotation for the bot attribute
         logger.info("common Games Plugin loaded")
 
     async def _send_admin_dm(self, message: str) -> None:
         """Helper to send error/warning messages to the bot admin via DM."""
         try:
             admin_user = await self.bot.fetch_user(ADMIN_DISCORD_ID)
-            await admin_user.send(message)
+            if admin_user:
+                await admin_user.send(message)
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
@@ -248,7 +250,7 @@ class common_games(Extension):
         if len(final_message) > 1950:
             truncated_message = final_message[:1950] + "\n... (Message too long, truncated)"
             await self.bot.send_dm(ctx.author_id, truncated_message)
-            self.bot.send_log_dm(f"Common games message for {ctx.author_id} was truncated.")
+            await self.bot.send_log_dm(f"Common games message for {ctx.author_id} was truncated.")
         else:
             await self.bot.send_dm(ctx.author_id, final_message)
 
@@ -267,7 +269,10 @@ class common_games(Extension):
         for discord_id in registered_users.keys():
             try:
                 user_obj = await self.bot.fetch_user(discord_id)
-                list_message += f"- {user_obj.username} (<@{discord_id}>)\n"
+                if user_obj:
+                    list_message += f"- {user_obj.username} (<@{discord_id}>)\n"
+                else:
+                    list_message += f"- <@{discord_id}> (User Not Found)\n"
             except Exception:
                 list_message += f"- <@{discord_id}> (User Not Found/Error)\n"
 
@@ -276,5 +281,5 @@ class common_games(Extension):
         
         await self.bot.send_dm(ctx.author_id, list_message)
 
-def setup(bot):
+def setup(bot):  # Remove type annotation to avoid Extension constructor conflict
     common_games(bot)

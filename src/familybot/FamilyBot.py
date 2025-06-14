@@ -7,13 +7,18 @@ import signal
 import sys
 import logging # Import logging module here for main setup
 from datetime import datetime
-from interactions import Client, Intents, listen # Ensure Client and listen are imported
+from typing import cast, TYPE_CHECKING
+from interactions import Client, Intents, listen, GuildText, BaseChannel, Message # Ensure Client and listen are imported
 from interactions.ext import prefixed_commands
+
+if TYPE_CHECKING:
+    from interactions import User
 
 # Import modules from your project's new package structure
 from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID
 from familybot.WebSocketServer import start_websocket_server_task # Import the async server task
 from familybot.lib.database import init_db # <<< Import init_db
+from familybot.lib.types import FamilyBotClient # Import the protocol type
 
 
 # Setup global logging for the entire bot (this will be the root logger)
@@ -61,60 +66,84 @@ else:
 async def send_to_channel(channel_id: int, message: str) -> None:
     try:
         channel = await client.fetch_channel(channel_id)
-        if channel:
+        # Type guard to check if channel supports sending messages
+        if channel and isinstance(channel, GuildText):
             await channel.send(message)
+        elif channel and hasattr(channel, 'send'):
+            # Fallback for other sendable channel types
+            await channel.send(message)  # type: ignore
         else:
-            logger.warning(f"Could not find channel with ID: {channel_id}")
+            logger.warning(f"Could not find channel with ID: {channel_id} or channel doesn't support sending messages")
     except Exception as e:
         logger.error(f"Error sending message to channel {channel_id}: {e}")
 
 async def send_log_dm(message: str) -> None:
     try:
         user = await client.fetch_user(ADMIN_DISCORD_ID)
-        now = datetime.now().strftime("%d/%m/%y %H:%M:%S")
-        await user.send(f"{now} -> {message}")
+        if user:
+            now = datetime.now().strftime("%d/%m/%y %H:%M:%S")
+            await user.send(f"{now} -> {message}")
     except Exception as e:
         logger.error(f"Error sending log DM to admin {ADMIN_DISCORD_ID}: {e}")
 
 async def send_dm(discord_id: int, message: str) -> None:
     try:
         user = await client.fetch_user(discord_id)
-        await user.send(message)
+        if user:
+            await user.send(message)
     except Exception as e:
         logger.error(f"Error sending DM to user {discord_id}: {e}")
 
 async def edit_msg(chan_id: int, msg_id: int, message: str) -> None:
     try:
         channel = client.get_channel(chan_id)
-        if channel:
+        # Type guard to check if channel supports message operations
+        if channel and isinstance(channel, GuildText):
             msg = await channel.fetch_message(msg_id)
             if msg:
                 await msg.edit(content=message)
             else:
                 logger.warning(f"Message {msg_id} not found in channel {chan_id} for editing.")
+        elif channel and hasattr(channel, 'fetch_message'):
+            # Fallback for other channel types that support message fetching
+            msg = await channel.fetch_message(msg_id)  # type: ignore
+            if msg:
+                await msg.edit(content=message)
+            else:
+                logger.warning(f"Message {msg_id} not found in channel {chan_id} for editing.")
         else:
-            logger.warning(f"Channel {chan_id} not found for editing message {msg_id}.")
+            logger.warning(f"Channel {chan_id} not found for editing message {msg_id} or channel doesn't support message fetching.")
     except Exception as e:
         logger.error(f"Error editing message {msg_id} in channel {chan_id}: {e}")
 
 async def get_pinned_message(chan_id: int) -> list:
     try:
         channel = client.get_channel(chan_id)
-        if channel:
+        # Type guard to check if channel supports pinned messages
+        if channel and isinstance(channel, GuildText):
             pinned_messages = await channel.fetch_pinned_messages()
             return pinned_messages
+        elif channel and hasattr(channel, 'fetch_pinned_messages'):
+            # Fallback for other channel types that support pinned messages
+            pinned_messages = await channel.fetch_pinned_messages()  # type: ignore
+            return pinned_messages
         else:
-            logger.warning(f"Channel {chan_id} not found for fetching pinned messages.")
+            logger.warning(f"Channel {chan_id} not found for fetching pinned messages or channel doesn't support pinned messages.")
             return []
     except Exception as e:
         logger.error(f"Error fetching pinned messages from channel {chan_id}: {e}")
         return []
 
-client.send_to_channel = send_to_channel
-client.send_log_dm = send_log_dm
-client.send_dm = send_dm
-client.edit_msg = edit_msg
-client.get_pinned_message = get_pinned_message
+# Cast client to our protocol type and assign methods
+typed_client = cast(FamilyBotClient, client)
+typed_client.send_to_channel = send_to_channel
+typed_client.send_log_dm = send_log_dm
+typed_client.send_dm = send_dm
+typed_client.edit_msg = edit_msg
+typed_client.get_pinned_message = get_pinned_message
+
+# Update the global client reference to use the typed version
+client = typed_client
 
 
 # --- Event Listeners and Background Tasks ---

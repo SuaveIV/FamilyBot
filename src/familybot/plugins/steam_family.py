@@ -1,6 +1,6 @@
 # In src/familybot/plugins/steam_family.py
 
-from interactions import Extension, Client, listen, Task, IntervalTrigger, GuildText
+from interactions import Extension, listen, Task, IntervalTrigger, GuildText
 from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
 import requests
 import json
@@ -8,17 +8,18 @@ import logging
 import os
 from datetime import datetime, timedelta
 import sqlite3
-import asyncio # <<< Import asyncio for sleep
-import time
+import asyncio
+import time # <<< Import time for time.time()
 
 # Import necessary items from your config and lib modules
 from familybot.config import (
-    NEW_GAME_CHANNEL_ID, WISHLIST_CHANNEL_ID, FAMILY_STEAM_ID, FAMILY_USER_DICT,
+    NEW_GAME_CHANNEL_ID, WISHLIST_CHANNEL_ID, FAMILY_STEAM_ID, FAMILY_USER_DICT, # FAMILY_USER_DICT kept for migration
     ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
 )
 from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list, format_message
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 from familybot.lib.database import get_db_connection
+from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -32,19 +33,19 @@ _family_members_migrated_this_run = False
 class steam_family(Extension):
     # --- RATE LIMITING CONSTANTS ---
     MAX_WISHLIST_GAMES_TO_PROCESS = 20 # Limit appdetails calls to 20 games per run
-    STEAM_API_RATE_LIMIT = 1.0  # Minimum seconds between Steam API calls
-    STEAM_STORE_API_RATE_LIMIT = 1.5  # Minimum seconds between Steam Store API calls (more restrictive)
+    STEAM_API_RATE_LIMIT = 1.0 # Minimum seconds between Steam API calls (e.g., GetOwnedGames, GetFamilySharedApps)
+    STEAM_STORE_API_RATE_LIMIT = 1.5 # Minimum seconds between Steam Store API calls (e.g., appdetails)
     # --- END RATE LIMITING CONSTANTS ---
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: FamilyBotClient):
+        self.bot: FamilyBotClient = bot  # Explicit type annotation for the bot attribute
         # Rate limiting tracking
         self._last_steam_api_call = 0.0
         self._last_steam_store_api_call = 0.0
         logger.info("Steam Family Plugin loaded")
 
     async def _rate_limit_steam_api(self) -> None:
-        """Enforce rate limiting for Steam API calls."""
+        """Enforce rate limiting for Steam API calls (non-storefront)."""
         current_time = time.time()
         time_since_last_call = current_time - self._last_steam_api_call
         
@@ -56,7 +57,7 @@ class steam_family(Extension):
         self._last_steam_api_call = time.time()
 
     async def _rate_limit_steam_store_api(self) -> None:
-        """Enforce rate limiting for Steam Store API calls."""
+        """Enforce rate limiting for Steam Store API calls (e.g., appdetails)."""
         current_time = time.time()
         time_since_last_call = current_time - self._last_steam_store_api_call
         
@@ -71,15 +72,15 @@ class steam_family(Extension):
         """Helper to send error/warning messages to the bot admin via DM."""
         try:
             admin_user = await self.bot.fetch_user(ADMIN_DISCORD_ID)
-            if admin_user is None:
-                logger.error(f"Could not fetch admin user with ID {ADMIN_DISCORD_ID}")
-                return
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            await admin_user.send(f"Steam Family Plugin Error ({now_str}): {message}")
+            if admin_user is not None:
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                await admin_user.send(f"Steam Family Plugin Error ({now_str}): {message}")
+            else:
+                logger.error(f"Admin user with ID {ADMIN_DISCORD_ID} not found or could not be fetched. Cannot send DM.")
         except Exception as e:
-            logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
+            logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID} (after initial fetch attempt): {e}")
 
-    async def _handle_api_response(self, api_name: str, response: requests.Response) -> dict | None:
+    async def _handle_api_response(self, api_name: str, response: requests.Response) -> dict | None: # Fix type annotation syntax
         """Helper to process API responses, handle errors, and return JSON data."""
         try:
             response.raise_for_status()
@@ -182,7 +183,7 @@ class steam_family(Extension):
 
         games_json = None
         try:
-            await self._rate_limit_steam_api()
+            await self._rate_limit_steam_api() # Apply rate limit before API call
             url_family_list = get_family_game_list_url()
             answer = requests.get(url_family_list, timeout=15)
             games_json = await self._handle_api_response("GetFamilySharedApps", answer)
@@ -206,7 +207,7 @@ class steam_family(Extension):
                     game_array.append(str(game.get("appid")))
 
             for game_appid in game_array:
-                await self._rate_limit_steam_store_api()
+                await self._rate_limit_steam_store_api() # Apply store API rate limit
                 game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=fr&l=fr"
                 logger.info(f"Fetching app details for AppID: {game_appid} for coop check")
                 app_info_response = requests.get(game_url, timeout=10)
@@ -268,7 +269,7 @@ class steam_family(Extension):
 
         games_json = None
         try:
-            await self._rate_limit_steam_api()
+            await self._rate_limit_steam_api() # Apply rate limit before API call
             url_family_list = get_family_game_list_url()
             answer = requests.get(url_family_list, timeout=15)
             games_json = await self._handle_api_response("GetFamilySharedApps", answer)
@@ -315,7 +316,7 @@ class steam_family(Extension):
 
             if len(new_games_to_notify_raw) > 10:
                 logger.warning(f"Detected {len(new_games_to_notify_raw)} new games. Processing only the latest 10 (by AppID) to avoid rate limits.")
-                await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Detected {len(new_games_to_notify_raw)} new games in the Family Library. Processing only the latest 10 (most recently added) to avoid API rate limits. More may be announced in subsequent checks.") # type: ignore
+                await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Detected {len(new_games_to_notify_raw)} new games in the Family Library. Processing only the latest 10 (most recently added) to avoid API rate limits. More may be announced in subsequent checks.")  # type: ignore
                 new_games_to_process = new_games_to_notify_raw[:10]
             else:
                 new_games_to_process = new_games_to_notify_raw
@@ -325,7 +326,7 @@ class steam_family(Extension):
                 for new_appid_tuple in new_games_to_process:
                     new_appid = new_appid_tuple[0]
 
-                    await self._rate_limit_steam_store_api()
+                    await self._rate_limit_steam_store_api() # Apply store API rate limit
                     game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=fr&l=fr"
                     logger.info(f"Fetching app details for new game AppID: {new_appid}")
                     app_info_response = requests.get(game_url, timeout=10)
@@ -342,7 +343,7 @@ class steam_family(Extension):
                     if game_data.get("type") == "game" and game_data.get("is_free") == False and is_family_shared_game:
                         owner_steam_id = game_owner_list.get(str(new_appid))
                         owner_name = current_family_members.get(owner_steam_id, f"Unknown Owner ({owner_steam_id})")
-                        await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Thank you to {owner_name} for \n https://store.steampowered.com/app/{new_appid}") # type: ignore
+                        await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Thank you to {owner_name} for \n https://store.steampowered.com/app/{new_appid}")  # type: ignore
                     else:
                         logger.debug(f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'.")
 
@@ -379,7 +380,7 @@ class steam_family(Extension):
 
             wishlist_json = None
             try:
-                await self._rate_limit_steam_api()
+                await self._rate_limit_steam_api() # Apply rate limit here
                 wishlist_response = requests.get(wishlist_url, timeout=15)
                 if wishlist_response.text == "{\"success\":2}":
                     logger.info(f"{user_name_for_log}'s wishlist is private or empty.")
@@ -416,12 +417,26 @@ class steam_family(Extension):
             owner_steam_ids = item[1]
 
             if len(owner_steam_ids) > 1:
+                # --- NEW LOGIC: Sort and slice duplicate games for processing ---
+                # This ensures we don't hit rate limits on store API calls for many common games.
+                # Assuming AppID sorting is sufficient for "most relevant/latest" in this context.
+                # Or consider sorting by number of owners in `item[1]` if that's more relevant.
+                sorted_duplicate_games = sorted(duplicate_games_for_display, key=lambda x: x[0], reverse=True) # Sort by AppID
+                
+                if len(sorted_duplicate_games) > self.MAX_WISHLIST_GAMES_TO_PROCESS:
+                    logger.warning(f"Detected {len(sorted_duplicate_games)} common wishlist games. Processing only the latest {self.MAX_WISHLIST_GAMES_TO_PROCESS} to avoid rate limits.")
+                    await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, f"Detected {len(sorted_duplicate_games)} common wishlist games. Processing only the latest {self.MAX_WISHLIST_GAMES_TO_PROCESS} (by AppID) for this update to avoid API rate limits. More may be announced in subsequent checks.")
+                    games_to_process_for_details = sorted_duplicate_games[:self.MAX_WISHLIST_GAMES_TO_PROCESS] # Slice for processing
+                else:
+                    games_to_process_for_details = sorted_duplicate_games
+                # --- END NEW LOGIC ---
+
                 game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=fr&l=fr"
                 logger.info(f"Fetching app details for wishlist AppID: {app_id}")
 
                 game_info_json = None
                 try:
-                    await self._rate_limit_steam_store_api()
+                    await self._rate_limit_steam_store_api() # Apply store API rate limit
                     game_info_response = requests.get(game_url, timeout=10)
                     game_info_json = await self._handle_api_response("AppDetails (Wishlist)", game_info_response)
                     if not game_info_json: continue
@@ -433,8 +448,7 @@ class steam_family(Extension):
 
                     is_family_shared_category = any(cat.get("id") == 62 for cat in game_data.get("categories", []))
 
-                    # Get saved game app IDs for comparison
-                    saved_game_appids = {item[0] for item in get_saved_games()}
+                    saved_game_appids = {item[0] for item in get_saved_games()} # Get saved game app IDs for comparison
 
                     if (game_data.get("type") == "game"
                         and game_data.get("is_free") == False
@@ -462,7 +476,6 @@ class steam_family(Extension):
             await self._send_admin_dm(f"Error fetching wishlist channel: {e}")
             return
 
-        # Ensure we have a text channel that supports the required methods
         if not isinstance(wishlist_channel, GuildText):
             logger.error(f"Wishlist channel {WISHLIST_CHANNEL_ID} is not a text channel (type: {type(wishlist_channel).__name__}).")
             await self._send_admin_dm(f"Wishlist channel {WISHLIST_CHANNEL_ID} is not a text channel.")
@@ -475,6 +488,7 @@ class steam_family(Extension):
             logger.error(f"Error fetching pinned messages from channel {WISHLIST_CHANNEL_ID}: {e}")
             await self._send_admin_dm(f"Error fetching pinned messages: {e}")
 
+        # Pass the duplicate games to format_message
         wishlist_new_message = format_message(duplicate_games_for_display, short=False)
 
         try:
@@ -496,5 +510,5 @@ class steam_family(Extension):
         self.send_new_game.start()
         logger.info("--Steam Family Tasks Started")
 
-def setup(bot):
+def setup(bot):  # Remove type annotation to avoid Extension constructor conflict
     steam_family(bot)

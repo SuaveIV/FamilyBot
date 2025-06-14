@@ -7,6 +7,7 @@ import os
 import logging
 from datetime import datetime # For admin DM timestamp
 from familybot.config import HELP_CHANNEL_ID, ADMIN_DISCORD_ID, PLUGIN_PATH
+from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -14,16 +15,17 @@ if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class help_message(Extension):
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: FamilyBotClient):
+        self.bot: FamilyBotClient = bot  # Explicit type annotation for the bot attribute
         logger.info("Help Message Plugin loaded")
 
     async def _send_admin_dm(self, message: str) -> None:
         """Helper to send error/warning messages to the bot admin via DM."""
         try:
             admin_user = await self.bot.fetch_user(ADMIN_DISCORD_ID)
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            await admin_user.send(f"Help Message Plugin Error ({now_str}): {message}")
+            if admin_user:
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                await admin_user.send(f"Help Message Plugin Error ({now_str}): {message}")
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
@@ -43,7 +45,8 @@ class help_message(Extension):
 
         pinned_messages = []
         try:
-            pinned_messages = await help_channel.fetch_pinned_messages()
+            if hasattr(help_channel, 'fetch_pinned_messages'):
+                pinned_messages = await help_channel.fetch_pinned_messages()  # type: ignore
         except Exception as e:
             logger.error(f"Error fetching pinned messages from channel {HELP_CHANNEL_ID}: {e}")
             await self._send_admin_dm(f"Error fetching pinned messages: {e}")
@@ -112,9 +115,13 @@ class help_message(Extension):
 
         try:
             if not pinned_messages:
-                help_message_obj = await help_channel.send(full_help_message)
-                await help_message_obj.pin()
-                logger.info(f"New help message pinned in channel {HELP_CHANNEL_ID}")
+                if hasattr(help_channel, 'send'):
+                    help_message_obj = await help_channel.send(full_help_message)  # type: ignore
+                    await help_message_obj.pin()
+                    logger.info(f"New help message pinned in channel {HELP_CHANNEL_ID}")
+                else:
+                    logger.error(f"Channel {HELP_CHANNEL_ID} does not support sending messages")
+                    await self._send_admin_dm(f"Channel {HELP_CHANNEL_ID} does not support sending messages")
             else:
                 await pinned_messages[-1].edit(content=full_help_message)
                 logger.info(f"Help message updated in channel {HELP_CHANNEL_ID}")
@@ -127,5 +134,5 @@ class help_message(Extension):
         await self.write_help()
         logger.info("--Help Message created/modified")
 
-def setup(bot):
+def setup(bot):  # Remove type annotation to avoid Extension constructor conflict
     help_message(bot)
