@@ -1,0 +1,33 @@
+{
+  "type": "batch",
+  "data": [
+    {
+      "type": "user",
+      "discord_id": "123456789012345678",
+      "steam_id": "76561198000000000"
+    },
+    {
+      "type": "family_member",
+      "steam_id": "76561198000000001",
+      "friendly_name": "John Doe",
+      "discord_id": "987654321098765432"
+    },
+    {
+      "type": "saved_game",
+      "appid": "730",
+      "detected_at": "2023-12-01T10:30:00Z"
+    },
+    {
+      "type": "game_details",
+      "appid": "440",
+      "name": "Team Fortress 2",
+      "game_type": "game",
+      "is_free": true,
+      "categories": [
+        {"id": 1, "description": "Multi-player"},
+        {"id": 36, "description": "Online Multi-Player"}
+      ],
+      "price_overview": null
+    }
+  ]
+}
