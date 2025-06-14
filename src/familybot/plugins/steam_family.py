@@ -18,7 +18,7 @@ from familybot.config import (
 )
 from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list, format_message
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
-from familybot.lib.database import get_db_connection
+from familybot.lib.database import get_db_connection, get_cached_game_details, cache_game_details
 from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
@@ -207,17 +207,27 @@ class steam_family(Extension):
                     game_array.append(str(game.get("appid")))
 
             for game_appid in game_array:
-                await self._rate_limit_steam_store_api() # Apply store API rate limit
-                game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=fr&l=fr"
-                logger.info(f"Fetching app details for AppID: {game_appid} for coop check")
-                app_info_response = requests.get(game_url, timeout=10)
-                game_info_json = await self._handle_api_response("AppDetails", app_info_response)
-                if not game_info_json: continue
+                # Try to get cached game details first
+                cached_game = get_cached_game_details(game_appid)
+                if cached_game:
+                    logger.info(f"Using cached game details for AppID: {game_appid}")
+                    game_data = cached_game
+                else:
+                    # If not cached, fetch from API
+                    await self._rate_limit_steam_store_api() # Apply store API rate limit
+                    game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=fr&l=fr"
+                    logger.info(f"Fetching app details from API for AppID: {game_appid} for coop check")
+                    app_info_response = requests.get(game_url, timeout=10)
+                    game_info_json = await self._handle_api_response("AppDetails", app_info_response)
+                    if not game_info_json: continue
 
-                game_data = game_info_json.get(str(game_appid), {}).get("data")
-                if not game_data:
-                    logger.warning(f"No game data found for AppID {game_appid} in app details response for coop check.")
-                    continue
+                    game_data = game_info_json.get(str(game_appid), {}).get("data")
+                    if not game_data:
+                        logger.warning(f"No game data found for AppID {game_appid} in app details response for coop check.")
+                        continue
+                    
+                    # Cache the game details permanently (game details rarely change)
+                    cache_game_details(game_appid, game_data, permanent=True)
 
                 if game_data.get("type") == "game" and game_data.get("is_free") == False:
                     is_family_shared_category = any(cat.get("id") == 62 for cat in game_data.get("categories", []))
@@ -326,17 +336,27 @@ class steam_family(Extension):
                 for new_appid_tuple in new_games_to_process:
                     new_appid = new_appid_tuple[0]
 
-                    await self._rate_limit_steam_store_api() # Apply store API rate limit
-                    game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=fr&l=fr"
-                    logger.info(f"Fetching app details for new game AppID: {new_appid}")
-                    app_info_response = requests.get(game_url, timeout=10)
-                    game_info_json = await self._handle_api_response("AppDetails (New Game)", app_info_response)
-                    if not game_info_json: continue
+                    # Try to get cached game details first
+                    cached_game = get_cached_game_details(new_appid)
+                    if cached_game:
+                        logger.info(f"Using cached game details for new game AppID: {new_appid}")
+                        game_data = cached_game
+                    else:
+                        # If not cached, fetch from API
+                        await self._rate_limit_steam_store_api() # Apply store API rate limit
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=fr&l=fr"
+                        logger.info(f"Fetching app details from API for new game AppID: {new_appid}")
+                        app_info_response = requests.get(game_url, timeout=10)
+                        game_info_json = await self._handle_api_response("AppDetails (New Game)", app_info_response)
+                        if not game_info_json: continue
 
-                    game_data = game_info_json.get(str(new_appid), {}).get("data")
-                    if not game_data:
-                        logger.warning(f"No game data found for new game AppID {new_appid} in app details response.")
-                        continue
+                        game_data = game_info_json.get(str(new_appid), {}).get("data")
+                        if not game_data:
+                            logger.warning(f"No game data found for new game AppID {new_appid} in app details response.")
+                            continue
+                        
+                        # Cache the game details permanently (game details rarely change)
+                        cache_game_details(new_appid, game_data, permanent=True)
 
                     is_family_shared_game = any(cat.get("id") == 62 for cat in game_data.get("categories", []))
 

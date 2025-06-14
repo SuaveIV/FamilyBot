@@ -10,7 +10,10 @@ import sqlite3 # Import sqlite3 for specific error handling
 
 from familybot.config import ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
 from familybot.lib.utils import get_common_elements_in_lists
-from familybot.lib.database import get_db_connection # <<< Import get_db_connection
+from familybot.lib.database import (
+    get_db_connection, get_cached_user_games, cache_user_games,
+    get_cached_discord_user, cache_discord_user, cleanup_expired_cache
+)
 from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
@@ -164,9 +167,17 @@ class common_games(Extension):
 
         game_lists = []
         for steam_id in steam_ids_to_check:
+            # Try to get cached games first
+            cached_games = get_cached_user_games(steam_id)
+            if cached_games is not None:
+                logger.info(f"Using cached games for Steam ID: {steam_id} ({len(cached_games)} games)")
+                game_lists.append([int(appid) for appid in cached_games])
+                continue
+
+            # If not cached, fetch from API
             temp_game_list = []
             steam_get_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&format=json&include_appinfo=1"
-            logger.info(f"Fetching games for Steam ID: {steam_id}")
+            logger.info(f"Fetching games from API for Steam ID: {steam_id}")
             try:
                 answer = requests.get(steam_get_games_url, timeout=10)
                 answer.raise_for_status()
@@ -183,6 +194,9 @@ class common_games(Extension):
 
                 for game in user_game_list_json:
                     temp_game_list.append(game["appid"])
+                
+                # Cache the results for 6 hours
+                cache_user_games(steam_id, temp_game_list, cache_hours=6)
                 game_lists.append(temp_game_list)
 
             except requests.exceptions.RequestException as e:
@@ -267,9 +281,18 @@ class common_games(Extension):
 
         list_message = "Here are the users currently registered:\n"
         for discord_id in registered_users.keys():
+            # Try to get cached username first
+            cached_username = get_cached_discord_user(discord_id)
+            if cached_username:
+                list_message += f"- {cached_username} (<@{discord_id}>)\n"
+                continue
+
+            # If not cached, fetch from Discord API
             try:
                 user_obj = await self.bot.fetch_user(discord_id)
                 if user_obj:
+                    # Cache the username for 1 hour
+                    cache_discord_user(discord_id, user_obj.username, cache_hours=1)
                     list_message += f"- {user_obj.username} (<@{discord_id}>)\n"
                 else:
                     list_message += f"- <@{discord_id}> (User Not Found)\n"
@@ -280,6 +303,17 @@ class common_games(Extension):
             list_message = list_message[:1950] + "\n... (List too long, truncated)"
         
         await self.bot.send_dm(ctx.author_id, list_message)
+
+    @Task.create(IntervalTrigger(hours=6))
+    async def cleanup_cache_task(self):
+        """Periodic task to clean up expired cache entries."""
+        logger.info("Running cache cleanup task...")
+        cleanup_expired_cache()
+
+    @listen()
+    async def on_startup(self):
+        self.cleanup_cache_task.start()
+        logger.info("--Common Games cache cleanup task started")
 
 def setup(bot):  # Remove type annotation to avoid Extension constructor conflict
     common_games(bot)
