@@ -182,18 +182,22 @@ class steam_family(Extension):
         return users
 
     """
-    [help]|!coop| it returns all the family shared multiplayer games in the shared library with a given numbers of copies| !coop NUMBER_OF_COPIES | ***This command can be used in bot DM***
+    [help]|coop| it returns all the family shared multiplayer games in the shared library with a given numbers of copies| !coop NUMBER_OF_COPIES | ***This command can be used in bot DM***
     """
     @prefixed_command(name="coop")
-    async def coop_command(self, ctx: PrefixedContext, number_str: str):
+    async def coop_command(self, ctx: PrefixedContext, number_str: str | None = None):
+        if number_str is None:
+            await ctx.send("❌ **Missing required parameter!**\n\n**Usage:** `!coop NUMBER_OF_COPIES`\n**Example:** `!coop 2` (to find games with 2+ copies)\n\n**Note:** The number must be greater than 1.")
+            return
+            
         try:
             number = int(number_str)
         except ValueError:
-            await ctx.send("Please provide a valid number for copies.")
+            await ctx.send("❌ **Invalid number format!**\n\n**Usage:** `!coop NUMBER_OF_COPIES`\n**Example:** `!coop 2` (to find games with 2+ copies)\n\nPlease provide a valid number.")
             return
 
         if number <= 1:
-            await ctx.send("The number after the command must be greater than 1.")
+            await ctx.send("❌ **Invalid number!**\n\nThe number after the command must be greater than 1.\n**Example:** `!coop 2` (to find games with 2+ copies)")
             return
 
         loading_message = await ctx.send(f"Searching for games with {number} copies...")
@@ -272,7 +276,7 @@ class steam_family(Extension):
                                 if current_price != 'N/A':
                                     price_info.append(f"Current: {current_price}")
                                 if lowest_price != 'N/A':
-                                    price_info.append(f"Lowest: {lowest_price}€")
+                                    price_info.append(f"Lowest: ${lowest_price}")
                                 
                                 if price_info:
                                     game_name += f" ({' | '.join(price_info)})"
@@ -441,7 +445,7 @@ class steam_family(Extension):
                         # Use slower rate limiting for full scan
                         await self._rate_limit_full_scan()
                         
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=fr&l=fr"
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         logger.info(f"Full scan: Fetching app details for AppID: {app_id} ({processed_count}/{total_games})")
                         
                         game_info_response = requests.get(game_url, timeout=10)
@@ -537,7 +541,7 @@ class steam_family(Extension):
             await self._send_admin_dm(f"Full scan critical error: {e}")
 
     """
-    [help]|!deals|check current deals for family wishlist games|!deals|Shows games from family wishlists that are currently on sale or at historical low prices. ***This command can be used in bot DM***
+    [help]|deals|check current deals for family wishlist games|!deals|Shows games from family wishlists that are currently on sale or at historical low prices. ***This command can be used in bot DM***
     """
     @prefixed_command(name="deals")
     async def check_deals_command(self, ctx: PrefixedContext):
@@ -587,7 +591,7 @@ class steam_family(Extension):
                     else:
                         # If not cached, fetch from API
                         await self._rate_limit_steam_store_api()
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=fr&l=fr"
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         app_info_response = requests.get(game_url, timeout=10)
                         game_info_json = await self._handle_api_response("AppDetails (Deals)", app_info_response)
                         if not game_info_json: continue
@@ -650,20 +654,20 @@ class steam_family(Extension):
             
             # Format and send results
             if deals_found:
-                message_parts = [f"🎯 **Found {len(deals_found)} good deals** (checked {games_checked} games):\n"]
+                message_parts = [f"🎯 **Found {len(deals_found)} good deals** (checked {games_checked} games):\n\n"]
                 
                 for deal in deals_found[:10]:  # Limit to 10 deals to avoid message length issues
-                    message_parts.append(f"**{deal['name']}**")
-                    message_parts.append(f"{deal['deal_reason']}")
+                    message_parts.append(f"**{deal['name']}**\n")
+                    message_parts.append(f"{deal['deal_reason']}\n")
                     message_parts.append(f"💰 {deal['current_price']}")
                     if deal['discount_percent'] > 0:
                         message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal['lowest_price'] != "N/A":
-                        message_parts.append(f" | Lowest ever: {deal['lowest_price']}€")
+                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
                     message_parts.append(f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}")
                     if len(deal['interested_users']) > 3:
                         message_parts.append(f" +{len(deal['interested_users']) - 3} more")
-                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n")
+                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
                 
                 if len(deals_found) > 10:
                     message_parts.append(f"\n... and {len(deals_found) - 10} more deals!")
@@ -760,7 +764,7 @@ class steam_family(Extension):
                     else:
                         # If not cached, fetch from API
                         await self._rate_limit_steam_store_api() # Apply store API rate limit
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=fr&l=fr"
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=us&l=en"
                         logger.info(f"Fetching app details from API for new game AppID: {new_appid}")
                         app_info_response = requests.get(game_url, timeout=10)
                         game_info_json = await self._handle_api_response("AppDetails (New Game)", app_info_response)
@@ -794,7 +798,7 @@ class steam_family(Extension):
                                 if current_price != 'N/A':
                                     price_info.append(f"Current: {current_price}")
                                 if lowest_price != 'N/A':
-                                    price_info.append(f"Lowest ever: {lowest_price}€")
+                                    price_info.append(f"Lowest ever: ${lowest_price}")
                                 
                                 if price_info:
                                     message += f"\n💰 {' | '.join(price_info)}"
@@ -913,7 +917,7 @@ class steam_family(Extension):
         for item in games_to_process:
             app_id = item[0]
             
-            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=fr&l=fr"
+            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
             logger.info(f"Fetching app details for wishlist AppID: {app_id}")
 
             game_info_json = None
