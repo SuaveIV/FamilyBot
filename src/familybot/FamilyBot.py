@@ -368,6 +368,8 @@ if __name__ == "__main__":
                        help='Purge all cache data (game details, wishlist, family library, etc.)')
     parser.add_argument('--full-library-scan', action='store_true',
                        help='Scan all family members\' complete game libraries and cache game details')
+    parser.add_argument('--full-wishlist-scan', action='store_true',
+                       help='Perform comprehensive scan of ALL common wishlist games')
     
     args = parser.parse_args()
     
