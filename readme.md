@@ -59,7 +59,7 @@ This script will:
 
 ### Configuration
 
-The bot uses `config.yml` for its settings. Fill in the required data in the `config-template.yml` file and rename it to `config.yml`. This file should be placed in the **project's root directory** (`FamilyBot/`).
+The bot uses `config.yml` for its settings. First, fill in the required data in the `config-template.yml` file located in your **project's root directory** (`FamilyBot/`) and then **rename it to `config.yml`**.
 
 #### Discord IDs
 
@@ -98,7 +98,7 @@ To get your Steam Family ID:
 3. Copy the API key displayed there.
     ![ITAD API KEY](doc/ITAD_API_KEY.png)
 
-### Token Sender Installation and Configuration
+#### Token Sender Installation and Configuration
 
 The `Token_Sender` bot is a separate Python script (`getToken.py`) located in the `src/familybot/Token_Sender/` subdirectory. It requires:
 
