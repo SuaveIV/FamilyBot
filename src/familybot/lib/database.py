@@ -48,6 +48,16 @@ def init_db():
         ''')
         logger.info("Database: 'saved_games' table checked/created.")
 
+        # Create 'family_members' table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS family_members (
+                steam_id TEXT PRIMARY KEY,
+                friendly_name TEXT NOT NULL,
+                discord_id TEXT
+            )
+        ''')
+        logger.info("Database: 'family_members' table checked/created.")
+
         # --- NEW LOGIC for adding 'detected_at' to existing tables ---
         # 1. Check if the column exists
         cursor.execute("PRAGMA table_info(saved_games)")
