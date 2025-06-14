@@ -415,6 +415,129 @@ def cache_itad_price(appid: str, price_data: dict, cache_hours: int = 6):
             conn.close()
 
 
+def get_cached_wishlist(steam_id: str):
+    """Get cached wishlist data if not expired, returns None if not found or expired."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT appid FROM wishlist_cache 
+            WHERE steam_id = ? AND expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
+        """, (steam_id,))
+        rows = cursor.fetchall()
+        if rows:
+            return [row['appid'] for row in rows]
+        return None
+    except Exception as e:
+        logger.error(f"Error getting cached wishlist for {steam_id}: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def cache_wishlist(steam_id: str, appids: list, cache_hours: int = 2):
+    """Cache user's wishlist for specified hours (wishlists change moderately)."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        from datetime import datetime, timedelta
+        
+        now = datetime.utcnow()
+        expires_at = now + timedelta(hours=cache_hours)
+        
+        # Clear existing cache for this user
+        cursor.execute("DELETE FROM wishlist_cache WHERE steam_id = ?", (steam_id,))
+        
+        # Insert new cache entries
+        cache_entries = [
+            (steam_id, str(appid), now.isoformat() + 'Z', expires_at.isoformat() + 'Z')
+            for appid in appids
+        ]
+        cursor.executemany("""
+            INSERT INTO wishlist_cache (steam_id, appid, cached_at, expires_at)
+            VALUES (?, ?, ?, ?)
+        """, cache_entries)
+        conn.commit()
+        logger.debug(f"Cached {len(appids)} wishlist items for user {steam_id}")
+    except Exception as e:
+        logger.error(f"Error caching wishlist for {steam_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_cached_family_library():
+    """Get cached family library data if not expired, returns None if not found or expired."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT appid, owner_steamids, exclude_reason FROM family_library_cache 
+            WHERE expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
+        """, ())
+        rows = cursor.fetchall()
+        if rows:
+            import json
+            family_apps = []
+            for row in rows:
+                family_apps.append({
+                    'appid': int(row['appid']),
+                    'owner_steamids': json.loads(row['owner_steamids']) if row['owner_steamids'] else [],
+                    'exclude_reason': row['exclude_reason']
+                })
+            return family_apps
+        return None
+    except Exception as e:
+        logger.error(f"Error getting cached family library: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def cache_family_library(family_apps: list, cache_minutes: int = 30):
+    """Cache family library data for specified minutes (updates frequently)."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        import json
+        from datetime import datetime, timedelta
+        
+        now = datetime.utcnow()
+        expires_at = now + timedelta(minutes=cache_minutes)
+        
+        # Clear existing cache
+        cursor.execute("DELETE FROM family_library_cache")
+        
+        # Insert new cache entries
+        cache_entries = []
+        for app in family_apps:
+            cache_entries.append((
+                str(app.get('appid')),
+                json.dumps(app.get('owner_steamids', [])),
+                app.get('exclude_reason'),
+                now.isoformat() + 'Z',
+                expires_at.isoformat() + 'Z'
+            ))
+        
+        cursor.executemany("""
+            INSERT INTO family_library_cache (appid, owner_steamids, exclude_reason, cached_at, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, cache_entries)
+        conn.commit()
+        logger.debug(f"Cached {len(family_apps)} family library apps for {cache_minutes} minutes")
+    except Exception as e:
+        logger.error(f"Error caching family library: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
 def cleanup_expired_cache():
     """Remove expired cache entries from all cache tables."""
     conn = None

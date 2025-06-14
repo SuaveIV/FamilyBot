@@ -18,7 +18,10 @@ from familybot.config import (
 )
 from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list, format_message
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
-from familybot.lib.database import get_db_connection, get_cached_game_details, cache_game_details
+from familybot.lib.database import (
+    get_db_connection, get_cached_game_details, cache_game_details,
+    get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library
+)
 from familybot.lib.types import FamilyBotClient
 
 # Setup logging for this specific module
@@ -183,19 +186,29 @@ class steam_family(Extension):
 
         games_json = None
         try:
-            await self._rate_limit_steam_api() # Apply rate limit before API call
-            url_family_list = get_family_game_list_url()
-            answer = requests.get(url_family_list, timeout=15)
-            games_json = await self._handle_api_response("GetFamilySharedApps", answer)
-            if not games_json:
-                await loading_message.edit(content="Error retrieving family game list.")
-                return
+            # Try to get cached family library first
+            cached_family_library = get_cached_family_library()
+            if cached_family_library is not None:
+                logger.info(f"Using cached family library ({len(cached_family_library)} games)")
+                game_list = cached_family_library
+            else:
+                # If not cached, fetch from API
+                await self._rate_limit_steam_api() # Apply rate limit before API call
+                url_family_list = get_family_game_list_url()
+                answer = requests.get(url_family_list, timeout=15)
+                games_json = await self._handle_api_response("GetFamilySharedApps", answer)
+                if not games_json:
+                    await loading_message.edit(content="Error retrieving family game list.")
+                    return
 
-            game_list = games_json.get("response", {}).get("apps", [])
-            if not game_list:
-                logger.warning("No games found in family game list response.")
-                await loading_message.edit(content="No games found in the family library.")
-                return
+                game_list = games_json.get("response", {}).get("apps", [])
+                if not game_list:
+                    logger.warning("No games found in family game list response.")
+                    await loading_message.edit(content="No games found in the family library.")
+                    return
+                
+                # Cache the family library for 30 minutes
+                cache_family_library(game_list, cache_minutes=30)
 
             game_array = []
             coop_game_names = []
@@ -279,16 +292,26 @@ class steam_family(Extension):
 
         games_json = None
         try:
-            await self._rate_limit_steam_api() # Apply rate limit before API call
-            url_family_list = get_family_game_list_url()
-            answer = requests.get(url_family_list, timeout=15)
-            games_json = await self._handle_api_response("GetFamilySharedApps", answer)
-            if not games_json: return
+            # Try to get cached family library first
+            cached_family_library = get_cached_family_library()
+            if cached_family_library is not None:
+                logger.info(f"Using cached family library for new game check ({len(cached_family_library)} games)")
+                game_list = cached_family_library
+            else:
+                # If not cached, fetch from API
+                await self._rate_limit_steam_api() # Apply rate limit before API call
+                url_family_list = get_family_game_list_url()
+                answer = requests.get(url_family_list, timeout=15)
+                games_json = await self._handle_api_response("GetFamilySharedApps", answer)
+                if not games_json: return
 
-            game_list = games_json.get("response", {}).get("apps", [])
-            if not game_list:
-                logger.warning("No apps found in family game list response for new game check.")
-                return
+                game_list = games_json.get("response", {}).get("apps", [])
+                if not game_list:
+                    logger.warning("No apps found in family game list response for new game check.")
+                    return
+                
+                # Cache the family library for 30 minutes
+                cache_family_library(game_list, cache_minutes=30)
 
             current_family_members = await self._load_family_members_from_db()
             
@@ -395,8 +418,21 @@ class steam_family(Extension):
         for user_steam_id in all_unique_steam_ids_to_check:
             user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
 
+            # Try to get cached wishlist first
+            cached_wishlist = get_cached_wishlist(user_steam_id)
+            if cached_wishlist is not None:
+                logger.info(f"Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)")
+                for app_id in cached_wishlist:
+                    idx = find_in_2d_list(app_id, global_wishlist)
+                    if idx is not None:
+                        global_wishlist[idx][1].append(user_steam_id)
+                    else:
+                        global_wishlist.append([app_id, [user_steam_id]])
+                continue
+
+            # If not cached, fetch from API
             wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
-            logger.info(f"Fetching wishlist for {user_name_for_log} (Steam ID: {user_steam_id})")
+            logger.info(f"Fetching wishlist from API for {user_name_for_log} (Steam ID: {user_steam_id})")
 
             wishlist_json = None
             try:
@@ -415,17 +451,23 @@ class steam_family(Extension):
                     logger.info(f"No items found in {user_name_for_log}'s wishlist.")
                     continue
 
+                # Extract app IDs for caching
+                user_wishlist_appids = []
                 for game_item in wishlist_items:
                     app_id = str(game_item.get("appid"))
                     if not app_id:
                         logger.warning(f"Skipping wishlist item due to missing appid: {game_item}")
                         continue
 
+                    user_wishlist_appids.append(app_id)
                     idx = find_in_2d_list(app_id, global_wishlist)
                     if idx is not None:
                         global_wishlist[idx][1].append(user_steam_id)
                     else:
                         global_wishlist.append([app_id, [user_steam_id]])
+
+                # Cache the wishlist for 2 hours
+                cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
 
             except Exception as e:
                 logger.critical(f"An unexpected error occurred fetching/processing {user_name_for_log}'s wishlist: {e}", exc_info=True)
