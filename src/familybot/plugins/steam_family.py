@@ -322,6 +322,162 @@ class steam_family(Extension):
         else:
             await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
 
+    @prefixed_command(name="force_deals")
+    async def force_deals_command(self, ctx: PrefixedContext):
+        """
+        Admin command to force check deals and post results to the wishlist channel.
+        """
+        if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
+            await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
+            return
+
+        await ctx.send("🔍 **Forcing deals check and posting to wishlist channel...**")
+        
+        try:
+            current_family_members = await self._load_family_members_from_db()
+            all_unique_steam_ids_to_check = set(current_family_members.keys())
+            
+            # Collect all wishlist games from family members
+            global_wishlist = []
+            for user_steam_id in all_unique_steam_ids_to_check:
+                user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
+                
+                # Try to get cached wishlist first
+                cached_wishlist = get_cached_wishlist(user_steam_id)
+                if cached_wishlist is not None:
+                    logger.info(f"Force deals: Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)")
+                    for app_id in cached_wishlist:
+                        if app_id not in [item[0] for item in global_wishlist]:
+                            global_wishlist.append([app_id, [user_steam_id]])
+                        else:
+                            # Add user to existing entry
+                            for item in global_wishlist:
+                                if item[0] == app_id:
+                                    item[1].append(user_steam_id)
+                                    break
+            
+            if not global_wishlist:
+                await ctx.send("❌ No wishlist games found to check for deals.")
+                return
+            
+            deals_found = []
+            games_checked = 0
+            max_games_to_check = 25  # Higher limit for force command
+            
+            await ctx.send(f"📊 **Checking {min(len(global_wishlist), max_games_to_check)} games for deals...**")
+            
+            for item in global_wishlist[:max_games_to_check]:
+                app_id = item[0]
+                interested_users = item[1]
+                games_checked += 1
+                
+                try:
+                    # Get cached game details first
+                    cached_game = get_cached_game_details(app_id)
+                    if cached_game:
+                        game_data = cached_game
+                    else:
+                        # If not cached, fetch from API
+                        await self._rate_limit_steam_store_api()
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                        app_info_response = requests.get(game_url, timeout=10)
+                        game_info_json = await self._handle_api_response("AppDetails (Force Deals)", app_info_response)
+                        if not game_info_json: continue
+                        
+                        game_data = game_info_json.get(str(app_id), {}).get("data")
+                        if not game_data: continue
+                        
+                        # Cache the game details
+                        cache_game_details(app_id, game_data, permanent=True)
+                    
+                    game_name = game_data.get("name", f"Unknown Game ({app_id})")
+                    price_overview = game_data.get("price_overview")
+                    
+                    if not price_overview:
+                        continue
+                    
+                    # Check if game is on sale
+                    discount_percent = price_overview.get("discount_percent", 0)
+                    current_price = price_overview.get("final_formatted", "N/A")
+                    original_price = price_overview.get("initial_formatted", current_price)
+                    
+                    # Get historical low price
+                    lowest_price = get_lowest_price(int(app_id))
+                    
+                    # Determine if this is a good deal (more lenient criteria for force command)
+                    is_good_deal = False
+                    deal_reason = ""
+                    
+                    if discount_percent >= 30:  # Lower threshold for force command
+                        is_good_deal = True
+                        deal_reason = f"🔥 **{discount_percent}% OFF**"
+                    elif discount_percent >= 15 and lowest_price != "N/A":
+                        # Check if current price is close to historical low
+                        try:
+                            current_price_num = float(price_overview.get("final", 0)) / 100
+                            lowest_price_num = float(lowest_price)
+                            if current_price_num <= lowest_price_num * 1.2:  # Within 20% of historical low
+                                is_good_deal = True
+                                deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if is_good_deal:
+                        user_names = [current_family_members.get(uid, f"Unknown") for uid in interested_users]
+                        deal_info = {
+                            'name': game_name,
+                            'app_id': app_id,
+                            'current_price': current_price,
+                            'original_price': original_price,
+                            'discount_percent': discount_percent,
+                            'lowest_price': lowest_price,
+                            'deal_reason': deal_reason,
+                            'interested_users': user_names
+                        }
+                        deals_found.append(deal_info)
+                
+                except Exception as e:
+                    logger.warning(f"Force deals: Error checking deals for game {app_id}: {e}")
+                    continue
+            
+            # Format and send results to wishlist channel
+            if deals_found:
+                message_parts = [f"🎯 **Current Deals Alert** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"]
+                
+                for deal in deals_found:  # Show all deals found
+                    message_parts.append(f"**{deal['name']}**\n")
+                    message_parts.append(f"{deal['deal_reason']}\n")
+                    message_parts.append(f"💰 {deal['current_price']}")
+                    if deal['discount_percent'] > 0:
+                        message_parts.append(f" ~~{deal['original_price']}~~")
+                    if deal['lowest_price'] != "N/A":
+                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
+                    message_parts.append(f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}")
+                    if len(deal['interested_users']) > 3:
+                        message_parts.append(f" +{len(deal['interested_users']) - 3} more")
+                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
+                
+                final_message = "".join(message_parts)
+                
+                # Send to wishlist channel
+                try:
+                    await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, final_message)  # type: ignore
+                    await ctx.send(f"✅ **Force deals complete!** Posted {len(deals_found)} deals to wishlist channel.")
+                    logger.info(f"Force deals: Posted {len(deals_found)} deals to wishlist channel")
+                    await self.bot.send_log_dm("Force Deals") # type: ignore
+                except Exception as e:
+                    logger.error(f"Force deals: Error posting to wishlist channel: {e}")
+                    await ctx.send(f"❌ **Error posting deals to channel:** {e}")
+                    await self._send_admin_dm(f"Force deals channel error: {e}")
+            else:
+                await ctx.send(f"📊 **Force deals complete!** No significant deals found among {games_checked} games checked.")
+                logger.info(f"Force deals: No deals found among {games_checked} games")
+            
+        except Exception as e:
+            logger.critical(f"Force deals: Critical error during force deals check: {e}", exc_info=True)
+            await ctx.send(f"❌ **Critical error during force deals:** {e}")
+            await self._send_admin_dm(f"Force deals critical error: {e}")
+
     @prefixed_command(name="full_wishlist_scan")
     async def full_wishlist_scan_command(self, ctx: PrefixedContext):
         """
