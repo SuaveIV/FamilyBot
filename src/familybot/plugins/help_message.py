@@ -7,7 +7,8 @@ import os
 import logging
 from datetime import datetime # For admin DM timestamp
 from familybot.config import HELP_CHANNEL_ID, ADMIN_DISCORD_ID, PLUGIN_PATH
-from familybot.lib.types import FamilyBotClient
+from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
+from familybot.lib.utils import truncate_message_list
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -51,9 +52,9 @@ class help_message(Extension):
             logger.error(f"Error fetching pinned messages from channel {HELP_CHANNEL_ID}: {e}")
             await self._send_admin_dm(f"Error fetching pinned messages: {e}")
 
-        full_help_message = "# __🤖 Bot Command Usage__ \n"
+        header = "# __🤖 Bot Command Usage__ \n"
         command_template = Template("""
-### `!${name}`
+### `${name}`
 *${description}*
 **Usage:** `${usage}`
 *${comment}*
@@ -75,6 +76,9 @@ class help_message(Extension):
 
         plugin_files.sort() # Sort plugin files for consistent help message order
 
+        # Build command sections as separate items for better truncation control
+        command_sections = []
+        
         for file_name in plugin_files:
             if file_name.endswith(".py") and not file_name.startswith("__"):
                 file_path = os.path.join(PLUGIN_PATH, file_name)
@@ -86,8 +90,13 @@ class help_message(Extension):
                             if line.startswith("[help]") and "if \"[help]\"" not in line and "if '[help]'" not in line:
                                 parts = line.split("|")
                                 if len(parts) == 5:
+                                    # Fix the !! issue by cleaning the name field
+                                    name = parts[1].strip()
+                                    if name.startswith("!"):
+                                        name = name[1:]  # Remove the leading !
+                                    
                                     data = {
-                                        'name' : parts[1].strip(),
+                                        'name' : name,
                                         'description' : parts[2].strip(),
                                         'usage' : parts[3].strip(),
                                         'comment' : parts[4].strip()
@@ -104,14 +113,14 @@ class help_message(Extension):
                     await self._send_admin_dm(f"Error reading plugin file {file_name}: {e}")
 
                 if commands_in_file:
-                    full_help_message += f"\n## __📚 {file_name.replace('.py', '').replace('_', ' ').title()} Commands__\n"
+                    section_content = f"\n## __📚 {file_name.replace('.py', '').replace('_', ' ').title()} Commands__\n"
                     for cmd_data in commands_in_file:
-                        full_help_message += command_template.substitute(cmd_data)
+                        section_content += command_template.substitute(cmd_data)
+                    command_sections.append(section_content)
 
-        if len(full_help_message) > 1950:
-            logger.warning(f"Generated help message is very long ({len(full_help_message)} chars). It might be truncated by Discord.")
-            full_help_message = full_help_message[:1950] + "\n... (Message too long, truncated)"
-            await self._send_admin_dm("Help message truncated due to Discord's character limit.")
+        # Use utility function to handle message truncation
+        footer_template = "\n... and {count} more command sections!"
+        full_help_message = truncate_message_list(command_sections, header, footer_template)
 
         try:
             if not pinned_messages:

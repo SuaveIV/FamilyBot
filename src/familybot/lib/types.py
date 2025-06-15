@@ -6,6 +6,10 @@ from typing import Protocol, List, Union, LiteralString # Import necessary types
 # Import core interactions types that might be part of the protocol's methods' signatures
 from interactions import BaseChannel, User, Message, Client, GuildText # Add other types if needed
 
+# Discord API Constants
+DISCORD_MESSAGE_LIMIT = 4000  # Maximum characters allowed in a Discord message
+DISCORD_EMBED_LIMIT = 6000   # Maximum characters allowed in a Discord embed
+
 class FamilyBotClient(Protocol):
     """
     A protocol defining the expected methods and attributes on the bot client.

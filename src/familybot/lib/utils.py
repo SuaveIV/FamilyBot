@@ -4,9 +4,10 @@ import requests
 import json
 import logging
 import time
-from typing import Optional
+from typing import Optional, List
 from familybot.config import ITAD_API_KEY # Import ITAD_API_KEY from config
 from familybot.lib.database import get_cached_itad_price, cache_itad_price
+from familybot.lib.types import DISCORD_MESSAGE_LIMIT
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -173,3 +174,57 @@ class ProgressTracker:
         except (ZeroDivisionError, OverflowError, ValueError):
             logger.warning("Error calculating time estimation")
             return ""
+
+
+def truncate_message_list(items: List[str], header: str = "", footer_template: str = "\n... and {count} more items!", 
+                         max_length: int = DISCORD_MESSAGE_LIMIT) -> str:
+    """
+    Truncates a list of items to fit within Discord's message limit.
+    
+    Args:
+        items: List of strings to include in the message
+        header: Optional header text to prepend
+        footer_template: Template for footer when truncation occurs. Use {count} for remaining items count.
+        max_length: Maximum message length (defaults to Discord's limit)
+    
+    Returns:
+        Formatted message string that fits within the character limit
+    """
+    if not items:
+        return header
+    
+    # Build full content first
+    full_content = header + '\n'.join(items)
+    
+    # If it fits, return as-is
+    if len(full_content) <= max_length:
+        return full_content
+    
+    # Calculate available space for items
+    sample_footer = footer_template.format(count=999)  # Use max digits for calculation
+    available_space = max_length - len(header) - len(sample_footer)
+    
+    if available_space <= 0:
+        logger.warning(f"Header and footer too long for message truncation. Header: {len(header)}, Footer: {len(sample_footer)}")
+        return header[:max_length]
+    
+    # Add items until we run out of space
+    truncated_items = []
+    current_length = 0
+    
+    for item in items:
+        item_length = len(item) + 1  # +1 for newline
+        if current_length + item_length > available_space:
+            break
+        truncated_items.append(item)
+        current_length += item_length
+    
+    # Build final message
+    if len(truncated_items) < len(items):
+        remaining_count = len(items) - len(truncated_items)
+        footer = footer_template.format(count=remaining_count)
+        result = header + '\n'.join(truncated_items) + footer
+        logger.info(f"Message truncated: showing {len(truncated_items)} items, hiding {remaining_count} items")
+        return result
+    else:
+        return header + '\n'.join(truncated_items)

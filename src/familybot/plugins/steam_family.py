@@ -22,8 +22,8 @@ from familybot.lib.database import (
     get_db_connection, get_cached_game_details, cache_game_details,
     get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library
 )
-from familybot.lib.utils import get_lowest_price, ProgressTracker
-from familybot.lib.types import FamilyBotClient
+from familybot.lib.utils import get_lowest_price, ProgressTracker, truncate_message_list
+from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -291,7 +291,11 @@ class steam_family(Extension):
                         logger.debug(f"Game {game_appid} is not categorized as family shared (ID 62).")
 
             if coop_game_names:
-                await loading_message.edit(content='__Common shared multiplayer games__:\n' + '\n'.join(coop_game_names))
+                # Use the utility function to handle message truncation
+                header = '__Common shared multiplayer games__:\n'
+                footer_template = "\n... and {count} more games!"
+                final_message = truncate_message_list(coop_game_names, header, footer_template)
+                await loading_message.edit(content=final_message)
             else:
                 await loading_message.edit(content=f"No common shared multiplayer games found with {number} copies.")
 
@@ -987,25 +991,27 @@ class steam_family(Extension):
             
             # Format and send results
             if deals_found:
-                message_parts = [f"🎯 **Found {len(deals_found)} good deals** (checked {games_checked} games):\n\n"]
+                header = f"🎯 **Found {len(deals_found)} good deals** (checked {games_checked} games):\n\n"
                 
-                for deal in deals_found[:10]:  # Limit to 10 deals to avoid message length issues
-                    message_parts.append(f"**{deal['name']}**\n")
-                    message_parts.append(f"{deal['deal_reason']}\n")
-                    message_parts.append(f"💰 {deal['current_price']}")
+                # Build deal entries
+                deal_entries = []
+                for deal in deals_found:
+                    deal_entry = f"**{deal['name']}**\n"
+                    deal_entry += f"{deal['deal_reason']}\n"
+                    deal_entry += f"💰 {deal['current_price']}"
                     if deal['discount_percent'] > 0:
-                        message_parts.append(f" ~~{deal['original_price']}~~")
+                        deal_entry += f" ~~{deal['original_price']}~~"
                     if deal['lowest_price'] != "N/A":
-                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
-                    message_parts.append(f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}")
+                        deal_entry += f" | Lowest ever: ${deal['lowest_price']}"
+                    deal_entry += f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}"
                     if len(deal['interested_users']) > 3:
-                        message_parts.append(f" +{len(deal['interested_users']) - 3} more")
-                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
+                        deal_entry += f" +{len(deal['interested_users']) - 3} more"
+                    deal_entry += f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n"
+                    deal_entries.append(deal_entry)
                 
-                if len(deals_found) > 10:
-                    message_parts.append(f"\n... and {len(deals_found) - 10} more deals!")
-                
-                final_message = "".join(message_parts)
+                # Use utility function to handle message truncation
+                footer_template = "\n... and {count} more deals!"
+                final_message = truncate_message_list(deal_entries, header, footer_template)
             else:
                 final_message = f"No significant deals found among {games_checked} wishlist games checked. Try again later!"
             

@@ -9,12 +9,12 @@ import logging
 import sqlite3 # Import sqlite3 for specific error handling
 
 from familybot.config import ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
-from familybot.lib.utils import get_common_elements_in_lists
+from familybot.lib.utils import get_common_elements_in_lists, truncate_message_list
 from familybot.lib.database import (
     get_db_connection, get_cached_user_games, cache_user_games,
     get_cached_discord_user, cache_discord_user, cleanup_expired_cache
 )
-from familybot.lib.types import FamilyBotClient
+from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -224,7 +224,9 @@ class common_games(Extension):
             await self.bot.send_dm(ctx.author_id, "No common games found among the specified users.")
             return
 
-        message_parts = ["Common Multiplayer Games:\n"]
+        header = "Common Multiplayer Games:\n"
+        game_entries = []
+        
         for game_appid in common_game_appids:
             game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=fr"
             logger.info(f"Fetching app details for AppID: {game_appid}")
@@ -248,7 +250,7 @@ class common_games(Extension):
 
                     if is_multiplayer:
                         game_name = game_data.get("name", f"Unknown Game ({game_appid})")
-                        message_parts.append(f"- {game_name}\n")
+                        game_entries.append(f"- {game_name}")
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request error fetching app details for AppID {game_appid}: {e}")
@@ -257,16 +259,14 @@ class common_games(Extension):
             except Exception as e:
                 logger.error(f"Unexpected error processing game {game_appid}: {e}", exc_info=True)
 
-        final_message = "".join(message_parts)
-        if len(final_message) <= 25:
-            final_message += "None found."
-
-        if len(final_message) > 1950:
-            truncated_message = final_message[:1950] + "\n... (Message too long, truncated)"
-            await self.bot.send_dm(ctx.author_id, truncated_message)
-            await self.bot.send_log_dm(f"Common games message for {ctx.author_id} was truncated.")
+        if not game_entries:
+            final_message = header + "None found."
         else:
-            await self.bot.send_dm(ctx.author_id, final_message)
+            # Use utility function to handle message truncation
+            footer_template = "\n... and {count} more games!"
+            final_message = truncate_message_list(game_entries, header, footer_template, max_length=1950)
+
+        await self.bot.send_dm(ctx.author_id, final_message)
 
 
     """
@@ -279,12 +279,14 @@ class common_games(Extension):
             await self.bot.send_dm(ctx.author_id, "No users are currently registered.")
             return
 
-        list_message = "Here are the users currently registered:\n"
+        header = "Here are the users currently registered:\n"
+        user_entries = []
+        
         for discord_id in registered_users.keys():
             # Try to get cached username first
             cached_username = get_cached_discord_user(discord_id)
             if cached_username:
-                list_message += f"- {cached_username} (<@{discord_id}>)\n"
+                user_entries.append(f"- {cached_username} (<@{discord_id}>)")
                 continue
 
             # If not cached, fetch from Discord API
@@ -293,16 +295,17 @@ class common_games(Extension):
                 if user_obj:
                     # Cache the username for 1 hour
                     cache_discord_user(discord_id, user_obj.username, cache_hours=1)
-                    list_message += f"- {user_obj.username} (<@{discord_id}>)\n"
+                    user_entries.append(f"- {user_obj.username} (<@{discord_id}>)")
                 else:
-                    list_message += f"- <@{discord_id}> (User Not Found)\n"
+                    user_entries.append(f"- <@{discord_id}> (User Not Found)")
             except Exception:
-                list_message += f"- <@{discord_id}> (User Not Found/Error)\n"
+                user_entries.append(f"- <@{discord_id}> (User Not Found/Error)")
 
-        if len(list_message) > 1950:
-            list_message = list_message[:1950] + "\n... (List too long, truncated)"
+        # Use utility function to handle message truncation
+        footer_template = "\n... and {count} more users!"
+        final_message = truncate_message_list(user_entries, header, footer_template, max_length=1950)
         
-        await self.bot.send_dm(ctx.author_id, list_message)
+        await self.bot.send_dm(ctx.author_id, final_message)
 
     @Task.create(IntervalTrigger(hours=6))
     async def cleanup_cache_task(self):
