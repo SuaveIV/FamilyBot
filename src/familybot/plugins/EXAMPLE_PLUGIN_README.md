@@ -286,12 +286,23 @@ The example plugin uses these FamilyBot utilities:
 
 ## 🚀 Getting Started
 
-1. **Copy the example plugin** to create your own plugin
+### Using the Example Plugin Template
+
+The example plugin is saved as `example_plugin.py.template` to prevent it from loading automatically. To use it:
+
+1. **Copy the template file**: `cp example_plugin.py.template your_plugin_name.py`
 2. **Rename the class** and file to match your plugin's purpose
 3. **Modify the commands** to implement your desired functionality
 4. **Update the help documentation** to reflect your commands
 5. **Test thoroughly** with proper error scenarios
-6. **Add your plugin** to the bot's plugin loading system
+6. **The plugin will automatically load** when you restart the bot (since it ends with `.py`)
+
+### Important Notes
+
+- The template file (`.py.template`) will **NOT** be loaded by the bot
+- Only files ending in `.py` in the plugins directory are loaded
+- Make sure to rename both the file and the class inside when creating your plugin
+- Remove or modify the example commands to suit your needs
 
 ## 💡 Best Practices Demonstrated
 
