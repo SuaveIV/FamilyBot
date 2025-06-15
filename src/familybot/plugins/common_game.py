@@ -264,7 +264,7 @@ class common_games(Extension):
         else:
             # Use utility function to handle message truncation
             footer_template = "\n... and {count} more games!"
-            final_message = truncate_message_list(game_entries, header, footer_template, max_length=1950)
+            final_message = truncate_message_list(game_entries, header, footer_template)
 
         await self.bot.send_dm(ctx.author_id, final_message)
 
@@ -303,7 +303,7 @@ class common_games(Extension):
 
         # Use utility function to handle message truncation
         footer_template = "\n... and {count} more users!"
-        final_message = truncate_message_list(user_entries, header, footer_template, max_length=1950)
+        final_message = truncate_message_list(user_entries, header, footer_template)
         
         await self.bot.send_dm(ctx.author_id, final_message)
 

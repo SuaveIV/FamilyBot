@@ -7,7 +7,7 @@ from typing import Protocol, List, Union, LiteralString # Import necessary types
 from interactions import BaseChannel, User, Message, Client, GuildText # Add other types if needed
 
 # Discord API Constants
-DISCORD_MESSAGE_LIMIT = 4000  # Maximum characters allowed in a Discord message
+DISCORD_MESSAGE_LIMIT = 2000  # Maximum characters allowed in a Discord message
 DISCORD_EMBED_LIMIT = 6000   # Maximum characters allowed in a Discord embed
 
 class FamilyBotClient(Protocol):
