@@ -1,5 +1,0 @@
-feat: Increase cache time and wishlist check limit
-
-- Increased wishlist cache duration from 2 to 168 hours (7 days) to reduce redundant API calls for data that changes infrequently.
-- Increased the number of wishlist games checked by the `!force_deals` command from 25 to 100 to provide a more comprehensive deal search.
-- Fixed a localization issue in the Epic Games plugin, changing the API endpoint from French to US English for more relevant results.
