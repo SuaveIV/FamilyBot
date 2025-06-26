@@ -487,7 +487,7 @@ def get_cached_wishlist(steam_id: str):
             conn.close()
 
 
-def cache_wishlist(steam_id: str, appids: list, cache_hours: int = 2):
+def cache_wishlist(steam_id: str, appids: list, cache_hours: int = 168):
     """Cache user's wishlist for specified hours (wishlists change moderately)."""
     conn = None
     try:

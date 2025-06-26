@@ -36,7 +36,7 @@ _family_members_migrated_this_run = False
 
 class steam_family(Extension):
     # --- RATE LIMITING CONSTANTS ---
-    MAX_WISHLIST_GAMES_TO_PROCESS = 20 # Limit appdetails calls to 20 games per run
+    MAX_WISHLIST_GAMES_TO_PROCESS = 100 # Limit appdetails calls to 100 games per run
     STEAM_API_RATE_LIMIT = 3.0 # Minimum seconds between Steam API calls (e.g., GetOwnedGames, GetFamilySharedApps) - increased to prevent 429 errors
     STEAM_STORE_API_RATE_LIMIT = 2.0 # Minimum seconds between Steam Store API calls (e.g., appdetails) - increased to prevent 429 errors
     FULL_SCAN_RATE_LIMIT = 5.0 # Minimum seconds between Steam Store API calls for full wishlist scans - increased to prevent 429 errors
@@ -370,7 +370,7 @@ class steam_family(Extension):
             
             deals_found = []
             games_checked = 0
-            max_games_to_check = 25  # Higher limit for force command
+            max_games_to_check = 100  # Higher limit for force command
             total_games = min(len(global_wishlist), max_games_to_check)
             progress_tracker = ProgressTracker(total_games)
 

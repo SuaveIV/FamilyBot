@@ -66,8 +66,8 @@ class free_epicgames(Extension):
                 self._force_next_run = False
                 return
 
-            epic_url = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=fr&country=FR&allowCountries=FR"
-            base_shop_url = "https://store.epicgames.com/fr/p/"
+            epic_url = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=US&allowCountries=US"
+            base_shop_url = "https://store.epicgames.com/en-US/p/"
 
             try:
                 answer = requests.get(epic_url, timeout=10)
