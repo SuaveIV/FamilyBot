@@ -124,7 +124,7 @@ def init_db():
         ''')
         logger.info("Database: 'family_library_cache' table checked/created.")
 
-        # Create 'itad_price_cache' table for ITAD price data (changes frequently)
+        # Create 'itad_price_cache' table for ITAD price data (historical prices are permanent)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS itad_price_cache (
                 appid TEXT PRIMARY KEY,
@@ -132,7 +132,8 @@ def init_db():
                 lowest_price_formatted TEXT,
                 shop_name TEXT,
                 cached_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL
+                expires_at TEXT,
+                permanent BOOLEAN DEFAULT 1
             )
         ''')
         logger.info("Database: 'itad_price_cache' table checked/created.")
@@ -407,22 +408,23 @@ def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
 
 
 def get_cached_itad_price(appid: str):
-    """Get cached ITAD price data if not expired, returns None if not found or expired."""
+    """Get cached ITAD price data. Returns None if not found. Permanent cache never expires."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT lowest_price, lowest_price_formatted, shop_name 
+            SELECT lowest_price, lowest_price_formatted, shop_name, permanent
             FROM itad_price_cache 
-            WHERE appid = ? AND expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
+            WHERE appid = ? AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         """, (appid,))
         row = cursor.fetchone()
         if row:
             return {
                 'lowest_price': row['lowest_price'],
                 'lowest_price_formatted': row['lowest_price_formatted'],
-                'shop_name': row['shop_name']
+                'shop_name': row['shop_name'],
+                'permanent': bool(row['permanent']) if row['permanent'] is not None else False
             }
         return None
     except Exception as e:
@@ -433,8 +435,8 @@ def get_cached_itad_price(appid: str):
             conn.close()
 
 
-def cache_itad_price(appid: str, price_data: dict, cache_hours: int = 6):
-    """Cache ITAD price data for specified hours (prices change frequently)."""
+def cache_itad_price(appid: str, price_data: dict, permanent: bool = False, cache_hours: int = 6):
+    """Cache ITAD price data. If permanent=True, cache never expires (expires_at=NULL, permanent=1)."""
     conn = None
     try:
         conn = get_db_connection()
@@ -442,22 +444,30 @@ def cache_itad_price(appid: str, price_data: dict, cache_hours: int = 6):
         from datetime import datetime, timedelta
         
         now = datetime.utcnow()
-        expires_at = now + timedelta(hours=cache_hours)
+        if permanent:
+            expires_at_str = None
+            permanent_val = 1
+        else:
+            expires_at = now + timedelta(hours=cache_hours)
+            expires_at_str = expires_at.isoformat() + 'Z'
+            permanent_val = 0
         
         cursor.execute("""
             INSERT OR REPLACE INTO itad_price_cache 
-            (appid, lowest_price, lowest_price_formatted, shop_name, cached_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (appid, lowest_price, lowest_price_formatted, shop_name, cached_at, expires_at, permanent)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             appid,
             price_data.get('lowest_price'),
             price_data.get('lowest_price_formatted'),
             price_data.get('shop_name'),
             now.isoformat() + 'Z',
-            expires_at.isoformat() + 'Z'
+            expires_at_str,
+            permanent_val
         ))
         conn.commit()
-        logger.debug(f"Cached ITAD price for {appid} for {cache_hours} hours")
+        cache_type = "permanently" if permanent else f"for {cache_hours} hours"
+        logger.debug(f"Cached ITAD price for {appid} {cache_type}")
     except Exception as e:
         logger.error(f"Error caching ITAD price for {appid}: {e}")
     finally:

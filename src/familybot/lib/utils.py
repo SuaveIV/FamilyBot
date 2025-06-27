@@ -15,12 +15,12 @@ logger = get_logger(__name__)
 
 
 def get_lowest_price(steam_app_id: int) -> str:
-    """Fetches the lowest historical price for a given Steam App ID from IsThereAnyDeal with caching."""
+    """Fetches the lowest historical price for a given Steam App ID from IsThereAnyDeal with permanent caching for historical prices."""
     if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
         logger.error("ITAD_API_KEY is missing or a placeholder. Cannot fetch lowest price.")
         return "N/A"
 
-    # Try to get cached price first
+    # Try to get cached price first (permanent cache preferred)
     cached_price = get_cached_itad_price(str(steam_app_id))
     if cached_price:
         logger.debug(f"Using cached ITAD price for {steam_app_id}: {cached_price['lowest_price_formatted'] or cached_price['lowest_price']}")
@@ -49,14 +49,14 @@ def get_lowest_price(steam_app_id: int) -> str:
             price_amount = answer_storelow[0]["lows"][0]["price"]["amount"]
             shop_name = answer_storelow[0]["lows"][0].get("shop", {}).get("name", "Unknown Store")
             
-            # Cache the price data for 6 hours
+            # Cache the price data permanently (historical lowest price)
             cache_itad_price(str(steam_app_id), {
                 'lowest_price': str(price_amount),
                 'lowest_price_formatted': f"${price_amount}",
                 'shop_name': shop_name
-            }, cache_hours=6)
+            }, permanent=True)
             
-            logger.debug(f"Cached ITAD price for {steam_app_id}: ${price_amount} from {shop_name}")
+            logger.debug(f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}")
             return str(price_amount)
         else:
             logger.info(f"No historical lowest price found for Steam App ID {steam_app_id}.")

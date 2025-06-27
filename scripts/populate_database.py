@@ -136,106 +136,145 @@ class DatabasePopulator:
         total_cached = 0
         total_processed = 0
         
-        if TQDM_AVAILABLE:
-            member_iterator = tqdm(family_members.items(), desc="👥 Family Members", unit="member", leave=True)
-        else:
-            member_iterator = family_members.items()
-
-        for steam_id, name in member_iterator:
-            if TQDM_AVAILABLE:
-                # Explicitly cast to tqdm type for Pylance, or check if it's a tqdm instance
-                # This helps Pylance understand that `member_iterator` has `set_postfix_str`
-                if isinstance(member_iterator, tqdm):
-                    member_iterator.set_postfix_str(f"Processing {name}") # pyright: ignore [reportAttributeAccessIssue]
-                else: # Fallback for non-tqdm iterators if any custom ones are used
-                    print(f"\n📊 Processing {name}...")
-            else:
+        if TQDM_AVAILABLE: # Use tqdm if available
+            member_iterator_tqdm = tqdm(family_members.items(), desc="👥 Family Members", unit="member", leave=True)
+            for steam_id, name in member_iterator_tqdm:
+                member_iterator_tqdm.set_postfix_str(f"Processing {name}")
+                
+                try:
+                    await self.rate_limit_steam_api()
+                    owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&include_appinfo=1&include_played_free_games=1"
+                    
+                    if dry_run:
+                        continue
+                    
+                    response = requests.get(owned_games_url, timeout=15)
+                    games_data = self.handle_api_response(f"GetOwnedGames ({name})", response)
+                    
+                    if not games_data:
+                        continue
+                    
+                    games = games_data.get("response", {}).get("games", [])
+                    if not games:
+                        continue
+                    
+                    user_cached = 0
+                    user_skipped = 0
+                    
+                    games_progress_iterator_tqdm = tqdm(games, desc=f"🎮 {name[:15]}", unit="game", leave=False)
+                    for game in games_progress_iterator_tqdm:
+                        app_id = str(game.get("appid"))
+                        if not app_id:
+                            continue
+                        
+                        total_processed += 1
+                        
+                        if get_cached_game_details(app_id):
+                            user_skipped += 1
+                            games_progress_iterator_tqdm.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
+                            continue
+                        
+                        # Fetch game details
+                        await self.rate_limit_store_api()
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                        
+                        try:
+                            game_response = requests.get(game_url, timeout=10)
+                            game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
+                            
+                            if not game_info:
+                                continue
+                            
+                            game_data = game_info.get(str(app_id), {}).get("data")
+                            if not game_data:
+                                continue
+                            
+                            cache_game_details(app_id, game_data, permanent=True)
+                            user_cached += 1
+                            total_cached += 1
+                            
+                            games_progress_iterator_tqdm.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
+                            
+                        except Exception as e:
+                            continue
+                    
+                except Exception as e:
+                    continue
+        else: # Fallback to basic print statements if tqdm is not available
+            member_iterator_plain = family_members.items()
+            for steam_id, name in member_iterator_plain:
                 print(f"\n📊 Processing {name}...")
-            
-            try:
-                # Get user's owned games
-                await self.rate_limit_steam_api()
-                owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&include_appinfo=1&include_played_free_games=1"
                 
-                if dry_run:
-                    if not TQDM_AVAILABLE:
+                try:
+                    await self.rate_limit_steam_api()
+                    owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&include_appinfo=1&include_played_free_games=1"
+                    
+                    if dry_run:
                         print(f"   🔍 Would fetch owned games for {name}")
-                    continue
-                
-                response = requests.get(owned_games_url, timeout=15)
-                games_data = self.handle_api_response(f"GetOwnedGames ({name})", response)
-                
-                if not games_data:
-                    if not TQDM_AVAILABLE:
+                        continue
+                    
+                    response = requests.get(owned_games_url, timeout=15)
+                    games_data = self.handle_api_response(f"GetOwnedGames ({name})", response)
+                    
+                    if not games_data:
                         print(f"   ❌ Failed to get games for {name}")
-                    continue
-                
-                games = games_data.get("response", {}).get("games", [])
-                if not games:
-                    if not TQDM_AVAILABLE:
+                        continue
+                    
+                    games = games_data.get("response", {}).get("games", [])
+                    if not games:
                         print(f"   ⚠️  No games found for {name} (private profile?)")
-                    continue
-                
-                if not TQDM_AVAILABLE:
+                        continue
+                    
                     print(f"   🎯 Found {len(games)} games")
-                
-                user_cached = 0
-                user_skipped = 0
-                
-                if TQDM_AVAILABLE:
-                    games_progress_iterator = tqdm(games, desc=f"🎮 {name[:15]}", unit="game", leave=False)
-                else:
-                    games_progress_iterator = games
-
-                for game in games_progress_iterator:
-                    app_id = str(game.get("appid"))
-                    if not app_id:
-                        continue
                     
-                    total_processed += 1
+                    user_cached = 0
+                    user_skipped = 0
                     
-                    # Check if already cached
-                    if get_cached_game_details(app_id):
-                        user_skipped += 1
-                        if TQDM_AVAILABLE and isinstance(games_progress_iterator, tqdm):
-                            games_progress_iterator.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
-                        continue
-                    
-                    # Fetch game details
-                    await self.rate_limit_store_api()
-                    game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                    
-                    try:
-                        game_response = requests.get(game_url, timeout=10)
-                        game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
-                        
-                        if not game_info:
+                    games_progress_iterator_plain = games
+                    for game in games_progress_iterator_plain:
+                        app_id = str(game.get("appid"))
+                        if not app_id:
                             continue
                         
-                        game_data = game_info.get(str(app_id), {}).get("data")
-                        if not game_data:
+                        total_processed += 1
+                        
+                        # Check if already cached
+                        if get_cached_game_details(app_id):
+                            user_skipped += 1
                             continue
                         
-                        # Cache the game details
-                        cache_game_details(app_id, game_data, permanent=True)
-                        user_cached += 1
-                        total_cached += 1
+                        # Fetch game details
+                        await self.rate_limit_store_api()
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         
-                        if TQDM_AVAILABLE and isinstance(games_progress_iterator, tqdm):
-                            games_progress_iterator.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
+                        try:
+                            game_response = requests.get(game_url, timeout=10)
+                            game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
+                            
+                            if not game_info:
+                                continue
+                            
+                            game_data = game_info.get(str(app_id), {}).get("data")
+                            if not game_data:
+                                continue
+                            
+                            # Cache the game details
+                            cache_game_details(app_id, game_data, permanent=True)
+                            user_cached += 1
+                            total_cached += 1
+                            
+                        except Exception as e:
+                            if not TQDM_AVAILABLE:
+                                print(f"   ⚠️  Error processing game {app_id}: {e}")
+                            continue
+                    
+                    if not TQDM_AVAILABLE:
+                        print(f"   ✅ {name} complete: {user_cached} cached, {user_skipped} skipped")
                         
-                    except Exception as e:
-                        if not TQDM_AVAILABLE:
-                            print(f"   ⚠️  Error processing game {app_id}: {e}")
-                        continue
-                
-                if not TQDM_AVAILABLE:
-                    print(f"   ✅ {name} complete: {user_cached} cached, {user_skipped} skipped")
-                
-            except Exception as e:
-                if not TQDM_AVAILABLE:
-                    print(f"   ❌ Error processing {name}: {e}")
-                continue
+                except Exception as e:
+                    if not TQDM_AVAILABLE:
+                        print(f"   ❌ Error processing {name}: {e}")
+                    continue
         
         print(f"\n🎮 Family library population complete!")
         print(f"   📊 Total games processed: {total_processed}")
