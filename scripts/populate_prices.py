@@ -5,6 +5,7 @@ import asyncio
 import argparse
 import httpx 
 import json
+import random
 from datetime import datetime
 from typing import Dict, List, Set, Optional
 
@@ -35,73 +36,145 @@ import logging
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+class TokenBucket:
+    """Token bucket rate limiter for controlling API request rates."""
+    
+    def __init__(self, rate: float, capacity: Optional[int] = None):
+        """
+        Initialize token bucket.
+        
+        Args:
+            rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
+            capacity: Maximum tokens in bucket (defaults to rate * 10)
+        """
+        self.rate = rate
+        self.capacity = capacity if capacity is not None else max(1, int(rate * 10))
+        self.tokens = self.capacity
+        self.last_update = time.time()
+        self._lock = asyncio.Lock()
+    
+    async def acquire(self, tokens: int = 1) -> None:
+        """Acquire tokens from the bucket, waiting if necessary."""
+        async with self._lock:
+            now = time.time()
+            # Add tokens based on elapsed time
+            elapsed = now - self.last_update
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+            self.last_update = now
+            
+            # If we don't have enough tokens, wait
+            if self.tokens < tokens:
+                wait_time = (tokens - self.tokens) / self.rate
+                await asyncio.sleep(wait_time)
+                self.tokens = 0
+            else:
+                self.tokens -= tokens
+
+
 class PricePopulator:
     """Handles comprehensive price data population with concurrent async processing and rate limiting."""
     
     def __init__(self, rate_limit_mode: str = "normal"):
         """Initialize the populator with specified rate limiting and concurrency."""
         self.rate_limits = {
-            "fast": {"steam_api": 0.8, "store_api": 1.0, "itad_api": 0.5, "concurrency": 8},
-            "normal": {"steam_api": 1.0, "store_api": 1.5, "itad_api": 1.0, "concurrency": 5},
-            "slow": {"steam_api": 1.5, "store_api": 2.0, "itad_api": 2.0, "concurrency": 3},
-            "conservative": {"steam_api": 2.0, "store_api": 3.0, "itad_api": 3.0, "concurrency": 2}
+            "fast": {"steam_api": 1.2, "store_api": 1.5, "itad_api": 1.0, "concurrency": 6},
+            "normal": {"steam_api": 1.5, "store_api": 2.0, "itad_api": 1.2, "concurrency": 4},
+            "slow": {"steam_api": 2.0, "store_api": 2.5, "itad_api": 1.5, "concurrency": 3},
+            "conservative": {"steam_api": 3.0, "store_api": 4.0, "itad_api": 2.0, "concurrency": 2}
         }
         
         self.current_limits = self.rate_limits.get(rate_limit_mode, self.rate_limits["normal"])
-        self.last_steam_api_call = 0.0
-        self.last_store_api_call = 0.0
-        self.last_itad_api_call = 0.0
+        
+        # Create token bucket rate limiters
+        self.steam_bucket = TokenBucket(1.0 / self.current_limits["steam_api"])
+        self.store_bucket = TokenBucket(1.0 / self.current_limits["store_api"])
+        self.itad_bucket = TokenBucket(1.0 / self.current_limits["itad_api"])
         
         # Create semaphores for controlling concurrency
         self.steam_semaphore = asyncio.Semaphore(self.current_limits["concurrency"])
         self.itad_semaphore = asyncio.Semaphore(self.current_limits["concurrency"])
         
+        # Add retry configuration for 429 errors
+        self.max_retries = 3
+        self.base_backoff = 1.0
+        
         self.client = httpx.AsyncClient(timeout=15.0)
 
         print(f"🔧 Rate limiting mode: {rate_limit_mode}")
-        print(f"   Steam API: {self.current_limits['steam_api']}s")
-        print(f"   Store API: {self.current_limits['store_api']}s")
-        print(f"   ITAD API: {self.current_limits['itad_api']}s")
+        print(f"   Steam API: {self.current_limits['steam_api']}s (token bucket)")
+        print(f"   Store API: {self.current_limits['store_api']}s (token bucket)")
+        print(f"   ITAD API: {self.current_limits['itad_api']}s (token bucket)")
         print(f"   Concurrency: {self.current_limits['concurrency']} simultaneous requests")
+        print(f"   Retry policy: {self.max_retries} retries with exponential backoff")
     
     async def close(self):
         """Closes the httpx client session."""
         await self.client.aclose()
 
-    async def rate_limit_steam_api(self):
-        current_time = time.time()
-        time_since_last = current_time - self.last_steam_api_call
-        if time_since_last < self.current_limits["steam_api"]:
-            await asyncio.sleep(self.current_limits["steam_api"] - time_since_last)
-        self.last_steam_api_call = time.time()
-    
-    async def rate_limit_store_api(self):
-        current_time = time.time()
-        time_since_last = current_time - self.last_store_api_call
-        if time_since_last < self.current_limits["store_api"]:
-            await asyncio.sleep(self.current_limits["store_api"] - time_since_last)
-        self.last_store_api_call = time.time()
-    
-    async def rate_limit_itad_api(self):
-        current_time = time.time()
-        time_since_last = current_time - self.last_itad_api_call
-        if time_since_last < self.current_limits["itad_api"]:
-            await asyncio.sleep(self.current_limits["itad_api"] - time_since_last)
-        self.last_itad_api_call = time.time()
+    async def make_request_with_retry(self, url: str, method: str = "GET", json_data: Optional[dict | list] = None, api_type: str = "store") -> Optional[httpx.Response]:
+        """Make HTTP request with retry logic for 429 errors."""
+        bucket = self.store_bucket if api_type == "store" else self.itad_bucket
+        
+        for attempt in range(self.max_retries + 1):
+            try:
+                # Acquire token from bucket
+                await bucket.acquire()
+                
+                # Add jitter to prevent synchronized requests
+                jitter = random.uniform(0, 0.1)
+                await asyncio.sleep(jitter)
+                
+                # Make the request
+                if method == "GET":
+                    response = await self.client.get(url)
+                elif method == "POST":
+                    response = await self.client.post(url, json=json_data)
+                else:
+                    raise ValueError(f"Unsupported HTTP method: {method}")
+                
+                # Check for rate limiting
+                if response.status_code == 429:
+                    if attempt < self.max_retries:
+                        backoff_time = self.base_backoff * (2 ** attempt) + random.uniform(0, 1)
+                        logger.warning(f"Rate limited (429), retrying in {backoff_time:.1f}s (attempt {attempt + 1}/{self.max_retries + 1})")
+                        await asyncio.sleep(backoff_time)
+                        continue
+                    else:
+                        logger.error(f"Max retries exceeded for {url}")
+                        return None
+                
+                return response
+                
+            except Exception as e:
+                if attempt < self.max_retries:
+                    backoff_time = self.base_backoff * (2 ** attempt)
+                    logger.warning(f"Request failed: {e}, retrying in {backoff_time:.1f}s")
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    logger.error(f"Request failed after {self.max_retries} retries: {e}")
+                    return None
+        
+        return None
     
     def handle_api_response(self, api_name: str, response: httpx.Response) -> Optional[dict]:
         try:
             response.raise_for_status()
             return response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                logger.warning(f"Rate limited for {api_name}")
+            else:
+                logger.error(f"HTTP error for {api_name}: {e}")
+            return None
         except httpx.RequestError as e:
-            print(f"❌ Request error for {api_name}: {e}")
+            logger.error(f"Request error for {api_name}: {e}")
             return None
         except json.JSONDecodeError as e:
-            print(f"❌ JSON decode error for {api_name}: {e}")
-            print(f"   Response text: {response.text[:200]}...")
+            logger.error(f"JSON decode error for {api_name}: {e}")
             return None
         except Exception as e:
-            print(f"❌ Unexpected error for {api_name}: {e}")
+            logger.error(f"Unexpected error for {api_name}: {e}")
             return None
     
     def load_family_members(self) -> Dict[str, str]:
@@ -147,9 +220,12 @@ class PricePopulator:
         """Fetch price for a single Steam game with semaphore control."""
         async with self.steam_semaphore:
             try:
-                await self.rate_limit_store_api()
                 game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                response = await self.client.get(game_url)
+                response = await self.make_request_with_retry(game_url, method="GET", api_type="store")
+                
+                if response is None:
+                    return app_id, False
+                
                 game_info = self.handle_api_response(f"Steam Store ({app_id})", response)
                 
                 if game_info and game_info.get(str(app_id), {}).get("data"):
@@ -238,18 +314,24 @@ class PricePopulator:
         """Fetch ITAD price for a single game with semaphore control. Returns (app_id, status)."""
         async with self.itad_semaphore:
             try:
-                await self.rate_limit_itad_api()
                 lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
-                lookup_response = await self.client.get(lookup_url)
+                lookup_response = await self.make_request_with_retry(lookup_url, method="GET", api_type="itad")
+                
+                if lookup_response is None:
+                    return app_id, "error"
+                
                 lookup_data = self.handle_api_response(f"ITAD Lookup ({app_id})", lookup_response)
                 
                 game_id = lookup_data.get("game", {}).get("id") if lookup_data else None
                 if not game_id:
                     return app_id, "not_found" if lookup_data else "error"
 
-                await self.rate_limit_itad_api()
                 storelow_url = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
-                storelow_response = await self.client.post(storelow_url, json=[game_id])
+                storelow_response = await self.make_request_with_retry(storelow_url, method="POST", json_data=[game_id], api_type="itad")
+                
+                if storelow_response is None:
+                    return app_id, "error"
+                
                 storelow_data = self.handle_api_response(f"ITAD StoreLow ({app_id})", storelow_response)
 
                 if storelow_data and storelow_data[0].get("lows"):
