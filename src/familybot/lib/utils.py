@@ -175,13 +175,13 @@ class ProgressTracker:
             return ""
 
 
-def split_message(message: str, max_length: int = 3900) -> List[str]:
+def split_message(message: str, max_length: int = 1900) -> List[str]:
     """
     Split a message into multiple parts that fit within Discord's character limit.
     
     Args:
         message: The message to split
-        max_length: Maximum length per message part (default 3900 to stay under 4000 limit)
+        max_length: Maximum length per message part (default 1900 to stay well under 2000 limit)
     
     Returns:
         List of message parts
@@ -235,7 +235,7 @@ def split_message(message: str, max_length: int = 3900) -> List[str]:
 
 
 def truncate_message_list(items: List[str], header: str = "", footer_template: str = "\n... and {count} more items!", 
-                         max_length: int = DISCORD_MESSAGE_LIMIT) -> str:
+                         max_length: int = 1900) -> str:
     """
     Truncates a list of items to fit within Discord's message limit.
     
