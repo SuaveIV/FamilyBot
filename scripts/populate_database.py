@@ -14,7 +14,7 @@ try:
     from tqdm.asyncio import tqdm as atqdm
     TQDM_AVAILABLE = True
 except ImportError:
-    print("⚠️  tqdm not available. Install with: pip install tqdm")
+    print("⚠️  tqdm not available. Install with: uv pip install tqdm")
     print("   Falling back to basic progress indicators...")
     TQDM_AVAILABLE = False
 
@@ -238,8 +238,9 @@ class DatabasePopulator:
                     user_cached = 0
                     user_skipped = 0
                     
-                    games_progress_iterator_tqdm = tqdm(games, desc=f"🎮 {name[:15]}", unit="game", leave=False)
-                    for game in games_progress_iterator_tqdm:
+                    # Process games with real-time async updates
+                    games_to_fetch = []
+                    for game in games:
                         app_id = str(game.get("appid"))
                         if not app_id:
                             continue
@@ -248,34 +249,68 @@ class DatabasePopulator:
                         
                         if get_cached_game_details(app_id):
                             user_skipped += 1
-                            games_progress_iterator_tqdm.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
-                            continue
+                        else:
+                            games_to_fetch.append(app_id)
+                    
+                    if games_to_fetch:
+                        games_progress_iterator_tqdm = tqdm(total=len(games_to_fetch), desc=f"🎮 {name[:15]}", unit="game", leave=False)
                         
-                        # Fetch game details
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                        # Create progress tracking for real-time updates
+                        progress_lock = asyncio.Lock()
                         
-                        try:
-                            game_response = await self.make_request_with_retry(game_url, api_type="store")
-                            if game_response is None:
-                                continue
+                        async def fetch_game_with_progress(app_id: str) -> bool:
+                            """Fetch game details and update progress in real-time."""
+                            nonlocal user_cached
                             
-                            game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
+                            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                             
-                            if not game_info:
-                                continue
-                            
-                            game_data = game_info.get(str(app_id), {}).get("data")
-                            if not game_data:
-                                continue
-                            
-                            cache_game_details(app_id, game_data, permanent=True)
-                            user_cached += 1
-                            total_cached += 1
-                            
+                            try:
+                                game_response = await self.make_request_with_retry(game_url, api_type="store")
+                                if game_response is None:
+                                    return False
+                                
+                                game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
+                                
+                                if not game_info:
+                                    return False
+                                
+                                game_data = game_info.get(str(app_id), {}).get("data")
+                                if not game_data:
+                                    return False
+                                
+                                cache_game_details(app_id, game_data, permanent=True)
+                                
+                                # Update progress atomically
+                                async with progress_lock:
+                                    nonlocal user_cached, total_cached
+                                    user_cached += 1
+                                    total_cached += 1
+                                    games_progress_iterator_tqdm.update(1)
+                                    games_progress_iterator_tqdm.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
+                                
+                                return True
+                                
+                            except Exception as e:
+                                async with progress_lock:
+                                    games_progress_iterator_tqdm.update(1)
+                                    games_progress_iterator_tqdm.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
+                                return False
+                        
+                        # Process games in small batches for responsive updates
+                        batch_size = 5  # Conservative batch size for database population
+                        for i in range(0, len(games_to_fetch), batch_size):
+                            batch = games_to_fetch[i:i + batch_size]
+                            tasks = [fetch_game_with_progress(app_id) for app_id in batch]
+                            await asyncio.gather(*tasks, return_exceptions=True)
+                        
+                        games_progress_iterator_tqdm.close()
+                    else:
+                        # No games to fetch, just show the skipped count
+                        if TQDM_AVAILABLE:
+                            games_progress_iterator_tqdm = tqdm(total=1, desc=f"🎮 {name[:15]}", unit="game", leave=False)
+                            games_progress_iterator_tqdm.update(1)
                             games_progress_iterator_tqdm.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
-                            
-                        except Exception as e:
-                            continue
+                            games_progress_iterator_tqdm.close()
                     
                 except Exception as e:
                     continue
@@ -312,45 +347,62 @@ class DatabasePopulator:
                     user_cached = 0
                     user_skipped = 0
                     
-                    games_progress_iterator_plain = games
-                    for game in games_progress_iterator_plain:
+                    # Process games with async batching even without tqdm
+                    games_to_fetch = []
+                    for game in games:
                         app_id = str(game.get("appid"))
                         if not app_id:
                             continue
                         
                         total_processed += 1
                         
-                        # Check if already cached
                         if get_cached_game_details(app_id):
                             user_skipped += 1
-                            continue
+                        else:
+                            games_to_fetch.append(app_id)
+                    
+                    if games_to_fetch:
+                        print(f"   🎯 Processing {len(games_to_fetch)} new games...")
                         
-                        # Fetch game details
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        
-                        try:
-                            game_response = await self.make_request_with_retry(game_url, api_type="store")
-                            if game_response is None:
-                                continue
+                        async def fetch_game_simple(app_id: str) -> bool:
+                            """Fetch game details for non-tqdm mode."""
+                            nonlocal user_cached, total_cached
                             
-                            game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
+                            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                             
-                            if not game_info:
-                                continue
-                            
-                            game_data = game_info.get(str(app_id), {}).get("data")
-                            if not game_data:
-                                continue
-                            
-                            # Cache the game details
-                            cache_game_details(app_id, game_data, permanent=True)
-                            user_cached += 1
-                            total_cached += 1
-                            
-                        except Exception as e:
-                            if not TQDM_AVAILABLE:
+                            try:
+                                game_response = await self.make_request_with_retry(game_url, api_type="store")
+                                if game_response is None:
+                                    return False
+                                
+                                game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
+                                
+                                if not game_info:
+                                    return False
+                                
+                                game_data = game_info.get(str(app_id), {}).get("data")
+                                if not game_data:
+                                    return False
+                                
+                                cache_game_details(app_id, game_data, permanent=True)
+                                user_cached += 1
+                                total_cached += 1
+                                return True
+                                
+                            except Exception as e:
                                 print(f"   ⚠️  Error processing game {app_id}: {e}")
-                            continue
+                                return False
+                        
+                        # Process games in small batches with progress updates
+                        batch_size = 5
+                        for i in range(0, len(games_to_fetch), batch_size):
+                            batch = games_to_fetch[i:i + batch_size]
+                            tasks = [fetch_game_simple(app_id) for app_id in batch]
+                            await asyncio.gather(*tasks, return_exceptions=True)
+                            
+                            # Progress update every batch
+                            processed = min(i + batch_size, len(games_to_fetch))
+                            print(f"   📈 Progress: {processed}/{len(games_to_fetch)} | Cached: {user_cached}")
                     
                     if not TQDM_AVAILABLE:
                         print(f"   ✅ {name} complete: {user_cached} cached, {user_skipped} skipped")

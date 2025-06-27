@@ -13,7 +13,7 @@ try:
     from tqdm import tqdm
     TQDM_AVAILABLE = True
 except ImportError:
-    print("⚠️  tqdm not available. Install with: pip install tqdm")
+    print("⚠️  tqdm not available. Install with: uv pip install tqdm")
     print("   Falling back to basic progress indicators...")
     TQDM_AVAILABLE = False
 
@@ -265,39 +265,43 @@ class PricePopulator:
             print("   ✅ All games already have Steam price data")
             return 0
         
-        # Process games concurrently
+        # Process games concurrently with real-time progress updates
         steam_prices_cached, steam_errors = 0, 0
         
         if TQDM_AVAILABLE:
             progress_bar = tqdm(total=len(games_to_process), desc="💰 Steam Prices", unit="game")
         
-        # Process in batches to avoid overwhelming the system
-        batch_size = self.current_limits['concurrency'] * 10
-        for i in range(0, len(games_to_process), batch_size):
-            batch = games_to_process[i:i + batch_size]
+        # Create a semaphore to control concurrent updates to progress
+        progress_lock = asyncio.Lock()
+        
+        async def fetch_with_progress(app_id: str) -> tuple[str, bool]:
+            """Fetch price and update progress in real-time."""
+            nonlocal steam_prices_cached, steam_errors
             
-            # Create tasks for concurrent processing
-            tasks = [self.fetch_steam_price(app_id) for app_id in batch]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            result = await self.fetch_steam_price(app_id)
             
-            # Process results
-            for result in results:
-                if isinstance(result, Exception):
-                    steam_errors += 1
-                    logger.error(f"Task failed: {result}")
-                elif isinstance(result, tuple) and len(result) == 2:
-                    app_id, success = result
-                    if success:
-                        steam_prices_cached += 1
-                    else:
-                        steam_errors += 1
+            # Update progress atomically
+            async with progress_lock:
+                app_id, success = result
+                if success:
+                    steam_prices_cached += 1
                 else:
                     steam_errors += 1
-                    logger.error(f"Unexpected result format: {result}")
                 
                 if TQDM_AVAILABLE:
                     progress_bar.update(1)
                     progress_bar.set_postfix_str(f"Cached: {steam_prices_cached}, Errors: {steam_errors}")  # type: ignore
+                
+                return result
+        
+        # Process in smaller batches for more responsive progress updates
+        batch_size = self.current_limits['concurrency'] * 3
+        for i in range(0, len(games_to_process), batch_size):
+            batch = games_to_process[i:i + batch_size]
+            
+            # Create tasks for concurrent processing with progress updates
+            tasks = [fetch_with_progress(app_id) for app_id in batch]
+            await asyncio.gather(*tasks, return_exceptions=True)
             
             # Progress update for non-tqdm users
             if not TQDM_AVAILABLE:
@@ -371,41 +375,45 @@ class PricePopulator:
             print("   ✅ All games already have ITAD price data")
             return 0
         
-        # Process games concurrently
+        # Process games concurrently with real-time progress updates
         itad_prices_cached, itad_errors, itad_not_found = 0, 0, 0
         
         if TQDM_AVAILABLE:
             progress_bar = tqdm(total=len(games_to_process), desc="📈 ITAD Prices", unit="game")
         
-        # Process in smaller batches for ITAD (more conservative)
-        batch_size = self.current_limits['concurrency'] * 5
-        for i in range(0, len(games_to_process), batch_size):
-            batch = games_to_process[i:i + batch_size]
+        # Create a semaphore to control concurrent updates to progress
+        progress_lock = asyncio.Lock()
+        
+        async def fetch_itad_with_progress(app_id: str) -> tuple[str, str]:
+            """Fetch ITAD price and update progress in real-time."""
+            nonlocal itad_prices_cached, itad_errors, itad_not_found
             
-            # Create tasks for concurrent processing
-            tasks = [self.fetch_itad_price(app_id) for app_id in batch]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            result = await self.fetch_itad_price(app_id)
             
-            # Process results
-            for result in results:
-                if isinstance(result, Exception):
+            # Update progress atomically
+            async with progress_lock:
+                app_id, status = result
+                if status == "cached":
+                    itad_prices_cached += 1
+                elif status == "not_found":
+                    itad_not_found += 1
+                elif status == "error":
                     itad_errors += 1
-                    logger.error(f"ITAD task failed: {result}")
-                elif isinstance(result, tuple) and len(result) == 2:
-                    app_id, status = result
-                    if status == "cached":
-                        itad_prices_cached += 1
-                    elif status == "not_found":
-                        itad_not_found += 1
-                    elif status == "error":
-                        itad_errors += 1
-                else:
-                    itad_errors += 1
-                    logger.error(f"Unexpected ITAD result format: {result}")
                 
                 if TQDM_AVAILABLE:
                     progress_bar.update(1)
                     progress_bar.set_postfix_str(f"Cached: {itad_prices_cached}, Not Found: {itad_not_found}, Errors: {itad_errors}")  # type: ignore
+                
+                return result
+        
+        # Process in smaller batches for ITAD (more conservative) with real-time updates
+        batch_size = self.current_limits['concurrency'] * 2
+        for i in range(0, len(games_to_process), batch_size):
+            batch = games_to_process[i:i + batch_size]
+            
+            # Create tasks for concurrent processing with progress updates
+            tasks = [fetch_itad_with_progress(app_id) for app_id in batch]
+            await asyncio.gather(*tasks, return_exceptions=True)
             
             # Progress update for non-tqdm users
             if not TQDM_AVAILABLE:
