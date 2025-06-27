@@ -9,8 +9,19 @@ __pycache__/
 dist/
 *.egg-info/
 
-# Logs
+# Logs and logging
+logs/
 *.log
+*.log.*
+*.log.gz
+*.log.zip
+
+# Specific log patterns
+familybot*.log
+steam_api*.log
+script_errors*.log
+populate_*.log
+json_importer*.log
 
 # IDE-specific files (example for VS Code)
 .vscode/

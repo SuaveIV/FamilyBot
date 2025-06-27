@@ -15,11 +15,10 @@ from familybot.lib.database import (
     get_cached_discord_user, cache_discord_user, cleanup_expired_cache
 )
 from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
+from familybot.lib.logging_config import get_logger, log_private_profile_detection, log_api_error
 
-# Setup logging for this specific module
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Setup enhanced logging for this specific module
+logger = get_logger(__name__)
 
 # Define the path to OLD register.csv for migration (if it exists)
 OLD_REGISTER_CSV_PATH = os.path.join(PROJECT_ROOT, 'register.csv')

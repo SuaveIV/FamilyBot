@@ -25,6 +25,10 @@ from familybot.lib.database import (
     get_cached_wishlist, cache_wishlist, get_cached_itad_price, cache_itad_price
 )
 from familybot.lib.family_utils import find_in_2d_list
+from familybot.lib.logging_config import setup_script_logging, log_api_error, log_rate_limit, log_performance_metric
+
+# Setup enhanced logging for this script
+logger = setup_script_logging("populate_prices", "INFO")
 
 
 class PricePopulator:

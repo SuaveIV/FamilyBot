@@ -9,11 +9,10 @@ from datetime import datetime # For admin DM timestamp
 from familybot.config import HELP_CHANNEL_ID, ADMIN_DISCORD_ID, PLUGIN_PATH
 from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
 from familybot.lib.utils import truncate_message_list
+from familybot.lib.logging_config import get_logger
 
-# Setup logging for this specific module
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Setup enhanced logging for this specific module
+logger = get_logger(__name__)
 
 class help_message(Extension):
     def __init__(self, bot: FamilyBotClient):

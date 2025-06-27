@@ -24,10 +24,11 @@ from familybot.lib.database import (
 from familybot.lib.utils import get_lowest_price, ProgressTracker, truncate_message_list
 from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
 
-# Setup logging for this specific module
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Import enhanced logging configuration
+from familybot.lib.logging_config import get_logger, log_private_profile_detection, log_api_error, log_rate_limit
+
+# Setup enhanced logging for this specific module
+logger = get_logger(__name__)
 
 # --- Migration Flag for Family Members ---
 _family_members_migrated_this_run = False
@@ -1324,7 +1325,7 @@ class steam_family(Extension):
                 await self._rate_limit_steam_api() # Apply rate limit here
                 wishlist_response = requests.get(wishlist_url, timeout=15)
                 if wishlist_response.text == "{\"success\":2}":
-                    logger.info(f"{user_name_for_log}'s wishlist is private or empty.")
+                    log_private_profile_detection(logger, user_name_for_log, user_steam_id, "wishlist")
                     continue
 
                 wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)

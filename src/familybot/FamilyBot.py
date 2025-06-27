@@ -22,9 +22,11 @@ from familybot.lib.database import init_db, get_db_connection # <<< Import init_
 from familybot.lib.types import FamilyBotClient # Import the protocol type
 
 
-# Setup global logging for the entire bot (this will be the root logger)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__) # Logger for this main script
+# Import our centralized logging configuration
+from familybot.lib.logging_config import setup_bot_logging, get_logger
+
+# Setup comprehensive logging for the bot
+logger = setup_bot_logging("INFO")  # Can be changed to DEBUG for more verbose logging
 
 # --- Client Setup ---
 client = Client(token=DISCORD_API_KEY, intents=Intents.ALL)

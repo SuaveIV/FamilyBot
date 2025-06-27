@@ -11,11 +11,10 @@ import logging
 # Import from config
 from familybot.config import EPIC_CHANNEL_ID, ADMIN_DISCORD_ID
 from familybot.lib.types import FamilyBotClient
+from familybot.lib.logging_config import get_logger, log_api_error
 
-# Setup logging for this specific module
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Setup enhanced logging for this specific module
+logger = get_logger(__name__)
 
 class free_epicgames(Extension):
     def __init__(self, bot: FamilyBotClient):

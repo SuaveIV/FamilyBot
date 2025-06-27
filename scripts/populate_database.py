@@ -26,6 +26,10 @@ from familybot.lib.database import (
     get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library
 )
 from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list
+from familybot.lib.logging_config import setup_script_logging, log_private_profile_detection, log_api_error, log_rate_limit, log_performance_metric
+
+# Setup enhanced logging for this script
+logger = setup_script_logging("populate_database", "INFO")
 
 
 class DatabasePopulator:
@@ -70,17 +74,20 @@ class DatabasePopulator:
         self.last_store_api_call = time.time()
     
     def handle_api_response(self, api_name: str, response: requests.Response) -> Optional[dict]:
-        """Handle API responses with error checking."""
+        """Handle API responses with error checking and enhanced logging."""
         try:
             response.raise_for_status()
             return json.loads(response.text)
         except requests.exceptions.RequestException as e:
+            log_api_error(logger, api_name, e, f"Status: {response.status_code}")
             print(f"❌ Request error for {api_name}: {e}")
             return None
         except json.JSONDecodeError as e:
+            log_api_error(logger, api_name, e, f"Response: {response.text[:100]}")
             print(f"❌ JSON decode error for {api_name}: {e}")
             return None
         except Exception as e:
+            log_api_error(logger, api_name, e)
             print(f"❌ Unexpected error for {api_name}: {e}")
             return None
     

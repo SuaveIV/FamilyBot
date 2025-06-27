@@ -8,11 +8,10 @@ from typing import Optional, List
 from familybot.config import ITAD_API_KEY # Import ITAD_API_KEY from config
 from familybot.lib.database import get_cached_itad_price, cache_itad_price
 from familybot.lib.types import DISCORD_MESSAGE_LIMIT
+from familybot.lib.logging_config import get_logger, log_api_error
 
-# Setup logging for this specific module
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Setup enhanced logging for this specific module
+logger = get_logger(__name__)
 
 
 def get_lowest_price(steam_app_id: int) -> str:
