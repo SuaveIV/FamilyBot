@@ -462,3 +462,50 @@ if __name__ == "__main__":
     # No explicit signal handlers are typically needed here for Windows.
     logger.info("Starting FamilyBot client...")
     client.start()
+
+def main():
+    """Entry point for the familybot script alias."""
+    # This function allows the bot to be run via 'uv run familybot'
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='FamilyBot - Discord bot for Steam family management')
+    parser.add_argument('--purge-cache', action='store_true', 
+                       help='Purge game details cache to force fresh USD pricing and new boolean fields')
+    parser.add_argument('--purge-wishlist', action='store_true',
+                       help='Purge wishlist cache to force fresh wishlist data')
+    parser.add_argument('--purge-family-library', action='store_true',
+                       help='Purge family library cache to force fresh family game data')
+    parser.add_argument('--purge-all', action='store_true',
+                       help='Purge all cache data (game details, wishlist, family library, etc.)')
+    parser.add_argument('--full-library-scan', action='store_true',
+                       help='Scan all family members\' complete game libraries and cache game details')
+    parser.add_argument('--full-wishlist-scan', action='store_true',
+                       help='Perform comprehensive scan of ALL common wishlist games')
+    
+    args = parser.parse_args()
+    
+    # Handle command line operations
+    if args.purge_cache:
+        print("🗑️ Purging game details cache...")
+        purge_game_cache()
+        sys.exit(0)
+    elif args.purge_wishlist:
+        print("🗑️ Purging wishlist cache...")
+        purge_wishlist_cache()
+        sys.exit(0)
+    elif args.purge_family_library:
+        print("🗑️ Purging family library cache...")
+        purge_family_library_cache()
+        sys.exit(0)
+    elif args.purge_all:
+        print("🗑️ Purging all cache data...")
+        purge_all_cache()
+        sys.exit(0)
+    elif args.full_library_scan:
+        print("❌ Full library scan requires the bot to be running.")
+        print("Please start the bot and use the Discord command: !full_library_scan")
+        print("This command requires Discord interaction for progress updates and admin verification.")
+        sys.exit(1)
+    
+    # Normal bot startup
+    logger.info("Starting FamilyBot client...")
+    client.start()

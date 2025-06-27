@@ -1,22 +1,22 @@
 #!/bin/bash
 
 # .SYNOPSIS
-#     Starts both the FamilyBot (main bot + WebSocket server) and the Token Sender bot.
+#     Starts the FamilyBot with integrated token sender plugin.
 #
 # .DESCRIPTION
 #     This script automates the process of:
 #     1. Finding the virtual environment activation script.
-#     2. Launching FamilyBot.py in a a new, independent terminal window.
-#     3. Launching getToken.py in another new, independent terminal window.
+#     2. Launching FamilyBot.py in a new, independent terminal window.
 #
-#     Both bots will run in their own separate windows, allowing them to operate concurrently.
+#     The token sender now runs as an integrated plugin within the main bot process.
 #
 # .NOTES
 #     - Run this script from the FamilyBot/ project root directory.
 #     - Requires Bash shell.
 #     - Requires 'uv' to be installed and your virtual environment is set up.
 #     - Assumes 'gnome-terminal', 'konsole', or 'xterm' (or 'open' on macOS) is available.
-#     - You must manually close the bot windows when you want to stop them.
+#     - You must manually close the bot window when you want to stop it.
+#     - For first-time setup, run 'uv run familybot-setup' to configure Steam login.
 # .EXAMPLE
 #     ./run_bots.sh
 
@@ -24,7 +24,6 @@
 PROJECT_ROOT=$(pwd)
 ACTIVATE_SCRIPT="$PROJECT_ROOT/.venv/bin/activate"
 FAMILYBOT_SCRIPT="$PROJECT_ROOT/src/familybot/FamilyBot.py"
-TOKEN_SENDER_SCRIPT="$PROJECT_ROOT/src/familybot/Token_Sender/getToken.py"
 
 # --- Helper function for colored output ---
 COLOR_BLUE='\033[0;34m'
@@ -34,7 +33,7 @@ COLOR_RED='\033[0;31m'
 COLOR_CYAN='\033[0;36m'
 COLOR_NC='\033[0m' # No Color
 
-echo -e "${COLOR_CYAN}--- Starting FamilyBot and Token Sender ---${COLOR_NC}"
+echo -e "${COLOR_CYAN}--- Starting FamilyBot (with integrated token sender) ---${COLOR_NC}"
 
 # --- Verify paths exist ---
 if [[ ! -f "$ACTIVATE_SCRIPT" ]]; then
@@ -45,9 +44,12 @@ if [[ ! -f "$FAMILYBOT_SCRIPT" ]]; then
     echo -e "${COLOR_RED}ERROR: FamilyBot script not found at $FAMILYBOT_SCRIPT. Check path and project structure.${COLOR_NC}"
     exit 1
 fi
-if [[ ! -f "$TOKEN_SENDER_SCRIPT" ]]; then
-    echo -e "${COLOR_RED}ERROR: Token Sender script not found at $TOKEN_SENDER_SCRIPT. Check path and project structure.${COLOR_NC}"
-    exit 1
+
+# --- Check if browser profile exists ---
+BROWSER_PROFILE_PATH="$PROJECT_ROOT/FamilyBotBrowserProfile"
+if [[ ! -d "$BROWSER_PROFILE_PATH" ]]; then
+    echo -e "${COLOR_YELLOW}WARNING: Browser profile not found at $BROWSER_PROFILE_PATH${COLOR_NC}"
+    echo -e "${COLOR_YELLOW}For token sender functionality, run: uv run familybot-setup${COLOR_NC}"
 fi
 
 # --- Function to launch in a new terminal ---
@@ -81,17 +83,12 @@ launch_in_new_terminal() {
 }
 
 
-# --- Launch processes ---
+# --- Launch process ---
 
-echo -e "${COLOR_YELLOW}Launching FamilyBot (main bot + WebSocket server)...${COLOR_NC}"
+echo -e "${COLOR_YELLOW}Launching FamilyBot (main bot with integrated token sender)...${COLOR_NC}"
 launch_in_new_terminal "$FAMILYBOT_SCRIPT" "FamilyBot - Main Bot"
 echo -e "${COLOR_GREEN}FamilyBot launched in a new window.${COLOR_NC}"
 
-
-echo -e "${COLOR_YELLOW}Launching Token Sender bot...${COLOR_NC}"
-launch_in_new_terminal "$TOKEN_SENDER_SCRIPT" "FamilyBot - Token Sender"
-echo -e "${COLOR_GREEN}Token Sender bot launched in a new window.${COLOR_NC}"
-
-
 echo -e "${COLOR_CYAN}--- Launch sequence complete ---${COLOR_NC}"
-echo -e "${COLOR_CYAN}Check the newly opened terminal windows for bot logs.${COLOR_NC}"
+echo -e "${COLOR_CYAN}Check the newly opened terminal window for bot logs.${COLOR_NC}"
+echo -e "${COLOR_CYAN}The token sender plugin will run automatically within the main bot process.${COLOR_NC}"
