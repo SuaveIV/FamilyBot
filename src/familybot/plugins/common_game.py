@@ -12,7 +12,8 @@ from familybot.config import ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
 from familybot.lib.utils import get_common_elements_in_lists, truncate_message_list
 from familybot.lib.database import (
     get_db_connection, get_cached_user_games, cache_user_games,
-    get_cached_discord_user, cache_discord_user, cleanup_expired_cache
+    get_cached_discord_user, cache_discord_user, cleanup_expired_cache,
+    get_cached_game_details, cache_game_details
 )
 from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
 from familybot.lib.logging_config import get_logger, log_private_profile_detection, log_api_error
@@ -227,26 +228,42 @@ class common_games(Extension):
         game_entries = []
         
         for game_appid in common_game_appids:
-            game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=fr"
-            logger.info(f"Fetching app details for AppID: {game_appid}")
             try:
-                app_info_response = requests.get(game_url, timeout=5)
-                app_info_response.raise_for_status()
+                # Try to get cached game details first
+                cached_game = get_cached_game_details(str(game_appid))
+                if cached_game:
+                    logger.info(f"Using cached game details for AppID: {game_appid}")
+                    game_data = cached_game
+                else:
+                    # If not cached, fetch from API
+                    game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
+                    logger.info(f"Fetching app details from API for AppID: {game_appid}")
+                    
+                    app_info_response = requests.get(game_url, timeout=10)
+                    app_info_response.raise_for_status()
 
-                logger.debug(f"Status Code: {app_info_response.status_code}")
-                logger.debug(f"Raw Response Text (AppDetails):\n{app_info_response.text[:500]}")
+                    logger.debug(f"Status Code: {app_info_response.status_code}")
+                    logger.debug(f"Raw Response Text (AppDetails):\n{app_info_response.text[:500]}")
 
-                game_info_json = json.loads(app_info_response.text)
-                game_data = game_info_json.get(str(game_appid), {}).get("data")
+                    game_info_json = json.loads(app_info_response.text)
+                    game_data = game_info_json.get(str(game_appid), {}).get("data")
 
-                if not game_data or not game_info_json.get(str(game_appid), {}).get("success"):
-                    logger.warning(f"Could not get data for AppID {game_appid} or success=false. Response: {app_info_response.text}")
-                    continue
+                    if not game_data or not game_info_json.get(str(game_appid), {}).get("success"):
+                        logger.warning(f"Could not get data for AppID {game_appid} or success=false. Response: {app_info_response.text}")
+                        continue
+                    
+                    # Cache the game details permanently
+                    cache_game_details(str(game_appid), game_data, permanent=True)
 
                 if game_data.get("type") == "game":
-                    categories = game_data.get("categories", [])
-                    is_multiplayer = any(cat.get("id") in [1, 36, 38] for cat in categories)
-
+                    # Use cached boolean fields for faster performance if available
+                    is_multiplayer = game_data.get("is_multiplayer")
+                    
+                    # Fallback to category analysis if boolean field not available
+                    if is_multiplayer is None:
+                        categories = game_data.get("categories", [])
+                        is_multiplayer = any(cat.get("id") in [1, 36, 38] for cat in categories)
+                    
                     if is_multiplayer:
                         game_name = game_data.get("name", f"Unknown Game ({game_appid})")
                         game_entries.append(f"- {game_name}")
