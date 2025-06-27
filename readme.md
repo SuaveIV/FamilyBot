@@ -38,6 +38,7 @@ FamilyBot/
 ├── logs/                   # Log files (auto-created)
 ├── config-template.yml     # Main bot configuration template
 ├── pyproject.toml         # Project dependencies and metadata
+├── doc/ROADMAP.md         # Project roadmap (new location)
 └── main.py               # Simple entry point (placeholder)
 ```
 
@@ -53,18 +54,11 @@ FamilyBot consists of several interconnected components:
 - **WebSocket Server**: Receives tokens from the Token_Sender component
 - **Command-line Interface**: Supports cache management and maintenance operations
 
-### Token Sender Plugin (`plugins/token_sender.py`)
+### Token Sender (`Token_Sender/getToken.py`)
 
-- **Automated Token Extraction**: Uses Playwright with Chromium to extract Steam web API tokens
-- **Integrated Plugin**: Runs as a plugin within the main bot process (no separate WebSocket communication needed)
-- **Enhanced Session Management**: Uses explicit storage state saving for reliable Steam login persistence
-- **Admin Commands**: Provides `!force_token` and `!token_status` commands for monitoring and control
-- **Easy Setup**: Automated browser profile creation with `scripts/setup_browser.py`
-
-### Legacy Token Sender (`Token_Sender/getToken.py`)
-
-- **Deprecated**: Original standalone Selenium-based implementation (preserved for reference)
-- **Migration Complete**: New plugin provides all functionality with significant improvements
+- **Automated Token Extraction**: Uses Selenium with Firefox to extract Steam web API tokens
+- **WebSocket Client**: Sends tokens to the main bot via WebSocket connection
+- **Session Management**: Maintains Steam login sessions for token renewal
 
 ### Plugin Architecture
 
@@ -214,68 +208,15 @@ The `Token_Sender` bot has its own configuration. First, copy the template file 
 - **`shutdown`**: Set to `true` if you want your computer to shut down after the token is successfully sent (mostly for dedicated systems; set to `false` for development).
 - **`firefox_profile_path`**: The **complete path** to the Firefox profile you created in the previous step. Ensure you use **forward slashes (`/`)** or escaped backslashes (`\\`) in the path.
 
-## Running the Bot
+## Running the Bots
 
-### Token Sender Setup (First Time Only)
+Both bots need to run concurrently in separate processes. The main entry point is `src/familybot/FamilyBot.py`, not the `main.py` file (which is just a placeholder).
 
-Before running the bot for the first time, you need to set up the Steam login session for the token sender plugin:
+From the `FamilyBot/` project root directory, you have a few options:
 
-```bash
-# Set up browser profile with Steam login (run once)
-uv run python scripts/setup_browser.py
-```
+### Option 1: Using the Launch Scripts (Recommended for ease-of-use)
 
-This will:
-
-1. Open a Chromium browser window
-2. Navigate to Steam login page
-3. Allow you to log into Steam manually
-4. Save your login session for the token sender plugin
-
-### Running the Main Bot
-
-The main entry point is `src/familybot/FamilyBot.py`. The token sender now runs as an integrated plugin, so you only need to start one process.
-
-From the `FamilyBot/` project root directory:
-
-**Option 1: Using Script Aliases (Recommended):**
-
-```bash
-# Run the bot (works on all platforms)
-uv run familybot
-
-# Set up browser profile with Steam login
-uv run familybot-setup
-
-# Test token extraction functionality
-uv run familybot-test
-```
-
-**Option 2: Direct Python Execution:**
-
-**For Windows (PowerShell 7):**
-
-```powershell
-# Activate virtual environment
-. .\.venv\Scripts\Activate.ps1
-
-# Run the bot
-uv run python .\src\familybot\FamilyBot.py
-```
-
-**For macOS/Linux (Bash):**
-
-```bash
-# Activate virtual environment
-source ./.venv/bin/activate
-
-# Run the bot
-uv run python ./src/familybot/FamilyBot.py
-```
-
-### Legacy Launch Scripts (For Backward Compatibility)
-
-The old launch scripts are still available but now only start the main bot since the token sender is integrated:
+These scripts will launch both the main bot and the token sender in separate terminal windows, allowing them to operate concurrently.
 
 - **For Windows (PowerShell 7):**
 
@@ -289,6 +230,49 @@ The old launch scripts are still available but now only start the main bot since
     chmod +x ./run_bots.sh # Make the script executable first
     ./run_bots.sh
     ```
+
+**🚨 Security Note for Windows Launch Scripts (.ps1 and .bat) 🚨**
+The `run_bots.ps1` script (which internally calls `run_bots.bat` commands) and the `run_bots.bat` script itself operate by directly launching `cmd.exe` processes. This method effectively **bypasses Windows PowerShell's Execution Policy** (a security feature). While this resolves issues in environments where PowerShell scripts might be blocked, it means that these scripts will run without security checks or prompts.
+
+**It is crucial to review the content of these scripts (`run_bots.ps1`, `run_bots.bat`, and the Python files they execute) and ensure you trust their source before running them.** This approach trades off some security strictness for functionality in certain environments.
+
+### Option 2: Running Manually (For more control or troubleshooting)
+
+You can also launch each bot manually in its own separate terminal window. This requires you to first activate the virtual environment in each window.
+
+- **Step 1: Activate the Virtual Environment**
+    Open a new terminal window, navigate to your `FamilyBot/` project root directory, and run:
+- **For Windows (PowerShell 7):**
+
+```powershell
+        . .\.venv\Scripts\Activate.ps1
+```
+
+- **For macOS/Linux (Bash):**
+
+```bash
+        source ./.venv/bin/activate
+```
+
+You should see `(.venv)` appear at the beginning of your terminal prompt.
+
+- **Step 2: Run the Bot Executables**
+  Once the virtual environment is active in a terminal window, run the respective bot:
+  - **To run the main bot (FamilyBot.py + WebSocket server):**
+
+    ```powershell
+    uv run python .\src\familybot\FamilyBot.py
+    ```
+
+    (Use `./src/familybot/FamilyBot.py` for macOS/Linux Bash)
+
+  - **To run the token sender bot (getToken.py):**
+
+    ```powershell
+    uv run python .\src\familybot\Token_Sender\getToken.py
+    ```
+
+    (Use `./src/familybot/Token_Sender/getToken.py` for macOS/Linux Bash)
 
 ### Command-line Arguments
 
@@ -453,19 +437,6 @@ Adds the following commands:
 - `!register <SteamID>`: Links a Discord account to a Steam ID. (Usable in bot DMs).
 - `!common_games @user1 @user2`: Gets multiplayer games common to the sender's Steam library and the tagged users. (Usable in bot DMs).
 - `!list_users`: Gets the list of users who have linked their SteamID with their DiscordID using the `!register` command. The list is sent in DM. (Usable in bot DMs).
-
-### Token Sender
-
-This plugin handles automatic Steam web API token management:
-
-- **Automatic Token Renewal**: Monitors token expiry and automatically fetches new tokens using Playwright
-- **Smart Scheduling**: Checks hourly and updates tokens 1 hour before expiry (configurable)
-- **Admin Commands**:
-  - `!force_token`: Force immediate token update (admin only, DM only)
-  - `!token_status`: Check current token status and expiry information (admin only, DM only)
-- **Browser Automation**: Uses Playwright with Chromium for reliable token extraction
-- **Profile Support**: Can use existing browser profiles logged into Steam
-- **Error Handling**: Comprehensive error handling with admin notifications via DM
 
 ### Help Message
 

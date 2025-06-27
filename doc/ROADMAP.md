@@ -2,17 +2,20 @@
 
 This document outlines the planned future development goals and enhancements for the Family Bot project.
 
+## Completed Goals
+
+### 1. Switch Token Gatherer to Playwright (COMPLETED - 2025-06-27)
+
+* **Goal:** Replaced the Selenium-based token gathering (`getToken.py`) with Playwright.
+* **Benefits:** Significantly improved robustness, reliability, and cross-platform compatibility of the token gathering process. Playwright handles browser binary management automatically and offers a more modern asynchronous API.
+
+### 2. Combine Token Gatherer into Main Bot (COMPLETED - 2025-06-27)
+
+* **Goal:** Consolidated the `getToken.py` script's functionality directly into the main `FamilyBot.py` program as a plugin.
+* **Benefits:** Simplified overall bot management (single process to start/stop), enabled direct in-memory token transfer (eliminating the need for an internal WebSocket server for this purpose), and enhanced resource efficiency and unified graceful shutdowns.
+* **Additional Features:** Added new admin commands (`!force_token`, `!token_status`), enhanced session persistence, and comprehensive documentation/startup script updates.
+
 ## Future Development Goals
-
-### 1. Switch Token Gatherer to Playwright
-
-* **Goal:** Replace the current Selenium-based token gathering (`getToken.py`) with Playwright.
-* **Benefits:** This will significantly improve the robustness, reliability, and cross-platform compatibility of the token gathering process, as Playwright handles browser binary management automatically and offers a more modern asynchronous API.
-
-### 2. Combine Token Gatherer into Main Bot
-
-* **Goal:** Consolidate the `getToken.py` script's functionality directly into the main `FamilyBot.py` program.
-* **Benefits:** This architectural improvement will simplify overall bot management (single process to start/stop), enable direct in-memory token transfer (eliminating the need for an internal WebSocket server for this purpose), and enhance resource efficiency and unified graceful shutdowns.
 
 ### 3. Add Web-Based UI
 
