@@ -8,9 +8,9 @@ This directory contains utility scripts for managing FamilyBot's cache and datab
 
 A comprehensive script that populates the FamilyBot database with game data without requiring Discord interaction. Perfect for initial setup or complete database rebuilds.
 
-### `populate_prices.py` - Comprehensive Price Data Population
+### `populate_prices.py` - Wishlist Price Data Population
 
-A specialized script that pre-populates both Steam Store prices and ITAD historical price data. **Perfect for Steam Summer/Winter Sales** when you want maximum speed for deal detection commands.
+A specialized script that pre-populates both Steam Store prices and ITAD historical price data for **family wishlist games only**. **Perfect for Steam Summer/Winter Sales** when you want maximum speed for deal detection commands.
 
 #### Features
 

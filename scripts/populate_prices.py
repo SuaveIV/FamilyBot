@@ -132,32 +132,21 @@ class PricePopulator:
         return members
     
     def collect_all_game_ids(self, family_members: Dict[str, str]) -> Set[str]:
-        """Collect all unique game IDs from wishlists and cached game details."""
+        """Collect all unique game IDs from family member wishlists only."""
         all_game_ids = set()
         
-        print("\n📊 Collecting game IDs from wishlists...")
+        print("\n📊 Collecting game IDs from family wishlists...")
         
-        # Collect from wishlists
+        # Collect from wishlists only (deals commands only work with wishlist games)
         for steam_id, name in family_members.items():
             cached_wishlist = get_cached_wishlist(steam_id)
             if cached_wishlist:
                 all_game_ids.update(cached_wishlist)
                 print(f"   📋 {name}: {len(cached_wishlist)} wishlist games")
+            else:
+                print(f"   ⚠️  {name}: No cached wishlist found")
         
-        # Collect from cached game details
-        print("\n📊 Collecting game IDs from cached game details...")
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT appid FROM game_details_cache")
-            cached_games = [row["appid"] for row in cursor.fetchall()]
-            all_game_ids.update(cached_games)
-            conn.close()
-            print(f"   💾 Found {len(cached_games)} cached games")
-        except Exception as e:
-            print(f"   ❌ Error collecting cached games: {e}")
-        
-        print(f"\n🎯 Total unique games to process: {len(all_game_ids)}")
+        print(f"\n🎯 Total unique wishlist games to process: {len(all_game_ids)}")
         return all_game_ids
     
     async def populate_steam_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:

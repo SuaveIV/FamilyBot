@@ -206,7 +206,7 @@ The `scripts/` directory contains powerful utility scripts for database manageme
 ### Database Population Scripts
 
 * **`populate_database.py`** - Comprehensive database population script that fetches game data, wishlists, and family libraries. Perfect for initial setup or complete rebuilds.
-* **`populate_prices.py`** - Specialized price data population script that pre-populates both Steam Store prices and ITAD historical price data. **Essential for Steam Summer/Winter Sales** to maximize deal detection speed.
+* **`populate_prices.py`** - Specialized price data population script that pre-populates both Steam Store prices and ITAD historical price data for **family wishlist games only**. **Essential for Steam Summer/Winter Sales** to maximize deal detection speed.
 
 ### Cache Management Scripts
 
