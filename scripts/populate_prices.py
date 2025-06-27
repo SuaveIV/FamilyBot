@@ -30,17 +30,21 @@ from familybot.lib.logging_config import setup_script_logging
 # Setup enhanced logging for this script
 logger = setup_script_logging("populate_prices", "INFO")
 
+# Suppress verbose HTTP request logging from httpx
+import logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 class PricePopulator:
-    """Handles comprehensive price data population with rate limiting."""
+    """Handles comprehensive price data population with concurrent async processing and rate limiting."""
     
     def __init__(self, rate_limit_mode: str = "normal"):
-        """Initialize the populator with specified rate limiting."""
+        """Initialize the populator with specified rate limiting and concurrency."""
         self.rate_limits = {
-            "fast": {"steam_api": 0.8, "store_api": 1.0, "itad_api": 0.5},
-            "normal": {"steam_api": 1.0, "store_api": 1.5, "itad_api": 1.0},
-            "slow": {"steam_api": 1.5, "store_api": 2.0, "itad_api": 2.0},
-            "conservative": {"steam_api": 2.0, "store_api": 3.0, "itad_api": 3.0}
+            "fast": {"steam_api": 0.8, "store_api": 1.0, "itad_api": 0.5, "concurrency": 8},
+            "normal": {"steam_api": 1.0, "store_api": 1.5, "itad_api": 1.0, "concurrency": 5},
+            "slow": {"steam_api": 1.5, "store_api": 2.0, "itad_api": 2.0, "concurrency": 3},
+            "conservative": {"steam_api": 2.0, "store_api": 3.0, "itad_api": 3.0, "concurrency": 2}
         }
         
         self.current_limits = self.rate_limits.get(rate_limit_mode, self.rate_limits["normal"])
@@ -48,12 +52,17 @@ class PricePopulator:
         self.last_store_api_call = 0.0
         self.last_itad_api_call = 0.0
         
+        # Create semaphores for controlling concurrency
+        self.steam_semaphore = asyncio.Semaphore(self.current_limits["concurrency"])
+        self.itad_semaphore = asyncio.Semaphore(self.current_limits["concurrency"])
+        
         self.client = httpx.AsyncClient(timeout=15.0)
 
         print(f"🔧 Rate limiting mode: {rate_limit_mode}")
         print(f"   Steam API: {self.current_limits['steam_api']}s")
         print(f"   Store API: {self.current_limits['store_api']}s")
         print(f"   ITAD API: {self.current_limits['itad_api']}s")
+        print(f"   Concurrency: {self.current_limits['concurrency']} simultaneous requests")
     
     async def close(self):
         """Closes the httpx client session."""
@@ -134,6 +143,24 @@ class PricePopulator:
         print(f"\n🎯 Total unique wishlist games to process: {len(all_game_ids)}")
         return all_game_ids
     
+    async def fetch_steam_price(self, app_id: str) -> tuple[str, bool]:
+        """Fetch price for a single Steam game with semaphore control."""
+        async with self.steam_semaphore:
+            try:
+                await self.rate_limit_store_api()
+                game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                response = await self.client.get(game_url)
+                game_info = self.handle_api_response(f"Steam Store ({app_id})", response)
+                
+                if game_info and game_info.get(str(app_id), {}).get("data"):
+                    cache_game_details(app_id, game_info[str(app_id)]["data"], permanent=True)
+                    return app_id, True
+                else:
+                    return app_id, False
+            except Exception as e:
+                logger.error(f"Error fetching Steam price for {app_id}: {e}")
+                return app_id, False
+
     async def populate_steam_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
         print(f"\n💰 Starting Steam price population...")
         if not game_ids:
@@ -152,6 +179,7 @@ class PricePopulator:
         
         print(f"   🎯 Games to process: {len(games_to_process)}")
         print(f"   ⏭️   Games skipped (already have price data): {games_skipped}")
+        print(f"   🚀 Processing with {self.current_limits['concurrency']} concurrent requests")
         
         if dry_run:
             print("   🔍 DRY RUN: Would fetch Steam price data")
@@ -161,37 +189,83 @@ class PricePopulator:
             print("   ✅ All games already have Steam price data")
             return 0
         
+        # Process games concurrently
         steam_prices_cached, steam_errors = 0, 0
-        game_iterator = tqdm(games_to_process, desc="💰 Steam Prices", unit="game") if TQDM_AVAILABLE else games_to_process
         
-        for i, app_id in enumerate(game_iterator):
-            try:
-                await self.rate_limit_store_api()
-                game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                response = await self.client.get(game_url)
-                game_info = self.handle_api_response(f"Steam Store ({app_id})", response)
-                
-                if game_info and game_info.get(str(app_id), {}).get("data"):
-                    cache_game_details(app_id, game_info[str(app_id)]["data"], permanent=True)
-                    steam_prices_cached += 1
+        if TQDM_AVAILABLE:
+            progress_bar = tqdm(total=len(games_to_process), desc="💰 Steam Prices", unit="game")
+        
+        # Process in batches to avoid overwhelming the system
+        batch_size = self.current_limits['concurrency'] * 10
+        for i in range(0, len(games_to_process), batch_size):
+            batch = games_to_process[i:i + batch_size]
+            
+            # Create tasks for concurrent processing
+            tasks = [self.fetch_steam_price(app_id) for app_id in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for result in results:
+                if isinstance(result, Exception):
+                    steam_errors += 1
+                    logger.error(f"Task failed: {result}")
+                elif isinstance(result, tuple) and len(result) == 2:
+                    app_id, success = result
+                    if success:
+                        steam_prices_cached += 1
+                    else:
+                        steam_errors += 1
                 else:
                     steam_errors += 1
-
-                if TQDM_AVAILABLE and isinstance(game_iterator, tqdm):
-                    game_iterator.set_postfix_str(f"Cached: {steam_prices_cached}, Errors: {steam_errors}")  # type: ignore
-                elif not TQDM_AVAILABLE and (i + 1) % 50 == 0:
-                    print(f"   📈 Progress: {i + 1}/{len(games_to_process)} | Cached: {steam_prices_cached} | Errors: {steam_errors}")
-            except Exception as e:
-                steam_errors += 1
-                if TQDM_AVAILABLE and isinstance(game_iterator, tqdm):
-                    game_iterator.set_postfix_str(f"ERROR: {e}")  # type: ignore
-                else:
-                    print(f"   ⚠️  Error processing Steam price for {app_id}: {e}")
-                continue
+                    logger.error(f"Unexpected result format: {result}")
+                
+                if TQDM_AVAILABLE:
+                    progress_bar.update(1)
+                    progress_bar.set_postfix_str(f"Cached: {steam_prices_cached}, Errors: {steam_errors}")  # type: ignore
+            
+            # Progress update for non-tqdm users
+            if not TQDM_AVAILABLE:
+                processed = min(i + batch_size, len(games_to_process))
+                print(f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {steam_prices_cached} | Errors: {steam_errors}")
+        
+        if TQDM_AVAILABLE:
+            progress_bar.close()
         
         print(f"\n💰 Steam price population complete!\n   ✅ Prices cached: {steam_prices_cached}\n   ❌ Errors: {steam_errors}")
         return steam_prices_cached
     
+    async def fetch_itad_price(self, app_id: str) -> tuple[str, str]:
+        """Fetch ITAD price for a single game with semaphore control. Returns (app_id, status)."""
+        async with self.itad_semaphore:
+            try:
+                await self.rate_limit_itad_api()
+                lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
+                lookup_response = await self.client.get(lookup_url)
+                lookup_data = self.handle_api_response(f"ITAD Lookup ({app_id})", lookup_response)
+                
+                game_id = lookup_data.get("game", {}).get("id") if lookup_data else None
+                if not game_id:
+                    return app_id, "not_found" if lookup_data else "error"
+
+                await self.rate_limit_itad_api()
+                storelow_url = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
+                storelow_response = await self.client.post(storelow_url, json=[game_id])
+                storelow_data = self.handle_api_response(f"ITAD StoreLow ({app_id})", storelow_response)
+
+                if storelow_data and storelow_data[0].get("lows"):
+                    low = storelow_data[0]["lows"][0]
+                    cache_itad_price(app_id, {
+                        'lowest_price': str(low["price"]["amount"]), 
+                        'lowest_price_formatted': f"${low['price']['amount']}", 
+                        'shop_name': low.get("shop", {}).get("name", "Unknown Store")
+                    }, permanent=True)
+                    return app_id, "cached"
+                else:
+                    return app_id, "not_found"
+            except Exception as e:
+                logger.error(f"Error fetching ITAD price for {app_id}: {e}")
+                return app_id, "error"
+
     async def populate_itad_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
         print(f"\n📈 Starting ITAD price population...")
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
@@ -204,7 +278,9 @@ class PricePopulator:
         games_to_process = [gid for gid in game_ids if force_refresh or not get_cached_itad_price(gid)]
         games_skipped = len(game_ids) - len(games_to_process)
         
-        print(f"   🎯 Games to process: {len(games_to_process)}\n   ⏭️   Games skipped (already have ITAD data): {games_skipped}")
+        print(f"   🎯 Games to process: {len(games_to_process)}")
+        print(f"   ⏭️   Games skipped (already have ITAD data): {games_skipped}")
+        print(f"   🚀 Processing with {self.current_limits['concurrency']} concurrent requests")
         
         if dry_run:
             print("   🔍 DRY RUN: Would fetch ITAD price data")
@@ -213,45 +289,49 @@ class PricePopulator:
             print("   ✅ All games already have ITAD price data")
             return 0
         
+        # Process games concurrently
         itad_prices_cached, itad_errors, itad_not_found = 0, 0, 0
-        game_iterator = tqdm(games_to_process, desc="📈 ITAD Prices", unit="game") if TQDM_AVAILABLE else games_to_process
         
-        for i, app_id in enumerate(game_iterator):
-            try:
-                await self.rate_limit_itad_api()
-                lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
-                lookup_response = await self.client.get(lookup_url)
-                lookup_data = self.handle_api_response(f"ITAD Lookup ({app_id})", lookup_response)
-                
-                game_id = lookup_data.get("game", {}).get("id") if lookup_data else None
-                if not game_id:
-                    itad_not_found += 1
-                    if not lookup_data: itad_errors += 1
-                    continue
-
-                await self.rate_limit_itad_api()
-                storelow_url = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
-                storelow_response = await self.client.post(storelow_url, json=[game_id])
-                storelow_data = self.handle_api_response(f"ITAD StoreLow ({app_id})", storelow_response)
-
-                if storelow_data and storelow_data[0].get("lows"):
-                    low = storelow_data[0]["lows"][0]
-                    cache_itad_price(app_id, {'lowest_price': str(low["price"]["amount"]), 'lowest_price_formatted': f"${low['price']['amount']}", 'shop_name': low.get("shop", {}).get("name", "Unknown Store")}, permanent=True)
-                    itad_prices_cached += 1
+        if TQDM_AVAILABLE:
+            progress_bar = tqdm(total=len(games_to_process), desc="📈 ITAD Prices", unit="game")
+        
+        # Process in smaller batches for ITAD (more conservative)
+        batch_size = self.current_limits['concurrency'] * 5
+        for i in range(0, len(games_to_process), batch_size):
+            batch = games_to_process[i:i + batch_size]
+            
+            # Create tasks for concurrent processing
+            tasks = [self.fetch_itad_price(app_id) for app_id in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for result in results:
+                if isinstance(result, Exception):
+                    itad_errors += 1
+                    logger.error(f"ITAD task failed: {result}")
+                elif isinstance(result, tuple) and len(result) == 2:
+                    app_id, status = result
+                    if status == "cached":
+                        itad_prices_cached += 1
+                    elif status == "not_found":
+                        itad_not_found += 1
+                    elif status == "error":
+                        itad_errors += 1
                 else:
-                    itad_not_found += 1
+                    itad_errors += 1
+                    logger.error(f"Unexpected ITAD result format: {result}")
                 
-                if TQDM_AVAILABLE and isinstance(game_iterator, tqdm):
-                    game_iterator.set_postfix_str(f"Cached: {itad_prices_cached}, Not Found: {itad_not_found}, Errors: {itad_errors}") # type: ignore
-                elif not TQDM_AVAILABLE and (i + 1) % 25 == 0:
-                    print(f"   📈 Progress: {i + 1}/{len(games_to_process)} | Cached: {itad_prices_cached} | Not Found: {itad_not_found} | Errors: {itad_errors}")
-            except Exception as e:
-                itad_errors += 1
-                if TQDM_AVAILABLE and isinstance(game_iterator, tqdm):
-                    game_iterator.set_postfix_str(f"ERROR: {e}") # type: ignore
-                else:
-                    print(f"   ⚠️  Error processing ITAD price for {app_id}: {e}")
-                continue
+                if TQDM_AVAILABLE:
+                    progress_bar.update(1)
+                    progress_bar.set_postfix_str(f"Cached: {itad_prices_cached}, Not Found: {itad_not_found}, Errors: {itad_errors}")  # type: ignore
+            
+            # Progress update for non-tqdm users
+            if not TQDM_AVAILABLE:
+                processed = min(i + batch_size, len(games_to_process))
+                print(f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {itad_prices_cached} | Not Found: {itad_not_found} | Errors: {itad_errors}")
+        
+        if TQDM_AVAILABLE:
+            progress_bar.close()
         
         print(f"\n📈 ITAD price population complete!\n   ✅ Prices cached: {itad_prices_cached}\n   ❓ Games not found on ITAD: {itad_not_found}\n   ❌ Errors: {itad_errors}")
         return itad_prices_cached
