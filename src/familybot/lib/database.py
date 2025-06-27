@@ -14,7 +14,8 @@ DATABASE_FILE = os.path.join(PROJECT_ROOT, 'bot_data.db')
 def get_db_connection():
     """Establishes and returns a new SQLite database connection."""
     try:
-        conn = sqlite3.connect(DATABASE_FILE)
+        # Allow the connection to be used across multiple threads, necessary for FastAPI.
+        conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
     except sqlite3.Error as e:

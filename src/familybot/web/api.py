@@ -3,6 +3,7 @@
 import os
 import logging
 import asyncio
+import sqlite3
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -13,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from familybot.config import PROJECT_ROOT
+from familybot.config import PROJECT_ROOT, WEB_UI_HOST, WEB_UI_PORT
 from familybot.lib.database import (
     get_db_connection, get_cached_game_details, get_cached_family_library,
     get_cached_wishlist, cleanup_expired_cache
@@ -51,7 +52,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://127.0.0.1:8080"],
+    allow_origins=[f"http://{WEB_UI_HOST}:{WEB_UI_PORT}"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,6 +72,13 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 # Dependency to get database connection
 def get_db():
+    """Get database connection with thread safety for FastAPI, using the main bot's connection logic.
+    
+    This function now uses `get_db_connection()` from `familybot.lib.database`, which
+    is configured to connect to `bot_data.db` (located in the project root), ensuring
+    consistency across the application.
+    """
+    from familybot.lib.database import get_db_connection
     conn = get_db_connection()
     try:
         yield conn
@@ -128,8 +136,12 @@ async def get_cache_stats(conn=Depends(get_db)):
     }
     
     for key, table in tables.items():
-        cursor.execute(f"SELECT COUNT(*) FROM {table}")
-        stats[key] = cursor.fetchone()[0]
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            stats[key] = cursor.fetchone()[0]
+        except sqlite3.OperationalError:
+            # Table doesn't exist yet
+            stats[key] = 0
     
     return CacheStats(**stats)
 
@@ -137,17 +149,21 @@ async def get_cache_stats(conn=Depends(get_db)):
 async def get_family_members(conn=Depends(get_db)):
     """Get family members list"""
     cursor = conn.cursor()
-    cursor.execute("SELECT steam_id, friendly_name, discord_id FROM family_members")
-    rows = cursor.fetchall()
-    
-    return [
-        FamilyMember(
-            steam_id=row['steam_id'],
-            friendly_name=row['friendly_name'],
-            discord_id=row['discord_id']
-        )
-        for row in rows
-    ]
+    try:
+        cursor.execute("SELECT steam_id, friendly_name, discord_id FROM family_members")
+        rows = cursor.fetchall()
+        
+        return [
+            FamilyMember(
+                steam_id=row['steam_id'],
+                friendly_name=row['friendly_name'],
+                discord_id=row['discord_id']
+            )
+            for row in rows
+        ]
+    except sqlite3.OperationalError:
+        # Table doesn't exist yet
+        return []
 
 @app.get("/api/family-library", response_model=List[GameDetails])
 async def get_family_library(limit: int = 50, conn=Depends(get_db)):
@@ -180,81 +196,89 @@ async def get_family_library(limit: int = 50, conn=Depends(get_db)):
 async def get_wishlist_summary(conn=Depends(get_db)):
     """Get wishlist summary across all family members"""
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT DISTINCT w.appid, w.steam_id, g.name, g.price_data
-        FROM wishlist_cache w
-        LEFT JOIN game_details_cache g ON w.appid = g.appid
-        WHERE w.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
-        ORDER BY g.name
-        LIMIT 100
-    """)
-    rows = cursor.fetchall()
-    
-    wishlist_items = []
-    for row in rows:
-        price_data = None
-        if row['price_data']:
-            import json
-            try:
-                price_data = json.loads(row['price_data'])
-            except:
-                pass
+    try:
+        cursor.execute("""
+            SELECT DISTINCT w.appid, w.steam_id, g.name, g.price_data
+            FROM wishlist_cache w
+            LEFT JOIN game_details_cache g ON w.appid = g.appid
+            WHERE w.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
+            ORDER BY g.name
+            LIMIT 100
+        """)
+        rows = cursor.fetchall()
         
-        wishlist_items.append(WishlistItem(
-            appid=row['appid'],
-            steam_id=row['steam_id'],
-            game_name=row['name'],
-            price_data=price_data
-        ))
-    
-    return wishlist_items
+        wishlist_items = []
+        for row in rows:
+            price_data = None
+            if row['price_data']:
+                import json
+                try:
+                    price_data = json.loads(row['price_data'])
+                except:
+                    pass
+            
+            wishlist_items.append(WishlistItem(
+                appid=row['appid'],
+                steam_id=row['steam_id'],
+                game_name=row['name'],
+                price_data=price_data
+            ))
+        
+        return wishlist_items
+    except sqlite3.OperationalError:
+        # Table doesn't exist yet
+        return []
 
 @app.get("/api/recent-games", response_model=List[GameDetails])
 async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
     """Get recently added games"""
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT s.appid, s.detected_at, g.name, g.type, g.is_free, g.categories, 
-               g.price_data, g.is_multiplayer, g.is_coop, g.is_family_shared
-        FROM saved_games s
-        LEFT JOIN game_details_cache g ON s.appid = g.appid
-        ORDER BY s.detected_at DESC
-        LIMIT ?
-    """, (limit,))
-    rows = cursor.fetchall()
-    
-    games = []
-    for row in rows:
-        categories = []
-        price_data = None
+    try:
+        cursor.execute("""
+            SELECT s.appid, s.detected_at, g.name, g.type, g.is_free, g.categories, 
+                   g.price_data, g.is_multiplayer, g.is_coop, g.is_family_shared
+            FROM saved_games s
+            LEFT JOIN game_details_cache g ON s.appid = g.appid
+            ORDER BY s.detected_at DESC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
         
-        if row['categories']:
-            import json
-            try:
-                categories = json.loads(row['categories'])
-            except:
-                pass
+        games = []
+        for row in rows:
+            categories = []
+            price_data = None
+            
+            if row['categories']:
+                import json
+                try:
+                    categories = json.loads(row['categories'])
+                except:
+                    pass
+            
+            if row['price_data']:
+                import json
+                try:
+                    price_data = json.loads(row['price_data'])
+                except:
+                    pass
+            
+            games.append(GameDetails(
+                appid=row['appid'],
+                name=row['name'],
+                type=row['type'],
+                is_free=bool(row['is_free']) if row['is_free'] is not None else False,
+                categories=categories,
+                price_data=price_data,
+                is_multiplayer=bool(row['is_multiplayer']) if row['is_multiplayer'] is not None else False,
+                is_coop=bool(row['is_coop']) if row['is_coop'] is not None else False,
+                is_family_shared=bool(row['is_family_shared']) if row['is_family_shared'] is not None else False
+            ))
         
-        if row['price_data']:
-            import json
-            try:
-                price_data = json.loads(row['price_data'])
-            except:
-                pass
-        
-        games.append(GameDetails(
-            appid=row['appid'],
-            name=row['name'],
-            type=row['type'],
-            is_free=bool(row['is_free']) if row['is_free'] is not None else False,
-            categories=categories,
-            price_data=price_data,
-            is_multiplayer=bool(row['is_multiplayer']) if row['is_multiplayer'] is not None else False,
-            is_coop=bool(row['is_coop']) if row['is_coop'] is not None else False,
-            is_family_shared=bool(row['is_family_shared']) if row['is_family_shared'] is not None else False
-        ))
-    
-    return games
+        return games
+    except sqlite3.OperationalError:
+        # Table doesn't exist yet
+        return []
 
 @app.get("/api/config", response_model=ConfigData)
 async def get_config_data():

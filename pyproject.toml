@@ -27,6 +27,8 @@ dependencies = [
 familybot = "familybot.FamilyBot:main"
 familybot-setup = "scripts.setup_browser:main"
 familybot-test = "scripts.test_token_plugin:main"
+familybot-populate = "scripts.populate_database:main"
+familybot-inspect-db = "inspect_db:inspect_database"
 
 [tool.setuptools]
 # This tells setuptools to look for your package(s) inside the 'src' directory.

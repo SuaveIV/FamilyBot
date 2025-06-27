@@ -6,31 +6,32 @@ import asyncio
 import signal
 import sys
 import argparse
-import logging # Import logging module here for main setup
+import logging 
 from datetime import datetime
 from typing import cast, TYPE_CHECKING
-from interactions import Client, Intents, listen, GuildText, BaseChannel, Message # Ensure Client and listen are imported
+from interactions import Client, Intents, listen, GuildText, BaseChannel, Message 
 from interactions.ext import prefixed_commands
+import uvicorn # Import uvicorn
 
 if TYPE_CHECKING:
     from interactions import User
 
 # Import modules from your project's new package structure
 from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID, WEB_UI_ENABLED, WEB_UI_HOST, WEB_UI_PORT
-from familybot.WebSocketServer import start_websocket_server_task # Import the async server task
-from familybot.lib.database import init_db, get_db_connection # <<< Import init_db and get_db_connection
-from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT # Import the protocol type and message limit
-from familybot.lib.utils import truncate_message_list, split_message # Import message utilities
+from familybot.WebSocketServer import start_websocket_server_task
+from familybot.lib.database import init_db, get_db_connection
+from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
+from familybot.lib.utils import truncate_message_list, split_message
 
 
 # Import our centralized logging configuration
 from familybot.lib.logging_config import setup_bot_logging, get_logger
 
 # Setup comprehensive logging for the bot
-logger = setup_bot_logging("INFO")  # Can be changed to DEBUG for more verbose logging
+logger = setup_bot_logging("INFO")
 
 # --- Client Setup ---
-client = Client(token=DISCORD_API_KEY, intents=Intents.ALL)
+client: FamilyBotClient = cast(FamilyBotClient, Client(token=DISCORD_API_KEY, intents=Intents.ALL))
 prefixed_commands.setup(client, default_prefix="!")
 
 # List to keep track of background tasks for graceful shutdown
@@ -39,11 +40,11 @@ _running_tasks = []
 # --- Plugin Loading ---
 def get_plugins(directory: str) -> list:
     plugin_list = []
-    dir_name = os.path.basename(os.path.normpath(directory)) # Get directory name without trailing slash
+    dir_name = os.path.basename(os.path.normpath(directory))
     try:
         for file_name in os.listdir(directory):
-            if file_name.endswith(".py") and not file_name.startswith("__"): # Exclude __init__.py
-                plugin_name = f"familybot.plugins.{file_name[:-3]}" # Correct import path
+            if file_name.endswith(".py") and not file_name.startswith("__"):
+                plugin_name = f"familybot.plugins.{file_name[:-3]}"
                 plugin_list.append(plugin_name)
         return plugin_list
     except FileNotFoundError:
@@ -53,7 +54,7 @@ def get_plugins(directory: str) -> list:
         logger.error(f"Error listing plugin directory: {e}")
         return []
 
-plugin_list = get_plugins(os.path.join(os.path.dirname(__file__), 'plugins')) # Point to src/familybot/plugins/
+plugin_list = get_plugins(os.path.join(os.path.dirname(__file__), 'plugins'))
 if plugin_list:
     for plugin in plugin_list:
         try:
@@ -66,49 +67,24 @@ else:
 
 
 # --- Global Utility Functions for Bot Instance ---
-# These are exposed as methods of the client instance for convenience in plugins
 async def send_to_channel(channel_id: int, message: str) -> None:
-    """
-    Send a message to a Discord channel, automatically splitting if it exceeds length limits.
-    
-    Args:
-        channel_id: The Discord channel ID
-        message: The message content to send
-    """
+    """Send a message to a Discord channel, automatically splitting if it exceeds length limits."""
     try:
         channel = await client.fetch_channel(channel_id)
-        
-        # Type guard to check if channel supports sending messages
-        if not channel:
-            logger.warning(f"Could not find channel with ID: {channel_id}")
-            return
-        
-        if not (isinstance(channel, GuildText) or hasattr(channel, 'send')):
-            logger.warning(f"Channel {channel_id} doesn't support sending messages")
-            return
-        
-        # Split message if it's too long
-        message_parts = split_message(message)
-        
-        if len(message_parts) > 1:
-            logger.info(f"Message too long for channel {channel_id}, splitting into {len(message_parts)} parts")
-        
-        # Send each part
-        for i, part in enumerate(message_parts):
-            try:
-                if isinstance(channel, GuildText):
+        # Ensure channel is a GuildText channel before sending messages
+        if isinstance(channel, GuildText):
+            message_parts = split_message(message)
+            if len(message_parts) > 1:
+                logger.info(f"Message too long for channel {channel_id}, splitting into {len(message_parts)} parts")
+            for i, part in enumerate(message_parts):
+                try:
                     await channel.send(part)
-                else:
-                    await channel.send(part)  # type: ignore
-                
-                # Add small delay between parts to avoid rate limiting
-                if i < len(message_parts) - 1:
-                    await asyncio.sleep(0.5)
-                    
-            except Exception as part_error:
-                logger.error(f"Error sending message part {i+1}/{len(message_parts)} to channel {channel_id}: {part_error}")
-                # Continue trying to send remaining parts
-                
+                    if i < len(message_parts) - 1:
+                        await asyncio.sleep(0.5)
+                except Exception as part_error:
+                    logger.error(f"Error sending message part {i+1}/{len(message_parts)} to channel {channel_id}: {part_error}")
+        else:
+            logger.warning(f"Could not find channel with ID: {channel_id} or channel doesn't support sending messages.")
     except Exception as e:
         logger.error(f"Error sending message to channel {channel_id}: {e}")
 
@@ -122,34 +98,20 @@ async def send_log_dm(message: str) -> None:
         logger.error(f"Error sending log DM to admin {ADMIN_DISCORD_ID}: {e}")
 
 async def send_dm(discord_id: int, message: str) -> None:
-    """
-    Send a DM to a Discord user, automatically splitting if it exceeds length limits.
-    
-    Args:
-        discord_id: The Discord user ID
-        message: The message content to send
-    """
+    """Send a DM to a Discord user, automatically splitting if it exceeds length limits."""
     try:
         user = await client.fetch_user(discord_id)
         if user:
-            # Split message if it's too long
             message_parts = split_message(message)
-            
             if len(message_parts) > 1:
                 logger.info(f"DM too long for user {discord_id}, splitting into {len(message_parts)} parts")
-            
-            # Send each part
             for i, part in enumerate(message_parts):
                 try:
                     await user.send(part)
-                    
-                    # Add small delay between parts to avoid rate limiting
                     if i < len(message_parts) - 1:
                         await asyncio.sleep(0.5)
-                        
                 except Exception as part_error:
                     logger.error(f"Error sending DM part {i+1}/{len(message_parts)} to user {discord_id}: {part_error}")
-                    # Continue trying to send remaining parts
         else:
             logger.warning(f"Could not find user with ID: {discord_id}")
     except Exception as e:
@@ -158,86 +120,61 @@ async def send_dm(discord_id: int, message: str) -> None:
 async def edit_msg(chan_id: int, msg_id: int, message: str) -> None:
     try:
         channel = client.get_channel(chan_id)
-        # Type guard to check if channel supports message operations
-        if channel and isinstance(channel, GuildText):
+        # Ensure channel is a GuildText channel before fetching/editing messages
+        if isinstance(channel, GuildText):
             msg = await channel.fetch_message(msg_id)
             if msg:
                 await msg.edit(content=message)
             else:
                 logger.warning(f"Message {msg_id} not found in channel {chan_id} for editing.")
-        elif channel and hasattr(channel, 'fetch_message'):
-            # Fallback for other channel types that support message fetching
-            msg = await channel.fetch_message(msg_id)  # type: ignore
-            if msg:
-                await msg.edit(content=message)
-            else:
-                logger.warning(f"Message {msg_id} not found in channel {chan_id} for editing.")
         else:
-            logger.warning(f"Channel {chan_id} not found for editing message {msg_id} or channel doesn't support message fetching.")
+            logger.warning(f"Channel {chan_id} is not a text channel and does not support message editing.")
     except Exception as e:
         logger.error(f"Error editing message {msg_id} in channel {chan_id}: {e}")
 
 async def get_pinned_message(chan_id: int) -> list:
     try:
         channel = client.get_channel(chan_id)
-        # Type guard to check if channel supports pinned messages
-        if channel and isinstance(channel, GuildText):
+        # Ensure channel is a GuildText channel before fetching pinned messages
+        if isinstance(channel, GuildText):
             pinned_messages = await channel.fetch_pinned_messages()
             return pinned_messages
-        elif channel and hasattr(channel, 'fetch_pinned_messages'):
-            # Fallback for other channel types that support pinned messages
-            pinned_messages = await channel.fetch_pinned_messages()  # type: ignore
-            return pinned_messages
         else:
-            logger.warning(f"Channel {chan_id} not found for fetching pinned messages or channel doesn't support pinned messages.")
+            logger.warning(f"Channel {chan_id} is not a text channel and does not support fetching pinned messages.")
             return []
     except Exception as e:
         logger.error(f"Error fetching pinned messages from channel {chan_id}: {e}")
         return []
 
-# Cast client to our protocol type and assign methods
-typed_client = cast(FamilyBotClient, client)
-typed_client.send_to_channel = send_to_channel
-typed_client.send_log_dm = send_log_dm
-typed_client.send_dm = send_dm
-typed_client.edit_msg = edit_msg
-typed_client.get_pinned_message = get_pinned_message
+# --- Main application startup and shutdown logic ---
+async def start_discord_bot():
+    """Starts the Discord bot client."""
+    logger.info("Starting FamilyBot Discord client...")
+    # Use client.astart() which is designed to be awaited and manages its own loop connection.
+    await client.astart()
 
-# Update the global client reference to use the typed version
-client = typed_client
+async def start_web_server_main():
+    """Starts the FastAPI web server using uvicorn Server."""
+    from familybot.web.api import app as web_app, set_bot_client
+    
+    # Set the bot client reference in the web API
+    set_bot_client(client)
+    
+    logger.info(f"Starting Web UI server on http://{WEB_UI_HOST}:{WEB_UI_PORT}")
+    
+    # Use uvicorn.Server for async operation instead of uvicorn.run
+    config = uvicorn.Config(
+        web_app,
+        host=WEB_UI_HOST,
+        port=WEB_UI_PORT,
+        log_level="info",
+        access_log=False  # Disable access logs to reduce noise
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
 
-
-# --- Web Server Function ---
-async def start_web_server():
-    """Start the FastAPI web server"""
-    try:
-        import uvicorn
-        from familybot.web.api import app, set_bot_client
-        
-        # Set the bot client reference in the web API
-        set_bot_client(client)
-        
-        # Configure uvicorn
-        config = uvicorn.Config(
-            app,
-            host=WEB_UI_HOST,
-            port=WEB_UI_PORT,
-            log_level="info",
-            access_log=False  # Disable access logs to reduce noise
-        )
-        
-        server = uvicorn.Server(config)
-        logger.info(f"Starting Web UI server on http://{WEB_UI_HOST}:{WEB_UI_PORT}")
-        await server.serve()
-        
-    except Exception as e:
-        logger.error(f"Error starting web server: {e}", exc_info=True)
-
-
-# --- Event Listeners and Background Tasks ---
-@listen()
-async def on_startup():
-    logger.info("Bot is ready! Starting background tasks...")
+async def run_application():
+    """Runs the Discord bot and optionally the Web UI."""
     # Initialize the database
     try:
         init_db()
@@ -245,25 +182,39 @@ async def on_startup():
     except Exception as e:
         logger.critical(f"Failed to initialize database: {e}", exc_info=True)
         await send_log_dm(f"CRITICAL ERROR: Database failed to initialize: {e}")
-        # Consider exiting if database is critical for bot function
         sys.exit(1)
 
     # Start the WebSocket server as an asyncio task
     ws_server_task = asyncio.create_task(start_websocket_server_task())
     _running_tasks.append(ws_server_task)
     logger.info("WebSocket server task scheduled.")
-    
-    # Start the Web UI server if enabled
-    if WEB_UI_ENABLED:
-        web_server_task = asyncio.create_task(start_web_server())
-        _running_tasks.append(web_server_task)
-        logger.info(f"Web UI server task scheduled on {WEB_UI_HOST}:{WEB_UI_PORT}")
-    
-    await send_log_dm("Bot ready")
-    
-@listen()
-async def on_disconnect():
-    logger.info("Bot disconnected. Initiating graceful shutdown of background tasks.")
+
+    try:
+        if WEB_UI_ENABLED:
+            # If Web UI is enabled, uvicorn.run will be the blocking call.
+            # We start the Discord bot as a background task.
+            discord_bot_task = asyncio.create_task(start_discord_bot())
+            _running_tasks.append(discord_bot_task)
+            logger.info("Discord bot task scheduled as background.")
+            
+            # Start the Web UI server (blocking call)
+            await start_web_server_main() # This will block the event loop
+        else:
+            # If Web UI is not enabled, the Discord bot is the main blocking call.
+            await start_discord_bot() # This will block the event loop
+
+        logger.info("Application tasks started.")
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logger.info("Shutdown signal received, initiating graceful shutdown...")
+        await shutdown_application_tasks()
+    except Exception as e:
+        logger.error(f"Unexpected error in run_application: {e}", exc_info=True)
+        await shutdown_application_tasks()
+        raise
+
+async def shutdown_application_tasks():
+    """Unified graceful shutdown for all application tasks."""
+    logger.info("Initiating graceful shutdown of all background tasks.")
     for task in _running_tasks:
         if not task.done():
             task.cancel()
@@ -272,10 +223,26 @@ async def on_disconnect():
         await asyncio.gather(*_running_tasks, return_exceptions=True)
         logger.info("All background tasks confirmed cancelled.")
     except asyncio.CancelledError:
-        logger.info("Some tasks were already cancelled during disconnect.")
+        logger.info("Some tasks were already cancelled during shutdown.")
     except Exception as e:
-        logger.error(f"Error during background task cleanup on disconnect: {e}", exc_info=True)
+        logger.error(f"Error during background task cleanup on shutdown: {e}", exc_info=True)
     logger.info("FamilyBot graceful shutdown complete.")
+
+
+# --- Event Listeners and Background Tasks ---
+@listen()
+async def on_startup():
+    # This event listener will now only be called once the bot is connected.
+    # Most startup logic has moved to run_application()
+    pass # Keep it empty for now or for future Discord-specific startup logic
+    
+@listen()
+async def on_disconnect():
+    # This will be called when the Discord client disconnects.
+    # If the Web UI is running, its shutdown event will handle the overall application shutdown.
+    # If only Discord bot is running, this will trigger the shutdown.
+    if not WEB_UI_ENABLED:
+        await shutdown_application_tasks()
 
 
 # --- Command Line Utilities ---
@@ -347,7 +314,7 @@ def purge_wishlist_cache() -> None:
             print("- Start the bot and run !force_wishlist to rebuild wishlist cache")
             print("- Or wait for the next automatic wishlist refresh (runs every 24 hours)")
         else:
-            print("❌ Wishlist cache purge cancelled.")
+            print("❌ Wishlist cache cancelled.")
             
     except Exception as e:
         print(f"❌ Error purging wishlist cache: {e}")
@@ -383,7 +350,7 @@ def purge_family_library_cache() -> None:
             print("- Start the bot and run !force to rebuild family library cache")
             print("- Or wait for the next automatic refresh (runs every hour)")
         else:
-            print("❌ Family library cache purge cancelled.")
+            print("❌ Family library cache cancelled.")
             
     except Exception as e:
         print(f"❌ Error purging family library cache: {e}")
@@ -490,12 +457,24 @@ if __name__ == "__main__":
         print("This command requires Discord interaction for progress updates and admin verification.")
         sys.exit(1)
     
-    # Normal bot startup
-    # interactions.py's client.start() is a blocking call that runs the event loop
-    # and usually handles SIGINT (Ctrl+C) by stopping the bot and triggering on_disconnect.
-    # No explicit signal handlers are typically needed here for Windows.
+    # Normal bot startup with proper signal handling
     logger.info("Starting FamilyBot client...")
-    client.start()
+    try:
+        asyncio.run(run_application())
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt, shutting down gracefully...")
+    except Exception as e:
+        logger.error(f"Unexpected error during startup: {e}", exc_info=True)
+        sys.exit(1)
+
+# Assign utility functions directly to the client instance after run_application
+# to ensure the client is properly cast before assignment.
+client.send_to_channel = send_to_channel  # type: ignore
+client.send_log_dm = send_log_dm  # type: ignore
+client.send_dm = send_dm  # type: ignore
+client.edit_msg = edit_msg  # type: ignore
+client.get_pinned_message = get_pinned_message  # type: ignore
+    
 
 def main():
     """Entry point for the familybot script alias."""
@@ -540,6 +519,12 @@ def main():
         print("This command requires Discord interaction for progress updates and admin verification.")
         sys.exit(1)
     
-    # Normal bot startup
+    # Normal bot startup with proper signal handling
     logger.info("Starting FamilyBot client...")
-    client.start()
+    try:
+        asyncio.run(run_application())
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt, shutting down gracefully...")
+    except Exception as e:
+        logger.error(f"Unexpected error during startup: {e}", exc_info=True)
+        sys.exit(1)
