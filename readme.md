@@ -234,6 +234,78 @@ uv run python scripts/populate_database.py
 
 For detailed documentation, see [scripts/README.md](scripts/README.md).
 
+## Logging System
+
+FamilyBot includes a comprehensive logging system that provides complete visibility into all bot operations, with special focus on private profile detection and error management.
+
+### Log File Structure
+
+All logs are automatically created in the `logs/` directory:
+
+```shell
+logs/
+├── familybot.log              # Main bot application log (all levels)
+├── familybot_errors.log       # Bot errors and critical issues only
+├── steam_api.log              # Steam API specific issues (filtered)
+├── scripts/
+│   ├── populate_database.log  # Database population script logs
+│   ├── populate_prices.log    # Price population script logs
+│   ├── script_errors.log      # Combined script error log
+│   └── [other script logs]    # Individual script logs
+└── archived/                  # Auto-rotated old logs
+```
+
+### Key Features
+
+* **Automatic Log Rotation**: Main logs rotate at 10MB, error logs at 5MB with multiple backups
+* **Security-Conscious**: Automatically masks API keys, tokens, and sensitive data
+* **Private Profile Detection**: Special logging for Steam private profile issues
+* **Performance Tracking**: Built-in timing and success rate monitoring
+* **Error Categorization**: API errors, database errors, and private profiles clearly separated
+
+### Private Profile Monitoring
+
+The logging system provides detailed tracking of private profile issues:
+
+```log
+[PRIVATE_PROFILE] username (steam_id): operation blocked - profile is private
+```
+
+### Viewing Logs
+
+**Windows (PowerShell):**
+
+```powershell
+# View real-time logs
+Get-Content logs\familybot.log -Wait
+Get-Content logs\familybot_errors.log -Wait
+
+# Search for specific issues
+Select-String "ERROR" logs\familybot.log
+Select-String "PRIVATE_PROFILE" logs\familybot.log
+```
+
+**macOS/Linux (Bash):**
+
+```bash
+# View real-time logs
+tail -f logs/familybot.log
+tail -f logs/familybot_errors.log
+
+# Search for specific issues
+grep "ERROR" logs/familybot.log
+grep "PRIVATE_PROFILE" logs/familybot.log
+```
+
+### Log Management
+
+Logs are automatically managed:
+
+* Files rotate when size limits are reached
+* Old logs are archived automatically
+* All log files are git-ignored for security
+* Sensitive data is automatically sanitized
+
 ## Features
 
 ### Steam Family

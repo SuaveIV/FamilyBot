@@ -18,9 +18,14 @@ import signal # For graceful shutdown
 import sys # For graceful shutdown
 from pathlib import Path
 
-# Setup logging for this specific module
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Add the src directory to the Python path for logging imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Import enhanced logging configuration
+from familybot.lib.logging_config import setup_script_logging, log_api_error
+
+# Setup enhanced logging for this script
+logger = setup_script_logging("token_sender", "INFO")
 
 # --- CONFIG_FILE_PATH logic ---
 # Use Path(__file__).parent to get the directory of the current script (getToken.py)
