@@ -363,9 +363,60 @@ class steam_family(Extension):
                                 if item[0] == app_id:
                                     item[1].append(user_steam_id)
                                     break
+                else:
+                    # If not cached, fetch fresh wishlist data from API
+                    if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+                        logger.warning(f"Force deals: Cannot fetch wishlist for {user_name_for_log} - Steam API key not configured")
+                        continue
+                    
+                    wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
+                    logger.info(f"Force deals: Fetching fresh wishlist from API for {user_name_for_log}")
+                    
+                    try:
+                        await self._rate_limit_steam_api()
+                        wishlist_response = requests.get(wishlist_url, timeout=15)
+                        if wishlist_response.text == "{\"success\":2}":
+                            log_private_profile_detection(logger, user_name_for_log, user_steam_id, "wishlist")
+                            continue
+
+                        wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)
+                        if not wishlist_json: 
+                            continue
+
+                        wishlist_items = wishlist_json.get("response", {}).get("items", [])
+                        if not wishlist_items:
+                            logger.info(f"Force deals: No items found in {user_name_for_log}'s wishlist.")
+                            continue
+
+                        # Extract app IDs and add to global wishlist
+                        user_wishlist_appids = []
+                        for game_item in wishlist_items:
+                            app_id = str(game_item.get("appid"))
+                            if not app_id:
+                                logger.warning(f"Force deals: Skipping wishlist item due to missing appid: {game_item}")
+                                continue
+
+                            user_wishlist_appids.append(app_id)
+                            if app_id not in [item[0] for item in global_wishlist]:
+                                global_wishlist.append([app_id, [user_steam_id]])
+                            else:
+                                # Add user to existing entry
+                                for item in global_wishlist:
+                                    if item[0] == app_id:
+                                        item[1].append(user_steam_id)
+                                        break
+
+                        # Cache the wishlist for 2 hours
+                        cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
+                        logger.info(f"Force deals: Fetched and cached {len(user_wishlist_appids)} wishlist items for {user_name_for_log}")
+
+                    except Exception as e:
+                        logger.error(f"Force deals: Error fetching wishlist for {user_name_for_log}: {e}")
+                        await self._send_admin_dm(f"Force deals wishlist error for {user_name_for_log}: {e}")
+                        continue
             
             if not global_wishlist:
-                await ctx.send("❌ No wishlist games found to check for deals.")
+                await ctx.send("❌ No wishlist games found to check for deals. This could be due to private profiles or empty wishlists.")
                 return
             
             deals_found = []
