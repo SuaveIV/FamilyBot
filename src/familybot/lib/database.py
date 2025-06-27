@@ -182,6 +182,27 @@ def init_db():
                     logger.error(f"Database: Unexpected error during '{column_name}' column migration: {e}", exc_info=True)
             else:
                 logger.debug(f"Database: '{column_name}' column already exists in 'game_details_cache'.")
+
+        # 3. Check and add 'permanent' column to itad_price_cache
+        cursor.execute("PRAGMA table_info(itad_price_cache)")
+        itad_cache_columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'permanent' not in itad_cache_columns:
+            logger.info("Database: 'permanent' column not found in 'itad_price_cache'. Attempting to add.")
+            try:
+                cursor.execute("ALTER TABLE itad_price_cache ADD COLUMN permanent BOOLEAN DEFAULT 1")
+                logger.info("Database: Added 'permanent' column to 'itad_price_cache' table.")
+                
+                # Update existing rows to have permanent=1 (historical prices are permanent by default)
+                cursor.execute("UPDATE itad_price_cache SET permanent = 1 WHERE permanent IS NULL")
+                conn.commit()
+                logger.info("Database: Updated existing ITAD price cache entries to permanent=1.")
+            except sqlite3.OperationalError as e:
+                logger.error(f"Database: Failed to add 'permanent' column to itad_price_cache: {e}")
+            except Exception as e:
+                logger.error(f"Database: Unexpected error during 'permanent' column migration: {e}", exc_info=True)
+        else:
+            logger.debug("Database: 'permanent' column already exists in 'itad_price_cache'.")
         
         # --- END MIGRATION LOGIC ---
 
