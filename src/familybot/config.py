@@ -64,3 +64,9 @@ HELP_CHANNEL_ID = config["help_message"]["channel_id"]
 TOKEN_SAVE_PATH = config["token_sender"]["token_save_path"]
 BROWSER_PROFILE_PATH = config["token_sender"]["browser_profile_path"]
 UPDATE_BUFFER_HOURS = config["token_sender"]["update_buffer_hours"]
+
+#-------------Web_UI---------------
+WEB_UI_ENABLED = config.get("web_ui", {}).get("enabled", True)
+WEB_UI_HOST = config.get("web_ui", {}).get("host", "127.0.0.1")
+WEB_UI_PORT = config.get("web_ui", {}).get("port", 8080)
+WEB_UI_DEFAULT_THEME = config.get("web_ui", {}).get("default_theme", "default")

@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyBot Dashboard</title>
+    
+    <!-- Bootstrap/Bootswatch CSS (dynamically loaded) -->
+    <link id="theme-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="fas fa-robot me-2"></i>FamilyBot
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logs">
+                            <i class="fas fa-file-alt me-1"></i>Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/config">
+                            <i class="fas fa-cog me-1"></i>Config
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- Theme Switcher Dropdown -->
+                <div class="dropdown me-3" id="theme-dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-palette me-1"></i>Theme
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <!-- Populated by JavaScript -->
+                    </ul>
+                </div>
+                
+                <!-- Status indicator -->
+                <div id="bot-status-indicator" class="status-indicator status-offline">
+                    <span class="status-dot"></span>
+                    <span>Offline</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Bot Status Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Bot Status
+                        </h5>
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshStatus()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="bot-online-status">Unknown</div>
+                                    <div class="metric-label">Status</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="bot-uptime">-</div>
+                                    <div class="metric-label">Uptime</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="discord-status">Unknown</div>
+                                    <div class="metric-label">Discord</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="websocket-status">Unknown</div>
+                                    <div class="metric-label">WebSocket</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cache Statistics -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-database me-2"></i>Cache Statistics
+                        </h5>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-outline-warning" onclick="purgeCache('expired')">
+                                <i class="fas fa-broom"></i> Clean Expired
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="purgeCache('all')">
+                                <i class="fas fa-trash"></i> Purge All
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="cache-stats">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Games and Family Library -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clock me-2"></i>Recent Games
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recent-games" class="game-list">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-users me-2"></i>Family Members
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="family-members">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wishlist Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-heart me-2"></i>Wishlist Summary
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="wishlist-summary" class="game-list">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div>Processing...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;">
+        <!-- Alerts will be inserted here -->
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Theme Switcher -->
+    <script src="{{ url_for('static', path='js/theme_switcher.js') }}"></script>
+    
+    <!-- Dashboard JavaScript -->
+    <script>
+        // Global variables
+        let refreshInterval;
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+            startAutoRefresh();
+        });
+        
+        // Load all dashboard data
+        async function loadDashboardData() {
+            try {
+                await Promise.all([
+                    loadBotStatus(),
+                    loadCacheStats(),
+                    loadRecentGames(),
+                    loadFamilyMembers(),
+                    loadWishlistSummary()
+                ]);
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showAlert('Error loading dashboard data', 'danger');
+            }
+        }
+        
+        // Load bot status
+        async function loadBotStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                // Update status indicator
+                const indicator = document.getElementById('bot-status-indicator');
+                if (status.online) {
+                    indicator.className = 'status-indicator status-online';
+                    indicator.innerHTML = '<span class="status-dot"></span><span>Online</span>';
+                } else {
+                    indicator.className = 'status-indicator status-offline';
+                    indicator.innerHTML = '<span class="status-dot"></span><span>Offline</span>';
+                }
+                
+                // Update status metrics
+                document.getElementById('bot-online-status').textContent = status.online ? 'Online' : 'Offline';
+                document.getElementById('bot-uptime').textContent = status.uptime || '-';
+                document.getElementById('discord-status').textContent = status.discord_connected ? 'Connected' : 'Disconnected';
+                document.getElementById('websocket-status').textContent = status.websocket_active ? 'Active' : 'Inactive';
+                
+            } catch (error) {
+                console.error('Error loading bot status:', error);
+            }
+        }
+        
+        // Load cache statistics
+        async function loadCacheStats() {
+            try {
+                const response = await fetch('/api/cache/stats');
+                const stats = await response.json();
+                
+                const container = document.getElementById('cache-stats');
+                container.innerHTML = '';
+                
+                const statItems = [
+                    { key: 'game_details', label: 'Game Details', icon: 'gamepad' },
+                    { key: 'user_games', label: 'User Games', icon: 'user' },
+                    { key: 'wishlist', label: 'Wishlist', icon: 'heart' },
+                    { key: 'family_library', label: 'Family Library', icon: 'users' },
+                    { key: 'itad_prices', label: 'Price Data', icon: 'dollar-sign' },
+                    { key: 'discord_users', label: 'Discord Users', icon: 'discord' }
+                ];
+                
+                statItems.forEach(item => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-2 col-sm-4 col-6 mb-3';
+                    col.innerHTML = `
+                        <div class="cache-stat-card bg-light">
+                            <div class="cache-stat-number text-primary">
+                                ${stats[item.key] || 0}
+                            </div>
+                            <div class="cache-stat-label">
+                                <i class="fas fa-${item.icon} me-1"></i>${item.label}
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(col);
+                });
+                
+            } catch (error) {
+                console.error('Error loading cache stats:', error);
+            }
+        }
+        
+        // Load recent games
+        async function loadRecentGames() {
+            try {
+                const response = await fetch('/api/recent-games?limit=5');
+                const games = await response.json();
+                
+                const container = document.getElementById('recent-games');
+                container.innerHTML = '';
+                
+                if (games.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No recent games found.</p>';
+                    return;
+                }
+                
+                games.forEach(game => {
+                    const gameCard = createGameCard(game);
+                    container.appendChild(gameCard);
+                });
+                
+            } catch (error) {
+                console.error('Error loading recent games:', error);
+            }
+        }
+        
+        // Load family members
+        async function loadFamilyMembers() {
+            try {
+                const response = await fetch('/api/family-members');
+                const members = await response.json();
+                
+                const container = document.getElementById('family-members');
+                container.innerHTML = '';
+                
+                if (members.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No family members configured.</p>';
+                    return;
+                }
+                
+                members.forEach(member => {
+                    const memberCard = document.createElement('div');
+                    memberCard.className = 'card mb-2';
+                    memberCard.innerHTML = `
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${member.friendly_name}</strong>
+                                    <br>
+                                    <small class="text-muted">Steam ID: ${member.steam_id}</small>
+                                </div>
+                                <div>
+                                    ${member.discord_id ? '<i class="fab fa-discord text-primary"></i>' : '<i class="fas fa-user-slash text-muted"></i>'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(memberCard);
+                });
+                
+            } catch (error) {
+                console.error('Error loading family members:', error);
+            }
+        }
+        
+        // Load wishlist summary
+        async function loadWishlistSummary() {
+            try {
+                const response = await fetch('/api/wishlist?limit=10');
+                const wishlist = await response.json();
+                
+                const container = document.getElementById('wishlist-summary');
+                container.innerHTML = '';
+                
+                if (wishlist.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No wishlist items found.</p>';
+                    return;
+                }
+                
+                wishlist.forEach(item => {
+                    const gameCard = createWishlistCard(item);
+                    container.appendChild(gameCard);
+                });
+                
+            } catch (error) {
+                console.error('Error loading wishlist:', error);
+            }
+        }
+        
+        // Create game card element
+        function createGameCard(game) {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+            
+            const badges = [];
+            if (game.is_free) badges.push('<span class="badge bg-success">Free</span>');
+            if (game.is_multiplayer) badges.push('<span class="badge bg-info">Multiplayer</span>');
+            if (game.is_coop) badges.push('<span class="badge bg-warning">Co-op</span>');
+            
+            card.innerHTML = `
+                <div class="game-info">
+                    <div class="game-title">${game.name || 'Unknown Game'}</div>
+                    <div class="game-meta">
+                        App ID: ${game.appid} | Type: ${game.type || 'Unknown'}
+                    </div>
+                    <div class="game-badges">
+                        ${badges.join(' ')}
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        // Create wishlist card element
+        function createWishlistCard(item) {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+            
+            let priceInfo = '';
+            if (item.price_data) {
+                priceInfo = `<span class="badge bg-primary">$${(item.price_data.final / 100).toFixed(2)}</span>`;
+            }
+            
+            card.innerHTML = `
+                <div class="game-info">
+                    <div class="game-title">${item.game_name || 'Unknown Game'}</div>
+                    <div class="game-meta">
+                        App ID: ${item.appid} | Steam ID: ${item.steam_id}
+                    </div>
+                    <div class="game-badges">
+                        ${priceInfo}
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        // Purge cache
+        async function purgeCache(type) {
+            if (!confirm(`Are you sure you want to purge ${type} cache data?`)) {
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`/api/cache/purge?cache_type=${type}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    await loadCacheStats(); // Refresh cache stats
+                } else {
+                    showAlert(result.message, 'danger');
+                }
+                
+            } catch (error) {
+                console.error('Error purging cache:', error);
+                showAlert('Error purging cache', 'danger');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Refresh status
+        async function refreshStatus() {
+            await loadBotStatus();
+            showAlert('Status refreshed', 'info');
+        }
+        
+        // Start auto-refresh
+        function startAutoRefresh() {
+            refreshInterval = setInterval(async () => {
+                await loadBotStatus();
+            }, 30000); // Refresh every 30 seconds
+        }
+        
+        // Show loading modal
+        function showLoading(show) {
+            const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            if (show) {
+                modal.show();
+            } else {
+                modal.hide();
+            }
+        }
+        
+        // Show alert
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alert-container');
+            const alertId = 'alert-' + Date.now();
+            
+            const alert = document.createElement('div');
+            alert.id = alertId;
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            container.appendChild(alert);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const alertElement = document.getElementById(alertId);
+                if (alertElement) {
+                    const bsAlert = new bootstrap.Alert(alertElement);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

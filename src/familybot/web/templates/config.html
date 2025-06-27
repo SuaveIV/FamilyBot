@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyBot Configuration</title>
+    
+    <!-- Bootstrap/Bootswatch CSS (dynamically loaded) -->
+    <link id="theme-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="fas fa-robot me-2"></i>FamilyBot
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logs">
+                            <i class="fas fa-file-alt me-1"></i>Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/config">
+                            <i class="fas fa-cog me-1"></i>Config
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- Theme Switcher Dropdown -->
+                <div class="dropdown me-3" id="theme-dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-palette me-1"></i>Theme
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <!-- Populated by JavaScript -->
+                    </ul>
+                </div>
+                
+                <!-- Status indicator -->
+                <div id="bot-status-indicator" class="status-indicator status-offline">
+                    <span class="status-dot"></span>
+                    <span>Offline</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Configuration Overview -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Configuration Overview
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            This page shows the current configuration status. To modify settings, edit the <code>config.yml</code> file and restart the bot.
+                        </div>
+                        <div class="row" id="config-overview">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plugin Configuration Status -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-puzzle-piece me-2"></i>Plugin Configuration Status
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="plugin-status">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Family Members -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-users me-2"></i>Family Members
+                        </h5>
+                        <span id="family-count" class="badge bg-primary">0 members</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="family-members-list">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Information -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-server me-2"></i>System Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="metric-card mb-3">
+                                    <div class="metric-label">WebSocket Server</div>
+                                    <div class="metric-value" id="websocket-ip">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-tools me-2"></i>Quick Actions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary" onclick="refreshConfig()">
+                                <i class="fas fa-sync-alt me-2"></i>Refresh Configuration
+                            </button>
+                            <button class="btn btn-outline-info" onclick="showConfigHelp()">
+                                <i class="fas fa-question-circle me-2"></i>Configuration Help
+                            </button>
+                            <button class="btn btn-outline-warning" onclick="validateConfig()">
+                                <i class="fas fa-check-circle me-2"></i>Validate Configuration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Template -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-file-code me-2"></i>Configuration Template
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Below is a sample configuration template. Copy this to your <code>config.yml</code> file and fill in your values.
+                        </p>
+                        <div class="position-relative">
+                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyConfigTemplate()" style="z-index: 10;">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                            <pre id="config-template" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"><code># FamilyBot Configuration Template
+
+# --- Discord Bot Configuration ---
+discord:
+  api_key: ""  # REQUIRED: Your Discord Bot Token
+  admin_id: 00000000000000000  # REQUIRED: Your Discord User ID
+
+# --- Free Epic Games Plugin Configuration ---
+free_epicgames:
+  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID for Epic Games announcements
+
+# --- Steam Family Plugin Configuration ---
+steam_family:
+  family_id: 000000  # REQUIRED: Your Steam Family Group ID
+  channel_id:
+    new_game: 00000000000000000  # REQUIRED: Discord Channel ID for new game notifications
+    wishlist: 00000000000000000  # REQUIRED: Discord Channel ID for wishlist updates
+  user_id:
+    # REQUIRED: Map Steam User IDs to friendly names
+    "00000000000000000": "User1Name"
+    "00000000000000000": "User2Name"
+  steamworks_api_key: ""  # REQUIRED: Your Steamworks Web API Key
+  itad_api_key: ""  # REQUIRED: IsThereAnyDeal.com API Key
+  websocket_server_ip: "127.0.0.1"  # OPTIONAL: WebSocket server IP
+
+# --- Help Message Plugin Configuration ---
+help_message:
+  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID for help messages
+
+# --- Web UI Configuration ---
+web_ui:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8080
+  default_theme: "default"  # Optional: default, darkly, flatly, etc.
+</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Help Modal -->
+    <div class="modal fade" id="configHelpModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-question-circle me-2"></i>Configuration Help
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="accordion" id="configHelpAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#discord-help">
+                                    Discord Configuration
+                                </button>
+                            </h2>
+                            <div id="discord-help" class="accordion-collapse collapse show" data-bs-parent="#configHelpAccordion">
+                                <div class="accordion-body">
+                                    <h6>Discord API Key</h6>
+                                    <p>Get your Discord Bot Token from <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a>.</p>
+                                    
+                                    <h6>Admin Discord ID</h6>
+                                    <p>Your Discord User ID (not username). Enable Developer Mode in Discord, right-click your profile, and select "Copy ID".</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#steam-help">
+                                    Steam Family Configuration
+                                </button>
+                            </h2>
+                            <div id="steam-help" class="accordion-collapse collapse" data-bs-parent="#configHelpAccordion">
+                                <div class="accordion-body">
+                                    <h6>Family ID</h6>
+                                    <p>Your Steam Family Group ID. Get this from steamapi.xpaw.me after obtaining your Steamworks API Key.</p>
+                                    
+                                    <h6>Steamworks API Key</h6>
+                                    <p>Get this from <a href="https://steamcommunity.com/dev/apikey" target="_blank">Steam Web API Key</a>.</p>
+                                    
+                                    <h6>ITAD API Key</h6>
+                                    <p>Get this from <a href="https://isthereanydeal.com/apps/my/" target="_blank">IsThereAnyDeal.com</a> for price tracking.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#channel-help">
+                                    Channel IDs
+                                </button>
+                            </h2>
+                            <div id="channel-help" class="accordion-collapse collapse" data-bs-parent="#configHelpAccordion">
+                                <div class="accordion-body">
+                                    <p>To get Discord Channel IDs:</p>
+                                    <ol>
+                                        <li>Enable Developer Mode in Discord Settings</li>
+                                        <li>Right-click on the channel you want</li>
+                                        <li>Select "Copy ID"</li>
+                                        <li>Paste the ID into your configuration</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;">
+        <!-- Alerts will be inserted here -->
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Theme Switcher -->
+    <script src="{{ url_for('static', path='js/theme_switcher.js') }}"></script>
+    
+    <!-- Config JavaScript -->
+    <script>
+        // Initialize config page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBotStatus();
+            loadConfigData();
+            loadFamilyMembers();
+        });
+        
+        // Load bot status for the indicator
+        async function loadBotStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                const indicator = document.getElementById('bot-status-indicator');
+                if (status.online) {
+                    indicator.className = 'status-indicator status-online';
+                    indicator.innerHTML = '<span class="status-dot"></span><span>Online</span>';
+                } else {
+                    indicator.className = 'status-indicator status-offline';
+                    indicator.innerHTML = '<span class="status-dot"></span><span>Offline</span>';
+                }
+            } catch (error) {
+                console.error('Error loading bot status:', error);
+            }
+        }
+        
+        // Load configuration data
+        async function loadConfigData() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                
+                displayConfigOverview(config);
+                displayPluginStatus(config);
+                
+            } catch (error) {
+                console.error('Error loading config data:', error);
+                showAlert('Error loading configuration data', 'danger');
+            }
+        }
+        
+        // Display configuration overview
+        function displayConfigOverview(config) {
+            const container = document.getElementById('config-overview');
+            container.innerHTML = '';
+            
+            const overviewItems = [
+                {
+                    label: 'Discord Bot',
+                    value: config.discord_configured ? 'Configured' : 'Not Configured',
+                    status: config.discord_configured ? 'success' : 'danger',
+                    icon: 'discord'
+                },
+                {
+                    label: 'Steam Family',
+                    value: config.steam_family_configured ? 'Configured' : 'Not Configured',
+                    status: config.steam_family_configured ? 'success' : 'danger',
+                    icon: 'steam'
+                },
+                {
+                    label: 'Family Members',
+                    value: `${config.family_members_count} members`,
+                    status: config.family_members_count > 0 ? 'success' : 'warning',
+                    icon: 'users'
+                },
+                {
+                    label: 'WebSocket Server',
+                    value: config.websocket_ip,
+                    status: 'info',
+                    icon: 'network-wired'
+                }
+            ];
+            
+            overviewItems.forEach(item => {
+                const col = document.createElement('div');
+                col.className = 'col-md-3 col-sm-6 mb-3';
+                col.innerHTML = `
+                    <div class="card border-${item.status}">
+                        <div class="card-body text-center">
+                            <i class="fab fa-${item.icon} fa-2x text-${item.status} mb-2"></i>
+                            <h6 class="card-title">${item.label}</h6>
+                            <p class="card-text text-${item.status}">${item.value}</p>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(col);
+            });
+            
+            // Update WebSocket IP display
+            document.getElementById('websocket-ip').textContent = config.websocket_ip;
+        }
+        
+        // Display plugin status
+        function displayPluginStatus(config) {
+            const container = document.getElementById('plugin-status');
+            container.innerHTML = '';
+            
+            const plugins = [
+                {
+                    name: 'Free Epic Games',
+                    configured: config.free_epicgames_configured,
+                    description: 'Announces free Epic Games Store games'
+                },
+                {
+                    name: 'Steam Family',
+                    configured: config.steam_family_configured,
+                    description: 'Monitors Steam Family library and wishlists'
+                },
+                {
+                    name: 'Help Message',
+                    configured: config.help_message_configured,
+                    description: 'Provides bot help and command information'
+                }
+            ];
+            
+            plugins.forEach(plugin => {
+                const col = document.createElement('div');
+                col.className = 'col-md-4 mb-3';
+                col.innerHTML = `
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title">${plugin.name}</h6>
+                                <span class="badge bg-${plugin.configured ? 'success' : 'danger'}">
+                                    ${plugin.configured ? 'Configured' : 'Not Configured'}
+                                </span>
+                            </div>
+                            <p class="card-text text-muted small">${plugin.description}</p>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(col);
+            });
+        }
+        
+        // Load family members
+        async function loadFamilyMembers() {
+            try {
+                const response = await fetch('/api/family-members');
+                const members = await response.json();
+                
+                const container = document.getElementById('family-members-list');
+                const countElement = document.getElementById('family-count');
+                
+                countElement.textContent = `${members.length} members`;
+                container.innerHTML = '';
+                
+                if (members.length === 0) {
+                    container.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No family members configured. Add Steam user IDs to your config.yml file.
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const table = document.createElement('div');
+                table.className = 'table-responsive';
+                table.innerHTML = `
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Friendly Name</th>
+                                <th>Steam ID</th>
+                                <th>Discord Linked</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${members.map(member => `
+                                <tr>
+                                    <td><strong>${member.friendly_name}</strong></td>
+                                    <td><code>${member.steam_id}</code></td>
+                                    <td>
+                                        ${member.discord_id ? 
+                                            '<i class="fas fa-check text-success"></i> Linked' : 
+                                            '<i class="fas fa-times text-muted"></i> Not Linked'
+                                        }
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                container.appendChild(table);
+                
+            } catch (error) {
+                console.error('Error loading family members:', error);
+            }
+        }
+        
+        // Refresh configuration
+        async function refreshConfig() {
+            showAlert('Refreshing configuration...', 'info');
+            await loadConfigData();
+            await loadFamilyMembers();
+            showAlert('Configuration refreshed', 'success');
+        }
+        
+        // Show configuration help modal
+        function showConfigHelp() {
+            const modal = new bootstrap.Modal(document.getElementById('configHelpModal'));
+            modal.show();
+        }
+        
+        // Validate configuration
+        function validateConfig() {
+            // This is a simple client-side validation
+            // In a real implementation, you might want to call an API endpoint
+            showAlert('Configuration validation is not yet implemented', 'warning');
+        }
+        
+        // Copy configuration template
+        async function copyConfigTemplate() {
+            const template = document.getElementById('config-template').textContent;
+            
+            try {
+                await navigator.clipboard.writeText(template);
+                showAlert('Configuration template copied to clipboard', 'success');
+            } catch (error) {
+                console.error('Failed to copy to clipboard:', error);
+                showAlert('Failed to copy to clipboard', 'danger');
+            }
+        }
+        
+        // Show alert
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alert-container');
+            const alertId = 'alert-' + Date.now();
+            
+            const alert = document.createElement('div');
+            alert.id = alertId;
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            container.appendChild(alert);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const alertElement = document.getElementById(alertId);
+                if (alertElement) {
+                    const bsAlert = new bootstrap.Alert(alertElement);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

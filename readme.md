@@ -26,19 +26,27 @@ FamilyBot/
 │   │   ├── steam_family.py  # Steam family functionality
 │   │   ├── free_epicgames.py # Epic Games free games
 │   │   ├── common_game.py   # Common games between users
-│   │   └── help_message.py  # Dynamic help system
-│   └── Token_Sender/        # Separate token management bot
+│   │   ├── help_message.py  # Dynamic help system
+│   │   └── token_sender.py  # Token management plugin
+│   ├── web/                 # Web UI components
+│   │   ├── api.py           # FastAPI web server
+│   │   ├── models.py        # Pydantic data models
+│   │   ├── static/          # CSS, JavaScript, and assets
+│   │   └── templates/       # HTML templates
+│   └── Token_Sender/        # Legacy token management (deprecated)
 │       ├── getToken.py      # Token extraction script
 │       └── config-template.yaml # Token sender configuration
 ├── scripts/                 # Utility scripts
 │   ├── populate_database.py # Database population
 │   ├── populate_prices.py   # Price data population
 │   └── README.md           # Scripts documentation
-├── doc/                    # Documentation images
+├── doc/                    # Documentation and images
+│   ├── WEB_UI_README.md    # Web UI documentation
+│   └── ROADMAP.md          # Project roadmap
 ├── logs/                   # Log files (auto-created)
 ├── config-template.yml     # Main bot configuration template
 ├── pyproject.toml         # Project dependencies and metadata
-├── doc/ROADMAP.md         # Project roadmap (new location)
+├── ATTRIB.md              # Third-party attributions
 └── main.py               # Simple entry point (placeholder)
 ```
 
@@ -79,6 +87,16 @@ FamilyBot consists of several interconnected components:
 - **Caching Strategy**: Intelligent caching of Steam API responses to minimize API calls
 - **Performance Optimization**: Pre-populated price data for faster deal detection
 
+### Web UI (`web/`)
+
+- **Modern Interface**: FastAPI-powered web dashboard for bot management and monitoring
+- **Real-time Monitoring**: Live bot status, cache statistics, and system health metrics
+- **Log Management**: Advanced log viewer with filtering, search, and export capabilities
+- **Theme Support**: 16+ Bootswatch themes including comprehensive dark mode options
+- **Cache Control**: Web-based cache management and purge operations
+- **Configuration Help**: Built-in setup guides and configuration templates
+- **Responsive Design**: Mobile-friendly interface that works on all devices
+
 ## Installation
 
 To install the bot, clone or unzip the repository archive.
@@ -100,6 +118,10 @@ The project uses the following main dependencies (defined in `pyproject.toml`):
 - **PyYAML**: Configuration file parsing
 - **tqdm**: Progress bars for long-running operations
 - **httpx**: Async HTTP client for improved performance
+- **fastapi**: Modern web framework for the Web UI
+- **uvicorn**: ASGI server for FastAPI
+- **jinja2**: Template engine for HTML rendering
+- **pydantic**: Data validation and serialization
 
 ### Setup
 
@@ -466,6 +488,27 @@ This plugin dynamically generates a help message for all plugin commands. It aut
 ```
 
  This ensures the help message is always up-to-date with your bot's latest features.
+
+### Web UI
+
+The Web UI provides a modern, browser-based interface for managing and monitoring FamilyBot:
+
+- **Dashboard**: Real-time bot status, cache statistics, recent games, family members, and wishlist summary
+- **Log Viewer**: Advanced log filtering, search, real-time updates, and export functionality
+- **Configuration**: View current settings, plugin status, family member management, and setup help
+- **Theme Support**: 16+ Bootswatch themes including multiple dark mode options (Darkly, Cyborg, Slate, Solar, Superhero, Vapor)
+- **Cache Management**: Web-based cache purging and statistics monitoring
+- **Mobile Responsive**: Works seamlessly on desktop, tablet, and mobile devices
+
+#### Accessing the Web UI
+
+Once the bot is running, the Web UI is automatically available at:
+
+- **Default URL**: `http://127.0.0.1:8080` (or your configured host/port)
+- **Configuration**: Customize host, port, and default theme in `config.yml` under the `web_ui` section
+- **Auto-start**: The web server starts automatically with the bot (can be disabled in config)
+
+For detailed Web UI documentation, see [doc/WEB_UI_README.md](doc/WEB_UI_README.md).
 
 ## Troubleshooting
 

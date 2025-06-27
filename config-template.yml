@@ -19,8 +19,8 @@ steam_family:
     # REQUIRED: Map Steam User IDs (SteamID64) to friendly names for your family members.
     # The SteamID64 must be a string (enclosed in quotes).
     # You can add as many entries as needed.
-    "00000000000000000": "User1Name"
-    "00000000000000000": "User2Name"
+    "00000000000000001": "User1Name"
+    "00000000000000002": "User2Name"
     # Example: "76561198000000000": "John"
   steamworks_api_key: "" # REQUIRED: Your Steamworks Web API Key. Get this from steamcommunity.com/dev/apikey.
                           # Used for GetOwnedGames, GetWishlist, GetSharedLibraryApps.
@@ -31,3 +31,10 @@ steam_family:
 # --- Help Message Plugin Configuration ---
 help_message:
   channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where the bot's help message will be posted/updated.
+
+# --- Web UI Configuration ---
+web_ui:
+  enabled: true  # OPTIONAL: Enable/disable the web UI (default: true)
+  host: "127.0.0.1"  # OPTIONAL: Host to bind the web server to (default: 127.0.0.1)
+  port: 8080  # OPTIONAL: Port for the web server (default: 8080)
+  default_theme: "default"  # OPTIONAL: Default Bootswatch theme (default, darkly, flatly, etc.)

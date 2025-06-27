@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from interactions import User
 
 # Import modules from your project's new package structure
-from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID
+from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID, WEB_UI_ENABLED, WEB_UI_HOST, WEB_UI_PORT
 from familybot.WebSocketServer import start_websocket_server_task # Import the async server task
 from familybot.lib.database import init_db, get_db_connection # <<< Import init_db and get_db_connection
 from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT # Import the protocol type and message limit
@@ -207,6 +207,33 @@ typed_client.get_pinned_message = get_pinned_message
 client = typed_client
 
 
+# --- Web Server Function ---
+async def start_web_server():
+    """Start the FastAPI web server"""
+    try:
+        import uvicorn
+        from familybot.web.api import app, set_bot_client
+        
+        # Set the bot client reference in the web API
+        set_bot_client(client)
+        
+        # Configure uvicorn
+        config = uvicorn.Config(
+            app,
+            host=WEB_UI_HOST,
+            port=WEB_UI_PORT,
+            log_level="info",
+            access_log=False  # Disable access logs to reduce noise
+        )
+        
+        server = uvicorn.Server(config)
+        logger.info(f"Starting Web UI server on http://{WEB_UI_HOST}:{WEB_UI_PORT}")
+        await server.serve()
+        
+    except Exception as e:
+        logger.error(f"Error starting web server: {e}", exc_info=True)
+
+
 # --- Event Listeners and Background Tasks ---
 @listen()
 async def on_startup():
@@ -225,6 +252,13 @@ async def on_startup():
     ws_server_task = asyncio.create_task(start_websocket_server_task())
     _running_tasks.append(ws_server_task)
     logger.info("WebSocket server task scheduled.")
+    
+    # Start the Web UI server if enabled
+    if WEB_UI_ENABLED:
+        web_server_task = asyncio.create_task(start_web_server())
+        _running_tasks.append(web_server_task)
+        logger.info(f"Web UI server task scheduled on {WEB_UI_HOST}:{WEB_UI_PORT}")
+    
     await send_log_dm("Bot ready")
     
 @listen()
