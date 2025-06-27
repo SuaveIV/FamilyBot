@@ -15,7 +15,13 @@ dependencies = [
     "PyYAML==6.0.2",
     "tqdm",
     "httpx>=0.28.1",
+    "playwright>=1.53.0",
 ]
+
+[project.scripts]
+familybot = "familybot.FamilyBot:main"
+familybot-setup = "scripts.setup_browser:main"
+familybot-test = "scripts.test_token_plugin:main"
 
 [tool.setuptools]
 # This tells setuptools to look for your package(s) inside the 'src' directory.

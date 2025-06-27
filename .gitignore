@@ -70,3 +70,6 @@ main.py
 # Database file
 bot_data.db
 converted.json
+
+# Browser profile for token_sender plugin (contains login session data)
+FamilyBotBrowserProfile/

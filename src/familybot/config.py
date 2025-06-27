@@ -59,3 +59,8 @@ EPIC_CHANNEL_ID = config["free_epicgames"]["channel_id"]
 
 #-------------Help_message---------------
 HELP_CHANNEL_ID = config["help_message"]["channel_id"]
+
+#-------------Token_Sender---------------
+TOKEN_SAVE_PATH = config["token_sender"]["token_save_path"]
+BROWSER_PROFILE_PATH = config["token_sender"]["browser_profile_path"]
+UPDATE_BUFFER_HOURS = config["token_sender"]["update_buffer_hours"]

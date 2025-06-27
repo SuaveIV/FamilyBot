@@ -6,3 +6,4 @@ websockets==12.0
 PyYAML==6.0.2
 tqdm
 httpx
+playwright==1.48.0
