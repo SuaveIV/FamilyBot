@@ -77,8 +77,7 @@ class free_epicgames(Extension):
 
                 if not game_list:
                     logger.warning("No game elements found in Epic Games API response.")
-                    if hasattr(epic_games_channel, 'send'):
-                        await epic_games_channel.send("Couldn't retrieve free games information this week.")  # type: ignore
+                    await self.bot.send_to_channel(EPIC_CHANNEL_ID, "Couldn't retrieve free games information this week.")
                     self._force_next_run = False
                     return
 
@@ -109,27 +108,24 @@ class free_epicgames(Extension):
                                         break
                             if messages_to_send: break
 
-                if messages_to_send and hasattr(epic_games_channel, 'send'):
-                    await epic_games_channel.send("The free games on the Epic Game Store this week are:")  # type: ignore
+                if messages_to_send:
+                    await self.bot.send_to_channel(EPIC_CHANNEL_ID, "The free games on the Epic Game Store this week are:")
                     for msg_url in messages_to_send:
-                        await epic_games_channel.send(msg_url)  # type: ignore
-                elif hasattr(epic_games_channel, 'send'):
-                    await epic_games_channel.send("No new free games found for this week, or already announced.")  # type: ignore
+                        await self.bot.send_to_channel(EPIC_CHANNEL_ID, msg_url)
+                else:
+                    await self.bot.send_to_channel(EPIC_CHANNEL_ID, "No new free games found for this week, or already announced.")
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request error fetching Epic Games: {e}")
-                if hasattr(epic_games_channel, 'send'):
-                    await epic_games_channel.send("An error occurred while fetching free Epic Games. Please try again later.")  # type: ignore
+                await self.bot.send_to_channel(EPIC_CHANNEL_ID, "An error occurred while fetching free Epic Games. Please try again later.")
                 await self._send_admin_dm(f"Error fetching Epic Games: {e}")
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decode error for Epic Games response: {e}. Raw: {answer.text[:200]}")
-                if hasattr(epic_games_channel, 'send'):
-                    await epic_games_channel.send("An error occurred processing Epic Games data. Please try again later.")  # type: ignore
+                await self.bot.send_to_channel(EPIC_CHANNEL_ID, "An error occurred processing Epic Games data. Please try again later.")
                 await self._send_admin_dm(f"JSON error Epic Games: {e}")
             except Exception as e:
                 logger.critical(f"An unexpected error occurred in send_epic_free_games: {e}", exc_info=True)
-                if hasattr(epic_games_channel, 'send'):
-                    await epic_games_channel.send("An unexpected error occurred with Epic Games task.")  # type: ignore
+                await self.bot.send_to_channel(EPIC_CHANNEL_ID, "An unexpected error occurred with Epic Games task.")
                 await self._send_admin_dm(f"Critical error Epic Games: {e}")
             finally:
                 self._force_next_run = False

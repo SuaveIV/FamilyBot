@@ -123,13 +123,22 @@ class help_message(Extension):
 
         try:
             if not pinned_messages:
-                if hasattr(help_channel, 'send'):
-                    help_message_obj = await help_channel.send(full_help_message)  # type: ignore
-                    await help_message_obj.pin()
-                    logger.info(f"New help message pinned in channel {HELP_CHANNEL_ID}")
+                # Use centralized send_to_channel function which handles message splitting
+                await self.bot.send_to_channel(HELP_CHANNEL_ID, full_help_message)
+                
+                # Get the channel to pin the message
+                if help_channel and hasattr(help_channel, 'fetch_message'):
+                    # Get the last message in the channel (should be our help message)
+                    try:
+                        messages = await help_channel.history(limit=1).flatten()  # type: ignore
+                        if messages:
+                            await messages[0].pin()
+                            logger.info(f"New help message pinned in channel {HELP_CHANNEL_ID}")
+                    except Exception as pin_error:
+                        logger.warning(f"Could not pin help message: {pin_error}")
+                        await self._send_admin_dm(f"Help message sent but could not pin: {pin_error}")
                 else:
-                    logger.error(f"Channel {HELP_CHANNEL_ID} does not support sending messages")
-                    await self._send_admin_dm(f"Channel {HELP_CHANNEL_ID} does not support sending messages")
+                    logger.info(f"Help message sent to channel {HELP_CHANNEL_ID}")
             else:
                 await pinned_messages[-1].edit(content=full_help_message)
                 logger.info(f"Help message updated in channel {HELP_CHANNEL_ID}")

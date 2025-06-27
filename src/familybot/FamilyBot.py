@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID
 from familybot.WebSocketServer import start_websocket_server_task # Import the async server task
 from familybot.lib.database import init_db, get_db_connection # <<< Import init_db and get_db_connection
-from familybot.lib.types import FamilyBotClient # Import the protocol type
+from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT # Import the protocol type and message limit
+from familybot.lib.utils import truncate_message_list, split_message # Import message utilities
 
 
 # Import our centralized logging configuration
@@ -67,16 +68,47 @@ else:
 # --- Global Utility Functions for Bot Instance ---
 # These are exposed as methods of the client instance for convenience in plugins
 async def send_to_channel(channel_id: int, message: str) -> None:
+    """
+    Send a message to a Discord channel, automatically splitting if it exceeds length limits.
+    
+    Args:
+        channel_id: The Discord channel ID
+        message: The message content to send
+    """
     try:
         channel = await client.fetch_channel(channel_id)
+        
         # Type guard to check if channel supports sending messages
-        if channel and isinstance(channel, GuildText):
-            await channel.send(message)
-        elif channel and hasattr(channel, 'send'):
-            # Fallback for other sendable channel types
-            await channel.send(message)  # type: ignore
-        else:
-            logger.warning(f"Could not find channel with ID: {channel_id} or channel doesn't support sending messages")
+        if not channel:
+            logger.warning(f"Could not find channel with ID: {channel_id}")
+            return
+        
+        if not (isinstance(channel, GuildText) or hasattr(channel, 'send')):
+            logger.warning(f"Channel {channel_id} doesn't support sending messages")
+            return
+        
+        # Split message if it's too long
+        message_parts = split_message(message)
+        
+        if len(message_parts) > 1:
+            logger.info(f"Message too long for channel {channel_id}, splitting into {len(message_parts)} parts")
+        
+        # Send each part
+        for i, part in enumerate(message_parts):
+            try:
+                if isinstance(channel, GuildText):
+                    await channel.send(part)
+                else:
+                    await channel.send(part)  # type: ignore
+                
+                # Add small delay between parts to avoid rate limiting
+                if i < len(message_parts) - 1:
+                    await asyncio.sleep(0.5)
+                    
+            except Exception as part_error:
+                logger.error(f"Error sending message part {i+1}/{len(message_parts)} to channel {channel_id}: {part_error}")
+                # Continue trying to send remaining parts
+                
     except Exception as e:
         logger.error(f"Error sending message to channel {channel_id}: {e}")
 
@@ -90,10 +122,36 @@ async def send_log_dm(message: str) -> None:
         logger.error(f"Error sending log DM to admin {ADMIN_DISCORD_ID}: {e}")
 
 async def send_dm(discord_id: int, message: str) -> None:
+    """
+    Send a DM to a Discord user, automatically splitting if it exceeds length limits.
+    
+    Args:
+        discord_id: The Discord user ID
+        message: The message content to send
+    """
     try:
         user = await client.fetch_user(discord_id)
         if user:
-            await user.send(message)
+            # Split message if it's too long
+            message_parts = split_message(message)
+            
+            if len(message_parts) > 1:
+                logger.info(f"DM too long for user {discord_id}, splitting into {len(message_parts)} parts")
+            
+            # Send each part
+            for i, part in enumerate(message_parts):
+                try:
+                    await user.send(part)
+                    
+                    # Add small delay between parts to avoid rate limiting
+                    if i < len(message_parts) - 1:
+                        await asyncio.sleep(0.5)
+                        
+                except Exception as part_error:
+                    logger.error(f"Error sending DM part {i+1}/{len(message_parts)} to user {discord_id}: {part_error}")
+                    # Continue trying to send remaining parts
+        else:
+            logger.warning(f"Could not find user with ID: {discord_id}")
     except Exception as e:
         logger.error(f"Error sending DM to user {discord_id}: {e}")
 

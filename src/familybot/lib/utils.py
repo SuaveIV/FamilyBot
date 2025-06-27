@@ -175,6 +175,65 @@ class ProgressTracker:
             return ""
 
 
+def split_message(message: str, max_length: int = 3900) -> List[str]:
+    """
+    Split a message into multiple parts that fit within Discord's character limit.
+    
+    Args:
+        message: The message to split
+        max_length: Maximum length per message part (default 3900 to stay under 4000 limit)
+    
+    Returns:
+        List of message parts
+    """
+    if len(message) <= max_length:
+        return [message]
+    
+    parts = []
+    current_part = ""
+    
+    # Split by lines first to preserve formatting
+    lines = message.split('\n')
+    
+    for line in lines:
+        # If a single line is too long, we need to split it
+        if len(line) > max_length:
+            # If we have content in current_part, save it first
+            if current_part:
+                parts.append(current_part.rstrip())
+                current_part = ""
+            
+            # Split the long line by words
+            words = line.split(' ')
+            for word in words:
+                # If adding this word would exceed limit, start new part
+                if len(current_part) + len(word) + 1 > max_length:
+                    if current_part:
+                        parts.append(current_part.rstrip())
+                        current_part = word + " "
+                    else:
+                        # Single word is too long, truncate it
+                        parts.append(word[:max_length-3] + "...")
+                        current_part = ""
+                else:
+                    current_part += word + " "
+        else:
+            # Check if adding this line would exceed the limit
+            if len(current_part) + len(line) + 1 > max_length:
+                # Save current part and start new one
+                if current_part:
+                    parts.append(current_part.rstrip())
+                current_part = line + "\n"
+            else:
+                current_part += line + "\n"
+    
+    # Add any remaining content
+    if current_part:
+        parts.append(current_part.rstrip())
+    
+    return parts
+
+
 def truncate_message_list(items: List[str], header: str = "", footer_template: str = "\n... and {count} more items!", 
                          max_length: int = DISCORD_MESSAGE_LIMIT) -> str:
     """
