@@ -913,7 +913,7 @@ class steam_family(Extension):
             
             deals_found = []
             games_checked = 0
-            max_games_to_check = 15  # Limit to avoid rate limits
+            max_games_to_check = 100  # Limit to avoid rate limits
             
             for item in global_wishlist[:max_games_to_check]:
                 app_id = item[0]
