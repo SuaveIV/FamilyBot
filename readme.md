@@ -199,6 +199,41 @@ You should see `(.venv)` appear at the beginning of your terminal prompt.
 
 To stop the bots, go to their respective terminal windows and press `Ctrl+C`. Both bots have graceful shutdown handling implemented.
 
+## Utility Scripts
+
+The `scripts/` directory contains powerful utility scripts for database management and performance optimization:
+
+### Database Population Scripts
+
+* **`populate_database.py`** - Comprehensive database population script that fetches game data, wishlists, and family libraries. Perfect for initial setup or complete rebuilds.
+* **`populate_prices.py`** - Specialized price data population script that pre-populates both Steam Store prices and ITAD historical price data. **Essential for Steam Summer/Winter Sales** to maximize deal detection speed.
+
+### Cache Management Scripts
+
+* **`purge_cache.ps1/.sh`** - Purge game details cache to force fresh USD pricing
+* **`purge_wishlist.ps1/.sh`** - Purge wishlist cache when family members update their wishlists
+* **`purge_family_library.ps1/.sh`** - Purge family library cache when new games are added
+* **`purge_all_cache.ps1/.sh`** - Purge ALL cache data for complete reset
+
+### Usage Examples
+
+```bash
+# Populate all data (run after initial setup)
+uv run python scripts/populate_database.py
+
+# Prepare for Steam sales (populate price data)
+uv run python scripts/populate_prices.py
+
+# During Steam sales (refresh current prices)
+uv run python scripts/populate_prices.py --refresh-current --steam-only
+
+# Clear all caches and rebuild
+.\scripts\purge_all_cache.ps1
+uv run python scripts/populate_database.py
+```
+
+For detailed documentation, see [scripts/README.md](scripts/README.md).
+
 ## Features
 
 ### Steam Family
@@ -208,6 +243,12 @@ This plugin includes all features related to Steam Family:
 * Sends a notification when a new game is added to the Family library.
 * Compares wishlists to find common games, facilitating price sharing among multiple users who desire the same game.
 * `!coop <number>`: A command that returns all multiplayer games in the family library in the given number of copies (or more).
+* `!deals`: Check current deals for family wishlist games (shows games on sale or at historical low prices).
+* `!force_deals`: Admin command to force check deals and post results to the wishlist channel (limited to 100 games).
+* `!force_deals_unlimited`: Admin command to check deals for ALL wishlist games with no limit (family sharing only).
+* `!purge_cache`: Admin command to purge game details cache and force fresh USD pricing.
+* `!full_library_scan`: Admin command to scan all family members' complete game libraries with rate limiting.
+* `!full_wishlist_scan`: Admin command to perform comprehensive wishlist scan of ALL common games.
 
 ### Free Epic Games
 

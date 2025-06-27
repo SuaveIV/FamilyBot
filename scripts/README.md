@@ -2,13 +2,78 @@
 
 This directory contains utility scripts for managing FamilyBot's cache and database operations.
 
-## Database Population Script
+## Database Population Scripts
 
 ### `populate_database.py` - Standalone Database Population
 
 A comprehensive script that populates the FamilyBot database with game data without requiring Discord interaction. Perfect for initial setup or complete database rebuilds.
 
+### `populate_prices.py` - Comprehensive Price Data Population
+
+A specialized script that pre-populates both Steam Store prices and ITAD historical price data. **Perfect for Steam Summer/Winter Sales** when you want maximum speed for deal detection commands.
+
 #### Features
+
+- **Dual API integration** - Fetches both Steam Store and ITAD price data
+- **Smart filtering** - Only processes games that need updates (unless forced)
+- **Flexible modes** - Steam-only, ITAD-only, or both
+- **Sale optimization** - Refresh current prices during active sales
+- **Conservative rate limiting** - Respects both Steam and ITAD API limits
+- **Progress tracking** - Beautiful progress bars with detailed statistics
+- **Error resilience** - Continues processing even if some games fail
+
+#### Usage
+
+```bash
+# Basic usage - populate all price data
+uv run python scripts/populate_prices.py
+
+# Steam Summer/Winter Sale workflow
+uv run python scripts/populate_prices.py --refresh-current  # Update current prices during sales
+uv run python scripts/populate_prices.py --steam-only       # Only Steam prices (faster)
+uv run python scripts/populate_prices.py --itad-only        # Only historical prices
+
+# Advanced options
+uv run python scripts/populate_prices.py --force-refresh    # Refresh all data even if cached
+uv run python scripts/populate_prices.py --conservative     # Very slow, safest rate limiting
+uv run python scripts/populate_prices.py --fast            # Faster rate limiting (use carefully)
+uv run python scripts/populate_prices.py --dry-run         # See what would be processed
+```
+
+#### When to Use
+
+- **Before major sales** - Pre-populate ITAD data for instant deal detection
+- **During active sales** - Use `--refresh-current` to update Steam prices
+- **After cache purging** - Rebuild comprehensive price database
+- **Performance optimization** - Make `!force_deals_unlimited` run at maximum speed
+
+#### Time Estimates
+
+For a typical family library (~1000 games):
+
+- **Steam prices only**: 25-40 minutes
+- **ITAD prices only**: 15-25 minutes  
+- **Both Steam + ITAD**: 40-65 minutes
+- **Refresh current prices**: 25-40 minutes
+
+#### Steam Sale Workflow
+
+```bash
+# Before a major Steam sale (e.g., Summer Sale)
+uv run python scripts/populate_prices.py
+
+# During the sale (daily updates)
+uv run python scripts/populate_prices.py --refresh-current --steam-only
+
+# After the sale
+# No action needed - cached data remains valid
+```
+
+---
+
+### `populate_database.py` - Database Population Details
+
+#### Database Features
 
 - **Beautiful progress bars** with tqdm (install with `pip install tqdm`)
 - **Rate limiting** to respect Steam API limits
@@ -17,26 +82,28 @@ A comprehensive script that populates the FamilyBot database with game data with
 - **Dry run mode** - see what would be done without making changes
 - **Multiple rate limiting modes** - fast, normal, or slow
 
-#### Usage
+#### Database Usage
+
+**Note**: Ensure your virtual environment is activated before running these scripts manually. Use `uv run python` to automatically handle the environment.
 
 ```bash
 # Install tqdm for progress bars (recommended)
-pip install tqdm
+uv add tqdm
 # OR run the installer script
-python scripts/install_tqdm.py
+uv run python scripts/install_tqdm.py
 
 # Basic usage - populate everything
-python scripts/populate_database.py
+uv run python scripts/populate_database.py
 
 # Advanced options
-python scripts/populate_database.py --library-only    # Only scan family libraries
-python scripts/populate_database.py --wishlist-only   # Only scan wishlists
-python scripts/populate_database.py --fast           # Faster rate limiting
-python scripts/populate_database.py --slow           # Slower rate limiting  
-python scripts/populate_database.py --dry-run        # Show what would be done
+uv run python scripts/populate_database.py --library-only    # Only scan family libraries
+uv run python scripts/populate_database.py --wishlist-only   # Only scan wishlists
+uv run python scripts/populate_database.py --fast           # Faster rate limiting
+uv run python scripts/populate_database.py --slow           # Slower rate limiting  
+uv run python scripts/populate_database.py --dry-run        # Show what would be done
 ```
 
-#### Time Estimates
+#### Database Time Estimates
 
 For a large combined library (2800+ games):
 
@@ -52,10 +119,10 @@ For a large combined library (2800+ games):
 .\scripts\purge_all_cache.ps1
 
 # 2. Populate database (with progress bars!)
-python scripts/populate_database.py
+uv run python scripts/populate_database.py
 
 # 3. Verify everything works
-python -m src.familybot.FamilyBot
+uv run python -m src.familybot.FamilyBot
 # Then test: !coop 2, !deals
 ```
 
@@ -107,7 +174,7 @@ These scripts help you clear various types of cached data to force fresh data re
 .\scripts\purge_all_cache.ps1
 
 # Populate database
-python scripts/populate_database.py
+uv run python scripts/populate_database.py
 ```
 
 ### Bash (Linux/macOS)
@@ -125,7 +192,7 @@ chmod +x scripts/*.sh
 ./scripts/purge_all_cache.sh
 
 # Populate database
-python scripts/populate_database.py
+uv run python scripts/populate_database.py
 ```
 
 ## Command Line Interface
@@ -134,14 +201,14 @@ You can also use the main bot script with command line arguments:
 
 ```bash
 # Cache purging operations
-python -m src.familybot.FamilyBot --purge-cache
-python -m src.familybot.FamilyBot --purge-wishlist  
-python -m src.familybot.FamilyBot --purge-family-library
-python -m src.familybot.FamilyBot --purge-all
+uv run python -m src.familybot.FamilyBot --purge-cache
+uv run python -m src.familybot.FamilyBot --purge-wishlist  
+uv run python -m src.familybot.FamilyBot --purge-family-library
+uv run python -m src.familybot.FamilyBot --purge-all
 
 # Scan operations (require Discord bot for progress updates)
-python -m src.familybot.FamilyBot --full-library-scan
-python -m src.familybot.FamilyBot --full-wishlist-scan
+uv run python -m src.familybot.FamilyBot --full-library-scan
+uv run python -m src.familybot.FamilyBot --full-wishlist-scan
 ```
 
 ## Discord Commands
@@ -151,7 +218,8 @@ For interactive operations, you can use these Discord commands (admin only, DM r
 - **`!purge_cache`** - Purge game details cache
 - **`!full_library_scan`** - Comprehensive library scan with rate limiting
 - **`!full_wishlist_scan`** - Complete wishlist scan of all common games
-- **`!force_deals`** - Check deals and post to wishlist channel
+- **`!force_deals`** - Check deals and post to wishlist channel (limited to 100 games)
+- **`!force_deals_unlimited`** - Check deals for ALL wishlist games (family sharing only)
 
 ## When to Use Each Script
 
@@ -207,9 +275,9 @@ For interactive operations, you can use these Discord commands (admin only, DM r
 - **tqdm** - For beautiful progress bars in `populate_database.py`
 
   ```bash
-  pip install tqdm
+  uv add tqdm
   # OR
-  python scripts/install_tqdm.py
+  uv run python scripts/install_tqdm.py
   ```
 
 ## Troubleshooting
@@ -220,6 +288,7 @@ If you encounter issues:
 2. **Verify paths** - Run from the FamilyBot root directory
 3. **Database access** - Ensure `data/` directory is writable
 4. **Python environment** - Verify all dependencies are installed
-5. **Missing tqdm** - Install with `pip install tqdm` for progress bars
+5. **Missing tqdm** - Install with `uv add tqdm` for progress bars
+6. **Virtual environment** - Use `uv run python` to automatically handle environment activation
 
 For more help, check the main README.md or Discord commands documentation.
