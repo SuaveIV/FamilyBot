@@ -25,7 +25,7 @@ from familybot.lib.plugin_admin_actions import (
     force_new_game_action,
     force_wishlist_action
 )
-from familybot.lib.logging_config import web_log_queue
+from familybot.lib.logging_config import web_log_queue, setup_web_logging
 from familybot.web.models import (
     BotStatus, GameDetails, FamilyMember, LogEntry, CacheStats,
     CommandRequest, CommandResponse, ConfigData, WishlistItem, RecentActivity
@@ -576,6 +576,7 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     """Initialize web application"""
+    setup_web_logging()
     logger.info("FamilyBot Web UI starting up...")
     
     # Create static and template directories if they don't exist
