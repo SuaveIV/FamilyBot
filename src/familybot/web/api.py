@@ -128,12 +128,34 @@ async def get_bot_status():
         uptime_delta = datetime.utcnow() - _bot_start_time
         uptime = str(uptime_delta).split('.')[0]  # Remove microseconds
     
+    # Check token validity using the token plugin's logic
+    token_valid = False
+    try:
+        from familybot.config import PROJECT_ROOT, TOKEN_SAVE_PATH
+        import os
+        
+        token_save_dir = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
+        token_file_path = os.path.join(token_save_dir, "token")
+        exp_file_path = os.path.join(token_save_dir, "token_exp")
+        
+        # Check if token files exist and token is not expired
+        if os.path.exists(token_file_path) and os.path.exists(exp_file_path):
+            with open(exp_file_path, 'r') as f:
+                exp_timestamp = float(f.read().strip())
+            
+            now_timestamp = datetime.utcnow().timestamp()
+            token_valid = now_timestamp < exp_timestamp
+    except Exception as e:
+        logger.error(f"Error checking token status: {e}")
+        token_valid = False
+    
     return BotStatus(
         online=_bot_client is not None,
         uptime=uptime,
         last_activity=_last_activity,
         discord_connected=_bot_client is not None and hasattr(_bot_client, 'is_ready') and _bot_client.is_ready,
-        websocket_active=True  # Assume WebSocket is active if bot is running
+        websocket_active=True,  # Assume WebSocket is active if bot is running
+        token_valid=token_valid
     )
 
 @app.get("/api/cache/stats", response_model=CacheStats)

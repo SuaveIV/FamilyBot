@@ -11,6 +11,7 @@ class BotStatus(BaseModel):
     last_activity: Optional[datetime] = None
     discord_connected: bool
     websocket_active: bool
+    token_valid: bool = False # New field for token status
 
 class GameDetails(BaseModel):
     """Game details from cache"""

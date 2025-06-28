@@ -56,7 +56,7 @@ class token_sender(Extension):
     async def _send_admin_dm(self, message: str) -> None:
         """Helper to send error/warning messages to the bot admin via DM."""
         try:
-            admin_user = await self.bot.fetch_user(ADMIN_DISCORD_ID)
+            admin_user = await self.bot.fetch_user(int(ADMIN_DISCORD_ID))
             if admin_user:
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 await admin_user.send(f"Token Sender Plugin ({now_str}): {message}")

@@ -25,6 +25,7 @@ async function loadBotStatus() {
             document.getElementById('bot-uptime').textContent = status.uptime || '-';
             document.getElementById('discord-status').textContent = status.discord_connected ? 'Connected' : 'Disconnected';
             document.getElementById('websocket-status').textContent = status.websocket_active ? 'Active' : 'Inactive';
+            document.getElementById('token-status').textContent = status.token_valid ? 'Valid' : 'Expired';
         }
     } catch (error) {
         console.error('Error loading bot status:', error);
