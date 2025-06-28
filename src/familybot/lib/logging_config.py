@@ -13,6 +13,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import coloredlogs
+from pythonjsonlogger.json import JsonFormatter
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -79,10 +81,13 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     )
     
     # 1. Console handler (all levels)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(numeric_level)
-    console_handler.setFormatter(detailed_formatter)
-    logger.addHandler(console_handler)
+    # Use coloredlogs for prettier console output
+    coloredlogs.install(
+        level=log_level,
+        logger=logger,
+        fmt='%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
     
     # 2. Main log file (all levels) - rotating
     main_log_file = logs_dir / "familybot.log"
@@ -93,7 +98,9 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         encoding='utf-8'
     )
     main_file_handler.setLevel(numeric_level)
-    main_file_handler.setFormatter(detailed_formatter)
+    main_file_handler.setFormatter(JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
+    ))
     logger.addHandler(main_file_handler)
     
     # 3. Error log file (WARNING and above) - rotating
@@ -105,7 +112,9 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         encoding='utf-8'
     )
     error_file_handler.setLevel(logging.WARNING)
-    error_file_handler.setFormatter(error_formatter)
+    error_file_handler.setFormatter(JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
+    ))
     logger.addHandler(error_file_handler)
     
     # 4. Steam API specific log file
@@ -117,7 +126,9 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         encoding='utf-8'
     )
     steam_file_handler.setLevel(logging.INFO)
-    steam_file_handler.setFormatter(detailed_formatter)
+    steam_file_handler.setFormatter(JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
+    ))
     
     # Create a filter for Steam API related logs
     class SteamAPIFilter(logging.Filter):
@@ -180,10 +191,12 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
     )
     
     # 1. Console handler (INFO and above for scripts)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(max(numeric_level, logging.INFO))
-    console_handler.setFormatter(progress_formatter)
-    logger.addHandler(console_handler)
+    coloredlogs.install(
+        level=log_level,
+        logger=logger,
+        fmt='%(asctime)s - %(message)s',
+        datefmt='%H:%M:%S'
+    )
     
     # 2. Script-specific log file
     script_log_file = logs_dir / f"{script_name}.log"
@@ -194,7 +207,9 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         encoding='utf-8'
     )
     script_file_handler.setLevel(numeric_level)
-    script_file_handler.setFormatter(script_formatter)
+    script_file_handler.setFormatter(JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
+    ))
     logger.addHandler(script_file_handler)
     
     # 3. Combined script errors log
@@ -206,7 +221,9 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         encoding='utf-8'
     )
     script_error_handler.setLevel(logging.WARNING)
-    script_error_handler.setFormatter(script_formatter)
+    script_error_handler.setFormatter(JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
+    ))
     logger.addHandler(script_error_handler)
     
     # Add sanitization filter
