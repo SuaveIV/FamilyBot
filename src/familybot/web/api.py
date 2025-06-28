@@ -564,9 +564,8 @@ async def websocket_logs(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            log_entry = web_log_queue.get()
+            log_entry = await web_log_queue.get()
             await websocket.send_text(log_entry)
-            await asyncio.sleep(0.1)
     except asyncio.CancelledError:
         pass
     finally:
