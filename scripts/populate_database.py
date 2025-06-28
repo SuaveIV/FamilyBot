@@ -495,25 +495,36 @@ class DatabasePopulator:
                 print(f"   ❌ Error processing {name}'s wishlist: {e}")
                 continue
         
-        # Process common wishlist games
-        common_games = [item for item in global_wishlist if len(item[1]) > 1]
-        if not common_games:
-            print("\n🎯 No common wishlist games found")
+        # Process ALL wishlist games (not just common ones)
+        all_unique_games = list(set([item[0] for item in global_wishlist]))
+        if not all_unique_games:
+            print("\n🎯 No wishlist games found")
             return 0
         
-        print(f"\n🎯 Processing {len(common_games)} common wishlist games...")
+        print(f"\n🎯 Processing {len(all_unique_games)} unique wishlist games...")
         
         if dry_run:
-            print("   🔍 Would process common wishlist games for caching")
+            print("   🔍 Would process all wishlist games for caching")
             return 0
         
-        for i, item in enumerate(common_games):
-            app_id = item[0]
-            
-            # Check if already cached
-            if get_cached_game_details(app_id):
-                continue
-            
+        # Filter out games that are already cached
+        games_to_fetch = []
+        for app_id in all_unique_games:
+            if not get_cached_game_details(app_id):
+                games_to_fetch.append(app_id)
+        
+        if not games_to_fetch:
+            print("   ✅ All wishlist games already cached")
+            return 0
+        
+        print(f"   🎯 Found {len(games_to_fetch)} new games to cache")
+        
+        if TQDM_AVAILABLE:
+            games_iterator = tqdm(games_to_fetch, desc="🎯 Wishlist Games", unit="game", leave=True)
+        else:
+            games_iterator = games_to_fetch
+        
+        for i, app_id in enumerate(games_iterator):
             try:
                 game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                 
@@ -534,16 +545,17 @@ class DatabasePopulator:
                 cache_game_details(app_id, game_data, permanent=True)
                 total_cached += 1
                 
-                # Progress update every 10 games
-                if (i + 1) % 10 == 0:
-                    print(f"   📈 Progress: {i + 1}/{len(common_games)} games processed")
+                # Progress update for non-tqdm mode
+                if not TQDM_AVAILABLE and (i + 1) % 10 == 0:
+                    print(f"   📈 Progress: {i + 1}/{len(games_to_fetch)} games processed")
             
             except Exception as e:
-                print(f"   ⚠️  Error processing game {app_id}: {e}")
+                if not TQDM_AVAILABLE:
+                    print(f"   ⚠️  Error processing game {app_id}: {e}")
                 continue
         
         print(f"\n🎯 Wishlist population complete!")
-        print(f"   💾 Common games cached: {total_cached}")
+        print(f"   💾 All wishlist games cached: {total_cached}")
         
         return total_cached
 

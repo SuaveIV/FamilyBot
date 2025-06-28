@@ -253,7 +253,8 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
             query = f"""
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM wishlist_cache w
-                LEFT JOIN game_details_cache g ON w.appid = g.appid
+                LEFT JOIN game_details_cache g ON w.appid = g.appid 
+                    AND (g.permanent = 1 OR g.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
                 WHERE w.steam_id = ?
                 ORDER BY g.name LIMIT {limit} OFFSET {offset}
             """
@@ -269,7 +270,8 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
             query = f"""
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM wishlist_cache w
-                LEFT JOIN game_details_cache g ON w.appid = g.appid
+                LEFT JOIN game_details_cache g ON w.appid = g.appid 
+                    AND (g.permanent = 1 OR g.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
                 ORDER BY g.name, w.steam_id LIMIT {limit} OFFSET {offset}
             """
 
