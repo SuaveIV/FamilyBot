@@ -68,6 +68,15 @@ This document lists all third-party libraries, frameworks, tools, and resources 
 - **Usage**: Internal WebSocket communication between bot components
 - **Website**: <https://websockets.readthedocs.io/>
 
+### Steam Integration
+
+**[Steam (solsticegamestudios/steam)](https://github.com/solsticegamestudios/steam)**
+
+- **Description**: Python package for interacting with Steam, fork of ValvePython/steam
+- **License**: MIT License
+- **Usage**: Enhanced Steam API access, fallback game data retrieval for missing store pages
+- **Website**: <https://github.com/solsticegamestudios/steam>
+
 ### Browser Automation
 
 **[Playwright](https://github.com/microsoft/playwright-python)**
@@ -235,6 +244,6 @@ We are committed to properly attributing all third-party code and resources used
 
 ---
 
-**Last Updated**: June 27, 2025
+**Last Updated**: June 28, 2025
 **Project Version**: Latest
 **Maintainer**: FamilyBot Development Team
