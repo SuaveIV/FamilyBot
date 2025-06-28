@@ -406,7 +406,7 @@ async def purge_game_details_cache_api():
         return CommandResponse(success=False, message=f"Error purging game details cache: {str(e)}")
 
 @app.post("/api/admin/plugin-action", response_model=CommandResponse)
-async def plugin_admin_action_api(command_name: str):
+async def plugin_admin_action_api(command_name: str, target_user: Optional[str] = None):
     """
     Triggers an admin action from a plugin.
     """
@@ -415,6 +415,10 @@ async def plugin_admin_action_api(command_name: str):
             result = await force_new_game_action()
         elif command_name == "force_wishlist":
             result = await force_wishlist_action()
+        elif command_name == "force_deals":
+            # Import the force_deals function
+            from familybot.lib.plugin_admin_actions import force_deals_action
+            result = await force_deals_action(target_friendly_name=target_user)
         else:
             raise HTTPException(status_code=400, detail="Invalid plugin admin command.")
         

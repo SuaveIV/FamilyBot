@@ -3,6 +3,7 @@
 import sqlite3
 import os
 import logging
+from typing import Optional # Import Optional
 from familybot.config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
@@ -683,6 +684,42 @@ def purge_family_library_cache():
         logger.info("Purged all entries from family_library_cache.")
     except Exception as e:
         logger.error(f"Error purging family_library_cache: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def get_steam_id_from_friendly_name(friendly_name: str) -> Optional[str]:
+    """Retrieves the SteamID associated with a given friendly name from the family_members table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT steam_id FROM family_members WHERE friendly_name = ?", (friendly_name,))
+        result = cursor.fetchone()
+        if result:
+            return result['steam_id']
+        return None
+    except Exception as e:
+        logger.error(f"Error retrieving SteamID for friendly name {friendly_name}: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def get_steam_id_from_discord_id(discord_id: str) -> Optional[str]:
+    """Retrieves the SteamID associated with a given Discord ID from the users table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT steam_id FROM users WHERE discord_id = ?", (discord_id,))
+        result = cursor.fetchone()
+        if result:
+            return result['steam_id']
+        return None
+    except Exception as e:
+        logger.error(f"Error retrieving SteamID for Discord ID {discord_id}: {e}")
+        return None
     finally:
         if conn:
             conn.close()

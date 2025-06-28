@@ -34,6 +34,17 @@
             <p class="description">Force a check for new games and trigger notifications.</p>
             <button class="admin-command-btn" data-command="force_wishlist" data-endpoint="/api/admin/plugin-action">Force Wishlist Refresh</button>
             <p class="description">Force a refresh of the wishlist data.</p>
+            
+            <div class="mt-4 p-3 border border-primary rounded bg-primary bg-opacity-10">
+                <h3 class="h5 text-primary mb-3">Force Deals Check</h3>
+                <div class="d-flex gap-3 align-items-center flex-wrap">
+                    <select id="deals-target-user" class="form-select" style="min-width: 200px;">
+                        <option value="">All Family Members</option>
+                    </select>
+                    <button class="admin-command-btn btn btn-primary" id="force-deals-btn" data-command="force_deals" data-endpoint="/api/admin/plugin-action">Force Deals Check</button>
+                </div>
+                <p class="description mt-2 mb-0 text-muted">Check for current deals on wishlist games. Select a specific family member or check all wishlists.</p>
+            </div>
         </div>
 
         <div id="command-output">

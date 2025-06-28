@@ -19,7 +19,8 @@ from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 from familybot.lib.database import (
     get_db_connection, get_cached_game_details, cache_game_details,
-    get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library
+    get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library,
+    get_steam_id_from_friendly_name # Added this import
 )
 from familybot.lib.utils import get_lowest_price, ProgressTracker, truncate_message_list
 from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
@@ -339,9 +340,12 @@ class steam_family(Extension):
             await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
 
     @prefixed_command(name="force_deals")
-    async def force_deals_command(self, ctx: PrefixedContext):
+    async def force_deals_command(self, ctx: PrefixedContext, target_friendly_name: str | None = None):
         """
-        Admin command to force check deals and post results to the wishlist channel.
+        Admin command to force check deals for a specific user's wishlist or all wishlists.
+        Usage: !force_deals [friendly_name]
+        If friendly_name is provided, checks only that user's wishlist.
+        If no friendly_name is provided, checks all family wishlists.
         """
         if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
             await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
@@ -352,11 +356,29 @@ class steam_family(Extension):
         
         try:
             current_family_members = await self._load_family_members_from_db()
-            all_unique_steam_ids_to_check = set(current_family_members.keys())
             
-            # Collect all wishlist games from family members
+            target_user_steam_ids = []
+            if target_friendly_name:
+                # Find the SteamID for the given friendly name
+                found_steam_id = None
+                for steam_id, friendly_name in current_family_members.items():
+                    if friendly_name.lower() == target_friendly_name.lower():
+                        found_steam_id = steam_id
+                        break
+                
+                if found_steam_id:
+                    target_user_steam_ids.append(found_steam_id)
+                    await ctx.send(f"🔍 **Checking deals for {target_friendly_name}'s wishlist...**")
+                else:
+                    await ctx.send(f"❌ Friendly name '{target_friendly_name}' not found. Available names: {', '.join(current_family_members.values())}")
+                    return
+            else:
+                target_user_steam_ids = list(current_family_members.keys())
+                await ctx.send("🔍 **Forcing deals check for all family wishlists...**")
+
+            # Collect wishlist games from the target user(s)
             global_wishlist = []
-            for user_steam_id in all_unique_steam_ids_to_check:
+            for user_steam_id in target_user_steam_ids:
                 user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
                 
                 # Try to get cached wishlist first
@@ -364,10 +386,10 @@ class steam_family(Extension):
                 if cached_wishlist is not None:
                     logger.info(f"Force deals: Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)")
                     for app_id in cached_wishlist:
+                        # Ensure app_id is added with its interested users
                         if app_id not in [item[0] for item in global_wishlist]:
                             global_wishlist.append([app_id, [user_steam_id]])
                         else:
-                            # Add user to existing entry
                             for item in global_wishlist:
                                 if item[0] == app_id:
                                     item[1].append(user_steam_id)
@@ -471,7 +493,7 @@ class steam_family(Extension):
                     price_overview = game_data.get("price_overview") or game_data.get("price_data")
                     
                     if not price_overview:
-                        logger.debug(f"Force deals unlimited: No price data found for {app_id} ({game_name})")
+                        logger.debug(f"Force deals: No price data found for {app_id} ({game_name})")
                         continue
                     
                     # Check if game is on sale
@@ -520,7 +542,8 @@ class steam_family(Extension):
             
             # Format and send results to wishlist channel
             if deals_found:
-                message_parts = [f"🎯 **Current Deals Alert** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"]
+                target_info = f" for {target_friendly_name}" if target_friendly_name else ""
+                message_parts = [f"🎯 **Current Deals Alert{target_info}** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"]
                 
                 for deal in deals_found:  # Show all deals found
                     message_parts.append(f"**{deal['name']}**\n")
@@ -1056,42 +1079,86 @@ class steam_family(Extension):
     """
     @prefixed_command(name="deals")
     async def check_deals_command(self, ctx: PrefixedContext):
-        loading_message = await ctx.send("🔍 Checking for current deals on family wishlist games...")
+        loading_message = await ctx.send("🔍 Checking for current deals on your wishlist...")
         
         try:
-            current_family_members = await self._load_family_members_from_db()
-            all_unique_steam_ids_to_check = set(current_family_members.keys())
-            
-            # Collect all wishlist games from family members
+            # Get the SteamID of the user who called the command
+            from familybot.lib.database import get_steam_id_from_discord_id
+            user_steam_id = get_steam_id_from_discord_id(str(ctx.author_id))
+
+            if not user_steam_id:
+                await loading_message.edit(content="❌ Your SteamID is not linked. Please link it using the `!link_steam` command.")
+                return
+
+            user_name_for_log = ctx.author.username # Use Discord username for logging
+
+            # Collect wishlist games for the calling user only
             global_wishlist = []
-            for user_steam_id in all_unique_steam_ids_to_check:
-                user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
+            
+            # Try to get cached wishlist first
+            cached_wishlist = get_cached_wishlist(user_steam_id)
+            if cached_wishlist is not None:
+                logger.info(f"Deals: Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)")
+                for app_id in cached_wishlist:
+                    global_wishlist.append([app_id, [user_steam_id]])
+            else:
+                # If not cached, fetch fresh wishlist data from API
+                if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+                    await loading_message.edit(content="❌ Steam API key is not configured. Cannot fetch wishlist.")
+                    return
                 
-                # Try to get cached wishlist first
-                cached_wishlist = get_cached_wishlist(user_steam_id)
-                if cached_wishlist is not None:
-                    logger.info(f"Using cached wishlist for deals check: {user_name_for_log} ({len(cached_wishlist)} items)")
-                    for app_id in cached_wishlist:
-                        if app_id not in [item[0] for item in global_wishlist]:
-                            global_wishlist.append([app_id, [user_steam_id]])
-                        else:
-                            # Add user to existing entry
-                            for item in global_wishlist:
-                                if item[0] == app_id:
-                                    item[1].append(user_steam_id)
-                                    break
+                wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
+                logger.info(f"Deals: Fetching fresh wishlist from API for {user_name_for_log}")
+                
+                try:
+                    await self._rate_limit_steam_api()
+                    wishlist_response = requests.get(wishlist_url, timeout=15)
+                    if wishlist_response.text == "{\"success\":2}":
+                        await loading_message.edit(content="❌ Your Steam wishlist is private. Please make it public to use this command.")
+                        return
+
+                    wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)
+                    if not wishlist_json:
+                        await loading_message.edit(content="❌ Error fetching your wishlist. Please try again later.")
+                        return
+
+                    wishlist_items = wishlist_json.get("response", {}).get("items", [])
+                    if not wishlist_items:
+                        await loading_message.edit(content="📭 Your wishlist is empty or contains no items.")
+                        return
+
+                    # Extract app IDs and add to global wishlist
+                    user_wishlist_appids = []
+                    for game_item in wishlist_items:
+                        app_id = str(game_item.get("appid"))
+                        if not app_id:
+                            continue
+                        user_wishlist_appids.append(app_id)
+                        global_wishlist.append([app_id, [user_steam_id]])
+
+                    # Cache the wishlist for 2 hours
+                    cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
+                    logger.info(f"Deals: Fetched and cached {len(user_wishlist_appids)} wishlist items for {user_name_for_log}")
+
+                except Exception as e:
+                    logger.error(f"Deals: Error fetching wishlist for {user_name_for_log}: {e}")
+                    await loading_message.edit(content="❌ Error fetching your wishlist. Please try again later.")
+                    return
             
             if not global_wishlist:
-                await loading_message.edit(content="No wishlist games found to check for deals.")
+                await loading_message.edit(content="📭 No wishlist games found to check for deals.")
                 return
             
+            # Check for deals
             deals_found = []
             games_checked = 0
-            max_games_to_check = 100  # Limit to avoid rate limits
-            
+            max_games_to_check = 50  # Reasonable limit for individual user
+            total_games = min(len(global_wishlist), max_games_to_check)
+
+            await loading_message.edit(content=f"📊 Checking {total_games} games for deals...")
+
             for item in global_wishlist[:max_games_to_check]:
                 app_id = item[0]
-                interested_users = item[1]
                 games_checked += 1
                 
                 try:
@@ -1105,16 +1172,19 @@ class steam_family(Extension):
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         app_info_response = requests.get(game_url, timeout=10)
                         game_info_json = await self._handle_api_response("AppDetails (Deals)", app_info_response)
-                        if not game_info_json: continue
+                        if not game_info_json:
+                            continue
                         
                         game_data = game_info_json.get(str(app_id), {}).get("data")
-                        if not game_data: continue
+                        if not game_data:
+                            continue
                         
                         # Cache the game details
                         cache_game_details(app_id, game_data, permanent=True)
                     
                     game_name = game_data.get("name", f"Unknown Game ({app_id})")
-                    price_overview = game_data.get("price_overview")
+                    # Handle both cached data (price_data) and fresh API data (price_overview)
+                    price_overview = game_data.get("price_overview") or game_data.get("price_data")
                     
                     if not price_overview:
                         continue
@@ -1127,11 +1197,11 @@ class steam_family(Extension):
                     # Get historical low price
                     lowest_price = get_lowest_price(int(app_id))
                     
-                    # Determine if this is a good deal
+                    # Determine if this is a good deal (stricter criteria for user command)
                     is_good_deal = False
                     deal_reason = ""
                     
-                    if discount_percent >= 50:  # 50% or more discount
+                    if discount_percent >= 50:  # Higher threshold for user command
                         is_good_deal = True
                         deal_reason = f"🔥 **{discount_percent}% OFF**"
                     elif discount_percent >= 25 and lowest_price != "N/A":
@@ -1141,12 +1211,11 @@ class steam_family(Extension):
                             lowest_price_num = float(lowest_price)
                             if current_price_num <= lowest_price_num * 1.1:  # Within 10% of historical low
                                 is_good_deal = True
-                                deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
+                                deal_reason = f"💎 **Historical Low** ({discount_percent}% off)"
                         except (ValueError, TypeError):
                             pass
                     
                     if is_good_deal:
-                        user_names = [current_family_members.get(uid, f"Unknown") for uid in interested_users]
                         deal_info = {
                             'name': game_name,
                             'app_id': app_id,
@@ -1154,362 +1223,88 @@ class steam_family(Extension):
                             'original_price': original_price,
                             'discount_percent': discount_percent,
                             'lowest_price': lowest_price,
-                            'deal_reason': deal_reason,
-                            'interested_users': user_names
+                            'deal_reason': deal_reason
                         }
                         deals_found.append(deal_info)
                 
                 except Exception as e:
-                    logger.warning(f"Error checking deals for game {app_id}: {e}")
+                    logger.warning(f"Deals: Error checking deals for game {app_id}: {e}")
                     continue
             
             # Format and send results
             if deals_found:
-                header = f"🎯 **Found {len(deals_found)} good deals** (checked {games_checked} games):\n\n"
+                message_parts = [f"🎯 **Current Deals on Your Wishlist** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"]
                 
-                # Build deal entries
-                deal_entries = []
-                for deal in deals_found:
-                    deal_entry = f"**{deal['name']}**\n"
-                    deal_entry += f"{deal['deal_reason']}\n"
-                    deal_entry += f"💰 {deal['current_price']}"
+                for deal in deals_found[:10]:  # Show top 10 deals
+                    message_parts.append(f"**{deal['name']}**\n")
+                    message_parts.append(f"{deal['deal_reason']}\n")
+                    message_parts.append(f"💰 {deal['current_price']}")
                     if deal['discount_percent'] > 0:
-                        deal_entry += f" ~~{deal['original_price']}~~"
+                        message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal['lowest_price'] != "N/A":
-                        deal_entry += f" | Lowest ever: ${deal['lowest_price']}"
-                    deal_entry += f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}"
-                    if len(deal['interested_users']) > 3:
-                        deal_entry += f" +{len(deal['interested_users']) - 3} more"
-                    deal_entry += f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n"
-                    deal_entries.append(deal_entry)
+                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
+                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
                 
-                # Use utility function to handle message truncation
-                footer_template = "\n... and {count} more deals!"
-                final_message = truncate_message_list(deal_entries, header, footer_template)
+                if len(deals_found) > 10:
+                    message_parts.append(f"... and {len(deals_found) - 10} more deals!")
+                
+                final_message = "".join(message_parts)
+                await loading_message.edit(content=final_message)
+                logger.info(f"Deals: Found {len(deals_found)} deals for {user_name_for_log}")
             else:
-                final_message = f"No significant deals found among {games_checked} wishlist games checked. Try again later!"
-            
-            await loading_message.edit(content=final_message)
+                await loading_message.edit(content=f"📊 **No significant deals found** among {games_checked} games checked.\n\n💡 Try the `!force_deals` command (admin only) for more lenient deal detection.")
+                logger.info(f"Deals: No deals found for {user_name_for_log} among {games_checked} games")
             
         except Exception as e:
-            logger.critical(f"An unexpected error occurred in check_deals_command: {e}", exc_info=True)
-            await loading_message.edit(content="An error occurred while checking for deals. Please try again later.")
-            await self._send_admin_dm(f"Critical error in deals command: {e}")
+            logger.critical(f"Deals: Critical error during deals check: {e}", exc_info=True)
+            await loading_message.edit(content="❌ An unexpected error occurred while checking for deals.")
+            await self._send_admin_dm(f"Deals critical error: {e}")
 
+    # --- BACKGROUND TASKS ---
     @Task.create(IntervalTrigger(hours=1))
-    async def send_new_game(self) -> None:
-        logger.info("Running send_new_game task...")
-
-        games_json = None
+    async def new_game_task(self):
+        """Background task to check for new games every hour."""
+        logger.info("Running new game task...")
         try:
-            # Try to get cached family library first
-            cached_family_library = get_cached_family_library()
-            if cached_family_library is not None:
-                logger.info(f"Using cached family library for new game check ({len(cached_family_library)} games)")
-                game_list = cached_family_library
-            else:
-                # If not cached, fetch from API
-                await self._rate_limit_steam_api() # Apply rate limit before API call
-                url_family_list = get_family_game_list_url() # Use the correct URL for family shared apps
-                answer = requests.get(url_family_list, timeout=15)
-                games_json = await self._handle_api_response("GetFamilySharedApps", answer)
-                if not games_json: return
-
-                game_list = games_json.get("response", {}).get("apps", [])
-                if not game_list:
-                    logger.warning("No apps found in family game list response for new game check.")
-                    return
-                
-                # Cache the family library for 30 minutes
-                cache_family_library(game_list, cache_minutes=30)
-
-            current_family_members = await self._load_family_members_from_db()
-            
-            game_owner_list = {}
-            game_array = []
-            for game in game_list:
-                # 'exclude_reason' 3 means the game is excluded from family sharing.
-                # We only want games that are part of the shared library.
-                if game.get("exclude_reason") != 3:
-                    appid = str(game.get("appid"))
-                    game_array.append(appid)
-                    # The 'owner_steamids' field contains a list of SteamIDs that own the game within the family group.
-                    # If there's only one owner, we can identify them.
-                    if len(game.get("owner_steamids", [])) == 1:
-                        game_owner_list[appid] = str(game["owner_steamids"][0])
-
-
-            saved_games_with_timestamps = get_saved_games()
-            saved_appids = {item[0] for item in saved_games_with_timestamps}
-
-            new_appids = set(game_array) - saved_appids
-
-            all_games_for_db_update = []
-            current_utc_iso = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
-
-            for appid in game_array:
-                if appid in new_appids:
-                    all_games_for_db_update.append((appid, current_utc_iso))
-                else:
-                    found_timestamp = next((ts for ap, ts in saved_games_with_timestamps if ap == appid), None)
-                    if found_timestamp:
-                        all_games_for_db_update.append((appid, found_timestamp))
-                    else:
-                        all_games_for_db_update.append((appid, current_utc_iso))
-
-
-            new_games_to_notify_raw = [(appid, current_utc_iso) for appid in new_appids]
-            new_games_to_notify_raw.sort(key=lambda x: x[1], reverse=True)
-
-            if len(new_games_to_notify_raw) > 10:
-                logger.warning(f"Detected {len(new_games_to_notify_raw)} new games. Processing only the latest 10 (by AppID) to avoid rate limits.")
-                await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, f"Detected {len(new_games_to_notify_raw)} new games in the Family Library. Processing only the latest 10 (most recently added) to avoid API rate limits. More may be announced in subsequent checks.")  # type: ignore
-                new_games_to_process = new_games_to_notify_raw[:10]
-            else:
-                new_games_to_process = new_games_to_notify_raw
-
-            if new_games_to_process:
-                logger.info(f"Processing {len(new_games_to_process)} new games for notification.")
-                for new_appid_tuple in new_games_to_process:
-                    new_appid = new_appid_tuple[0]
-
-                    # Try to get cached game details first
-                    cached_game = get_cached_game_details(new_appid)
-                    if cached_game:
-                        logger.info(f"Using cached game details for new game AppID: {new_appid}")
-                        game_data = cached_game
-                    else:
-                        # If not cached, fetch from API
-                        await self._rate_limit_steam_store_api() # Apply store API rate limit
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=us&l=en"
-                        logger.info(f"Fetching app details from API for new game AppID: {new_appid}")
-                        app_info_response = requests.get(game_url, timeout=10)
-                        game_info_json = await self._handle_api_response("AppDetails (New Game)", app_info_response)
-                        if not game_info_json: continue
-
-                        game_data = game_info_json.get(str(new_appid), {}).get("data")
-                        if not game_data:
-                            logger.warning(f"No game data found for new game AppID {new_appid} in app details response.")
-                            continue
-                        
-                        # Cache the game details permanently (game details rarely change)
-                        cache_game_details(new_appid, game_data, permanent=True)
-
-                    is_family_shared_game = any(cat.get("id") == 62 for cat in game_data.get("categories", []))
-
-                    if game_data.get("type") == "game" and game_data.get("is_free") == False and is_family_shared_game:
-                        owner_steam_id = game_owner_list.get(str(new_appid))
-                        owner_name = current_family_members.get(owner_steam_id, f"Unknown Owner ({owner_steam_id})")
-                        
-                        # Build the base message
-                        game_name = game_data.get("name", f"Unknown Game")
-                        message = f"Thank you to {owner_name} for **{game_name}**\nhttps://store.steampowered.com/app/{new_appid}"
-                        
-                        # Add pricing information if available
-                        try:
-                            current_price = game_data.get('price_overview', {}).get('final_formatted', 'N/A')
-                            lowest_price = get_lowest_price(int(new_appid))
-                            
-                            if current_price != 'N/A' or lowest_price != 'N/A':
-                                price_info = []
-                                if current_price != 'N/A':
-                                    price_info.append(f"Current: {current_price}")
-                                if lowest_price != 'N/A':
-                                    price_info.append(f"Lowest ever: ${lowest_price}")
-                                
-                                if price_info:
-                                    message += f"\n💰 {'|'.join(price_info)}"
-                        except Exception as e:
-                            logger.warning(f"Could not get pricing info for new game {new_appid}: {e}")
-                        
-                        await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, message)  # type: ignore
-                    else:
-                        logger.debug(f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'.")
-
-                set_saved_games(all_games_for_db_update)
-            else:
-                logger.info('No new games detected.')
-
-        except ValueError as e:
-            logger.error(f"Error in send_new_game: {e}")
-            await self._send_admin_dm(f"Error in send_new_game: {e}")
+            from familybot.lib.plugin_admin_actions import force_new_game_action
+            result = await force_new_game_action()
+            if result['success'] and 'New games detected' in result['message']:
+                # Only send to channel if new games were actually found
+                await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, result['message'])  # type: ignore
+                logger.info("New game task: Posted new games to channel")
         except Exception as e:
-            logger.critical(f"An unexpected error occurred in send_new_game task main block: {e}", exc_info=True)
-            await self._send_admin_dm(f"Critical error send_new_game task: {e}")
+            logger.error(f"Error in new game task: {e}", exc_info=True)
+            await self._send_admin_dm(f"New game task error: {e}")
 
-    @Task.create(IntervalTrigger(hours=24))
-    async def refresh_wishlist(self) -> None:
-        logger.info("Running refresh_wishlist task...")
-        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
-            logger.error("STEAMWORKS_API_KEY is not configured for wishlist task.")
-            await self._send_admin_dm("Steam API key is not configured for wishlist task.")
-            return
-
-        global_wishlist = []
-
-        current_family_members = await self._load_family_members_from_db()
-        
-        all_unique_steam_ids_to_check = set(current_family_members.keys())
-
-        for user_steam_id in all_unique_steam_ids_to_check:
-            user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
-
-            # Try to get cached wishlist first
-            cached_wishlist = get_cached_wishlist(user_steam_id)
-            if cached_wishlist is not None:
-                logger.info(f"Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)")
-                for app_id in cached_wishlist:
-                    idx = find_in_2d_list(app_id, global_wishlist)
-                    if idx is not None:
-                        global_wishlist[idx][1].append(user_steam_id)
-                    else:
-                        global_wishlist.append([app_id, [user_steam_id]])
-                continue
-
-            # If not cached, fetch from API
-            wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
-            logger.info(f"Fetching wishlist from API for {user_name_for_log} (Steam ID: {user_steam_id})")
-
-            wishlist_json = None
-            try:
-                await self._rate_limit_steam_api() # Apply rate limit here
-                wishlist_response = requests.get(wishlist_url, timeout=15)
-                if wishlist_response.text == "{\"success\":2}":
-                    log_private_profile_detection(logger, user_name_for_log, user_steam_id, "wishlist")
-                    continue
-
-                wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)
-                if not wishlist_json: continue
-
-                wishlist_items = wishlist_json.get("response", {}).get("items", [])
-
-                if not wishlist_items:
-                    logger.info(f"No items found in {user_name_for_log}'s wishlist.")
-                    continue
-
-                # Extract app IDs for caching
-                user_wishlist_appids = []
-                for game_item in wishlist_items:
-                    app_id = str(game_item.get("appid"))
-                    if not app_id:
-                        logger.warning(f"Skipping wishlist item due to missing appid: {game_item}")
-                        continue
-
-                    user_wishlist_appids.append(app_id)
-                    idx = find_in_2d_list(app_id, global_wishlist)
-                    if idx is not None:
-                        global_wishlist[idx][1].append(user_steam_id)
-                    else:
-                        global_wishlist.append([app_id, [user_steam_id]])
-
-                # Cache the wishlist for 2 hours
-                cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
-
-            except Exception as e:
-                logger.critical(f"An unexpected error occurred fetching/processing {user_name_for_log}'s wishlist: {e}", exc_info=True)
-                await self._send_admin_dm(f"Critical error wishlist {user_name_for_log}: {e}")
-
-        # First, collect all duplicate games without fetching details
-        potential_duplicate_games = []
-        for item in global_wishlist:
-            app_id = item[0]
-            owner_steam_ids = item[1]
-            if len(owner_steam_ids) > 1:
-                potential_duplicate_games.append(item)
-
-        # Sort and slice the potential duplicate games for processing
-        sorted_duplicate_games = sorted(potential_duplicate_games, key=lambda x: x[0], reverse=True)
-        
-        if len(sorted_duplicate_games) > self.MAX_WISHLIST_GAMES_TO_PROCESS:
-            logger.warning(f"Detected {len(sorted_duplicate_games)} common wishlist games. Processing only the latest {self.MAX_WISHLIST_GAMES_TO_PROCESS} to avoid rate limits.")
-            await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, f"Detected {len(sorted_duplicate_games)} common wishlist games. Processing only the latest {self.MAX_WISHLIST_GAMES_TO_PROCESS} (by AppID) for this update to avoid API rate limits. More may be announced in subsequent checks.")  # type: ignore
-            games_to_process = sorted_duplicate_games[:self.MAX_WISHLIST_GAMES_TO_PROCESS]
-        else:
-            games_to_process = sorted_duplicate_games
-
-        # Now process the selected games and fetch their details
-        duplicate_games_for_display = []
-        saved_game_appids = {item[0] for item in get_saved_games()}  # Get saved game app IDs for comparison
-
-        for item in games_to_process:
-            app_id = item[0]
-            
-            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-            logger.info(f"Fetching app details for wishlist AppID: {app_id}")
-
-            game_info_json = None
-            try:
-                await self._rate_limit_steam_store_api() # Apply store API rate limit
-                game_info_response = requests.get(game_url, timeout=10)
-                game_info_json = await self._handle_api_response("AppDetails (Wishlist)", game_info_response)
-                if not game_info_json: continue
-
-                game_data = game_info_json.get(str(app_id), {}).get("data")
-                if not game_data:
-                    logger.warning(f"No game data found for wishlist AppID {app_id} in app details response.")
-                    continue
-
-                # Use cached boolean fields for faster performance
-                is_family_shared = game_data.get("is_family_shared", False)
-
-                if (game_data.get("type") == "game"
-                    and game_data.get("is_free") == False
-                    and is_family_shared
-                    and "recommendations" in game_data
-                    and app_id not in saved_game_appids
-                    ):
-                    duplicate_games_for_display.append(item)
-                else:
-                    logger.debug(f"Skipping wishlist game {app_id}: not a paid game, not family shared category, or no recommendations, or already owned.")
-
-            except Exception as e:
-                logger.critical(f"An unexpected error occurred processing duplicate wishlist game {app_id}: {e}", exc_info=True)
-
-        wishlist_channel = None
+    @Task.create(IntervalTrigger(hours=6))
+    async def wishlist_task(self):
+        """Background task to refresh wishlist every 6 hours."""
+        logger.info("Running wishlist task...")
         try:
-            wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
-            if not wishlist_channel:
-                logger.error(f"Wishlist channel not found for ID: {WISHLIST_CHANNEL_ID}. Check config.yml.")
-                await self._send_admin_dm(f"Wishlist channel not found for ID: {WISHLIST_CHANNEL_ID}.")
-                return
+            from familybot.lib.plugin_admin_actions import force_wishlist_action
+            result = await force_wishlist_action()
+            if result['success'] and 'Details:' in result['message']:
+                # Only update channel if there are actual results
+                wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
+                if wishlist_channel and isinstance(wishlist_channel, GuildText):
+                    pinned_messages = await wishlist_channel.fetch_pinned_messages()
+                    if pinned_messages:
+                        # Extract just the wishlist content from the result message
+                        content_start = result['message'].find('Details:\n') + len('Details:\n')
+                        wishlist_content = result['message'][content_start:]
+                        await pinned_messages[-1].edit(content=wishlist_content)
+                        logger.info("Wishlist task: Updated pinned message")
         except Exception as e:
-            logger.error(f"Could not fetch wishlist channel (ID: {WISHLIST_CHANNEL_ID}): {e}")
-            await self._send_admin_dm(f"Error fetching wishlist channel: {e}")
-            return
-
-        if not isinstance(wishlist_channel, GuildText):
-            logger.error(f"Wishlist channel {WISHLIST_CHANNEL_ID} is not a text channel (type: {type(wishlist_channel).__name__}).")
-            await self._send_admin_dm(f"Wishlist channel {WISHLIST_CHANNEL_ID} is not a text channel.")
-            return
-
-        pinned_messages = []
-        try:
-            pinned_messages = await wishlist_channel.fetch_pinned_messages()
-        except Exception as e:
-            logger.error(f"Error fetching pinned messages from channel {WISHLIST_CHANNEL_ID}: {e}")
-            await self._send_admin_dm(f"Error fetching pinned messages: {e}")
-
-        # Pass the duplicate games to format_message
-        wishlist_new_message = format_message(duplicate_games_for_display, short=False)
-
-        try:
-            if not pinned_messages:
-                message_obj = await wishlist_channel.send(wishlist_new_message)
-                await message_obj.pin()
-                logger.info(f"New wishlist message pinned in channel {WISHLIST_CHANNEL_ID}")
-            else:
-                await pinned_messages[-1].edit(content=wishlist_new_message)
-                logger.info(f"Wishlist message updated in channel {WISHLIST_CHANNEL_ID}")
-        except Exception as e:
-            logger.error(f"Error sending/editing/pinning wishlist message in channel {WISHLIST_CHANNEL_ID}: {e}", exc_info=True)
-            await self._send_admin_dm(f"Error with wishlist message (send/edit/pin): {e}")
-
+            logger.error(f"Error in wishlist task: {e}", exc_info=True)
+            await self._send_admin_dm(f"Wishlist task error: {e}")
 
     @listen()
     async def on_startup(self):
-        self.refresh_wishlist.start()
-        self.send_new_game.start()
-        logger.info("--Steam Family Tasks Started")
+        """Start background tasks when the bot starts."""
+        self.new_game_task.start()
+        self.wishlist_task.start()
+        logger.info("--Steam Family background tasks started")
 
-def setup(bot):  # Remove type annotation to avoid Extension constructor conflict
+
+def setup(bot):
     steam_family(bot)

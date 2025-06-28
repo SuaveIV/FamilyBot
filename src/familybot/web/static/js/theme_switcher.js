@@ -20,16 +20,22 @@ class ThemeSwitcher {
                 dark: true
             },
             'blue': {
-                name: 'Blue Theme',
+                name: 'Cerulean',
                 url: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/cerulean/bootstrap.min.css',
                 preview: '#2FA4E7',
                 dark: false
             },
             'green': {
-                name: 'Green Theme',
+                name: 'Flatly',
                 url: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css',
                 preview: '#18BC9C',
                 dark: false
+            },
+            'evergreen': {
+                name: 'Solar',
+                url: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/solar/bootstrap.min.css',
+                preview: '#A7C080',
+                dark: true
             }
         };
         
