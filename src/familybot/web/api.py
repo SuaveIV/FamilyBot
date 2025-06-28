@@ -238,28 +238,46 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
     offset = (page - 1) * limit
     
     try:
-        # Base query
-        base_query = """
-            FROM wishlist_cache w
-            WHERE w.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
-        """
-        params = []
+        # Base query - don't use DISTINCT when showing all members
+        # Temporarily remove expiration filter to show all data for testing
         if family_member_id:
-            base_query += " AND w.steam_id = ?"
-            params.append(family_member_id)
+            # Filtering by specific family member
+            base_query = """
+                FROM wishlist_cache w
+                WHERE w.steam_id = ?
+            """
+            params = [family_member_id]
+            count_query = f"SELECT COUNT(*) {base_query}"
+            
+            # Get paginated items for specific member
+            query = f"""
+                SELECT w.appid, w.steam_id, g.name, g.price_data
+                FROM wishlist_cache w
+                LEFT JOIN game_details_cache g ON w.appid = g.appid
+                WHERE w.steam_id = ?
+                ORDER BY g.name LIMIT {limit} OFFSET {offset}
+            """
+        else:
+            # Show all members - each entry shows which member has the game
+            base_query = """
+                FROM wishlist_cache w
+            """
+            params = []
+            count_query = f"SELECT COUNT(*) {base_query}"
+            
+            # Get paginated items for all members
+            query = f"""
+                SELECT w.appid, w.steam_id, g.name, g.price_data
+                FROM wishlist_cache w
+                LEFT JOIN game_details_cache g ON w.appid = g.appid
+                ORDER BY g.name, w.steam_id LIMIT {limit} OFFSET {offset}
+            """
 
         # Get total count
-        cursor.execute(f"SELECT COUNT(DISTINCT w.appid) {base_query}", params)
+        cursor.execute(count_query, params)
         total_items = cursor.fetchone()[0]
 
         # Get paginated items
-        query = f"""
-            SELECT DISTINCT w.appid, w.steam_id, g.name, g.price_data
-            {base_query}
-            LEFT JOIN game_details_cache g ON w.appid = g.appid
-            ORDER BY g.name
-            LIMIT {limit} OFFSET {offset}
-        """
         cursor.execute(query, params)
         rows = cursor.fetchall()
         
@@ -564,12 +582,32 @@ async def websocket_logs(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            log_entry = await web_log_queue.get()
-            await websocket.send_text(log_entry)
+            if web_log_queue is not None:
+                try:
+                    log_entry = await asyncio.wait_for(web_log_queue.get(), timeout=1.0)
+                    await websocket.send_text(log_entry)
+                except asyncio.TimeoutError:
+                    # Send a heartbeat to keep connection alive
+                    try:
+                        await websocket.send_text('{"type": "heartbeat"}')
+                    except:
+                        break  # Connection closed
+            else:
+                # Queue not initialized, wait and send heartbeat
+                await asyncio.sleep(1.0)
+                try:
+                    await websocket.send_text('{"type": "heartbeat"}')
+                except:
+                    break  # Connection closed
     except asyncio.CancelledError:
         pass
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except:
+            pass  # Already closed
 
 # Health check endpoint
 @app.get("/health")

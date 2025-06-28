@@ -139,14 +139,12 @@
                             </button>
                         </div>
                     </div>
-                    <div class="card-body p-0">
-                        <div id="log-viewer" class="log-viewer">
-                            <div class="text-center p-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <div class="mt-2">Loading logs...</div>
+                    <div id="log-viewer" class="log-viewer card-body">
+                        <div class="text-center p-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
                             </div>
+                            <div class="mt-2">Loading logs...</div>
                         </div>
                     </div>
                 </div>
@@ -188,16 +186,41 @@
             logWebSocket = new WebSocket(wsUrl);
             
             logWebSocket.onmessage = function(event) {
-                const logData = JSON.parse(event.data);
-                const logEntry = {
-                    timestamp: logData.asctime,
-                    level: logData.levelname,
-                    message: logData.message,
-                    module: logData.name
-                };
-                currentLogs.unshift(logEntry);
-                displayLogs(currentLogs);
-                updateLogCount(currentLogs.length);
+                try {
+                    const logData = JSON.parse(event.data);
+                    
+                    // Skip heartbeat messages
+                    if (logData.type === 'heartbeat') {
+                        return;
+                    }
+                    
+                    const logEntry = {
+                        timestamp: logData.asctime || new Date().toISOString(),
+                        level: logData.levelname || 'INFO',
+                        message: logData.message || event.data,
+                        module: logData.name || 'unknown'
+                    };
+                    currentLogs.unshift(logEntry);
+                    
+                    // Keep only the last 1000 entries to prevent memory issues
+                    if (currentLogs.length > 1000) {
+                        currentLogs = currentLogs.slice(0, 1000);
+                    }
+                    
+                    displayLogs(currentLogs);
+                    updateLogCount(currentLogs.length);
+                } catch (error) {
+                    // If it's not JSON, treat it as a plain log message
+                    const logEntry = {
+                        timestamp: new Date().toISOString(),
+                        level: 'INFO',
+                        message: event.data,
+                        module: 'websocket'
+                    };
+                    currentLogs.unshift(logEntry);
+                    displayLogs(currentLogs);
+                    updateLogCount(currentLogs.length);
+                }
             };
             
             logWebSocket.onclose = function() {
@@ -278,7 +301,7 @@
         // Create log entry element
         function createLogEntry(log) {
             const entry = document.createElement('div');
-            entry.className = `card log-entry log-level-${log.level.toLowerCase()} mb-2`;
+            entry.className = `log-entry log-level-${log.level.toLowerCase()}`;
             
             const timestamp = new Date(log.timestamp).toLocaleString();
             const module = log.module ? ` <span class="badge bg-secondary">${log.module}</span>` : '';
@@ -291,19 +314,10 @@
             }
 
             entry.innerHTML = `
-                <div class="card-body p-2">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <strong class="text-${getLevelColor(log.level)}">[${log.level}]</strong>
-                            <span class="text-muted small">${timestamp}</span>
-                            ${module}
-                            <p class="mb-0 mt-1" style="white-space: pre-wrap;">${message}</p>
-                        </div>
-                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyLogEntry(this)" title="Copy to clipboard">
-                            <i class="fas fa-copy"></i>
-                        </button>
-                    </div>
-                </div>
+                <span class="text-${getLevelColor(log.level)}">[${log.level}]</span>
+                <span class="text-muted small">${timestamp}</span>
+                ${module}
+                <span class="log-message">${message}</span>
             `;
             
             return entry;

@@ -82,12 +82,12 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-4">
-                                <label for="family-member-filter" class="form-label">Family Member</label>
-                                <select id="family-member-filter" class="form-select">
-                                    <option value="">All Members</option>
+                            <div class="col-12">
+                                <label class="form-label">Family Member</label>
+                                <div id="family-member-buttons" class="btn-group flex-wrap" role="group">
+                                    <button type="button" class="btn btn-outline-primary active" data-steam-id="">All Members</button>
                                     <!-- Populated by JavaScript -->
-                                </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -156,7 +156,14 @@
             loadWishlistSummary(currentPage);
             loadBotStatus(); // Load bot status on page load
             startAutoRefresh(); // Start auto-refresh for bot status
-            document.getElementById('family-member-filter').addEventListener('change', () => loadWishlistSummary(1));
+            
+            // Add event listener to the "All Members" button
+            const allMembersBtn = document.querySelector('#family-member-buttons button[data-steam-id=""]');
+            if (allMembersBtn) {
+                allMembersBtn.addEventListener('click', function() {
+                    selectFamilyMember(this);
+                });
+            }
         });
 
         // Load bot status (copied from dashboard.html)
@@ -204,24 +211,58 @@
             }
         });
 
+        // Global variable to store family members data
+        let familyMembersData = [];
+
         async function loadFamilyMembers() {
             try {
                 const response = await fetch('/api/family-members');
                 const members = await response.json();
-                const filter = document.getElementById('family-member-filter');
+                familyMembersData = members; // Store for later use
+                const buttonContainer = document.getElementById('family-member-buttons');
+                
                 members.forEach(member => {
-                    const option = document.createElement('option');
-                    option.value = member.steam_id;
-                    option.textContent = member.friendly_name;
-                    filter.appendChild(option);
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn btn-outline-primary';
+                    button.setAttribute('data-steam-id', member.steam_id);
+                    button.textContent = member.friendly_name;
+                    button.addEventListener('click', function() {
+                        selectFamilyMember(this);
+                    });
+                    buttonContainer.appendChild(button);
                 });
             } catch (error) {
                 console.error('Error loading family members:', error);
             }
         }
 
+        function getFamilyMemberName(steamId) {
+            const member = familyMembersData.find(m => m.steam_id === steamId);
+            return member ? member.friendly_name : 'Unknown';
+        }
+
+        function selectFamilyMember(button) {
+            // Remove active class from all buttons
+            const buttons = document.querySelectorAll('#family-member-buttons button');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            
+            // Add active class to clicked button
+            button.classList.add('active');
+            
+            // Reset to first page and load wishlist
+            currentPage = 1;
+            loadWishlistSummary(1);
+        }
+
+        function getSelectedFamilyMember() {
+            const activeButton = document.querySelector('#family-member-buttons button.active');
+            return activeButton ? activeButton.getAttribute('data-steam-id') : '';
+        }
+
         async function loadWishlistSummary(page) {
-            const familyMemberId = document.getElementById('family-member-filter').value;
+            currentPage = page; // Update the global currentPage variable
+            const familyMemberId = getSelectedFamilyMember();
             let url = `/api/wishlist?page=${page}&limit=${ITEMS_PER_PAGE}`;
             if (familyMemberId) {
                 url += `&family_member_id=${familyMemberId}`;
@@ -237,6 +278,7 @@
                 
                 if (wishlist.length === 0) {
                     container.innerHTML = '<p class="text-muted">No wishlist items found.</p>';
+                    document.getElementById('wishlist-pagination').innerHTML = '';
                     return;
                 }
                 
@@ -263,15 +305,27 @@
                 priceInfo = `<span class="badge bg-primary">$${(item.price_data.final / 100).toFixed(2)}</span>`;
             }
             
+            // Get family member name for display
+            let memberInfo = '';
+            const selectedMember = getSelectedFamilyMember();
+            if (!selectedMember) {
+                // Show which family member has this game when viewing "All Members"
+                const memberName = getFamilyMemberName(item.steam_id);
+                memberInfo = `<span class="badge bg-secondary">${memberName}</span>`;
+            }
+            
             card.innerHTML = `
                 <div class="game-info">
-                    <a href="https://store.steampowered.com/app/${item.appid}" target="_blank" class="text-decoration-none">
-                        <div class="game-title">${item.game_name || 'Unknown Game'}</div>
-                    </a>
+                    <div class="game-title">
+                        <a href="https://store.steampowered.com/app/${item.appid}" target="_blank" class="text-decoration-none text-light">
+                            ${item.game_name || 'Unknown Game'}
+                        </a>
+                    </div>
                     <div class="game-meta">
                         App ID: ${item.appid} | Steam ID: ${item.steam_id}
                     </div>
                     <div class="game-badges">
+                        ${memberInfo}
                         ${priceInfo}
                     </div>
                 </div>
