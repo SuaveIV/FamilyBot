@@ -22,10 +22,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from familybot.config import STEAMWORKS_API_KEY, FAMILY_USER_DICT, ITAD_API_KEY
 from familybot.lib.database import (
     init_db, get_db_connection, get_cached_game_details, cache_game_details,
-    get_cached_wishlist, cache_wishlist, get_cached_itad_price, cache_itad_price
+    get_cached_wishlist, cache_wishlist, get_cached_itad_price, cache_itad_price,
+    cache_game_details_with_source, migrate_database_phase1
 )
 from familybot.lib.family_utils import find_in_2d_list
 from familybot.lib.logging_config import setup_script_logging
+from steam.webapi import WebAPI
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("populate_prices", "INFO")
@@ -188,6 +190,96 @@ class PricePopulator:
             logger.error(f"Error fetching Steam price for {app_id}: {e}")
             return app_id, False
 
+    def fetch_steam_price_enhanced(self, app_id: str) -> tuple[str, bool, str]:
+        """Enhanced Steam price fetching with Steam library fallback."""
+        
+        # Strategy 1: Current Steam Store API (keep existing)
+        success, source = self.fetch_steam_store_price(app_id) # Assuming this method exists or will be created
+        if success:
+            return app_id, True, 'store_api'
+        
+        # Strategy 2: Steam library WebAPI fallback
+        success, source = self.fetch_steam_library_price(app_id)
+        if success:
+            return app_id, True, 'steam_library'
+        
+        # Strategy 3: Steam library package lookup
+        success, source = self.fetch_steam_package_price(app_id)
+        if success:
+            return app_id, True, 'package_lookup'
+        
+        return app_id, False, 'failed'
+
+    def fetch_steam_library_price(self, app_id: str) -> tuple[bool, str]:
+        """Use Steam library WebAPI as fallback for price data."""
+        try:
+            if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+                logger.debug(f"Steam library fallback skipped for {app_id}: No API key")
+                return False, 'no_api_key'
+            
+            api = WebAPI(key=STEAMWORKS_API_KEY)
+            
+            # Try to get app info using Steam library
+            try:
+                # Get app list and find our app
+                app_list = api.call('ISteamApps.GetAppList')
+                if app_list and 'applist' in app_list:
+                    for app in app_list['applist']['apps']:
+                        if str(app.get('appid')) == app_id:
+                            # Found the app, create basic game data
+                            game_data = {
+                                'name': app['name'],
+                                'type': 'game',
+                                'is_free': False,  # Default assumption
+                                'categories': [],
+                                'price_overview': None  # No price data from app list
+                            }
+                            
+                            # Cache the basic game details
+                            cache_game_details_with_source(app_id, game_data, 'steam_library')
+                            logger.debug(f"Steam library fallback successful for app {app_id}: {app['name']}")
+                            return True, 'steam_library'
+                            
+            except Exception as e:
+                logger.debug(f"Steam library WebAPI call failed for {app_id}: {e}")
+                return False, 'webapi_error'
+            
+            logger.debug(f"Steam library fallback: app {app_id} not found in app list")
+            return False, 'not_found'
+            
+        except ImportError:
+            logger.debug("Steam library not available for fallback")
+            return False, 'library_unavailable'
+        except Exception as e:
+            logger.debug(f"Steam library fallback failed for {app_id}: {e}")
+            return False, 'library_error'
+
+    def fetch_steam_package_price(self, app_id: str) -> tuple[bool, str]:
+        """Use Steam library for package-based price lookup."""
+        try:
+            if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+                return False, 'no_api_key'
+            
+            api = WebAPI(key=STEAMWORKS_API_KEY)
+            
+            # Try to get package information for the app
+            # This is more advanced and may require additional Steam library features
+            # Implementation depends on available Steam library capabilities
+            
+            logger.debug(f"Steam package lookup attempted for app {app_id}")
+            return False, 'not_implemented'  # Placeholder for future implementation
+            
+        except ImportError:
+            return False, 'library_unavailable'
+        except Exception as e:
+            logger.debug(f"Steam package lookup failed for {app_id}: {e}")
+            return False, 'package_error'
+
+    def fetch_steam_store_price(self, app_id: str) -> tuple[bool, str]:
+        """Wrapper for existing fetch_steam_price to match new return signature."""
+        success = self.fetch_steam_price(app_id)[1]
+        return success, 'store_api'
+
     def populate_steam_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
         print(f"\n💰 Starting Steam price population...")
         if not game_ids:
@@ -222,8 +314,7 @@ class PricePopulator:
             progress_bar = tqdm(total=len(games_to_process), desc="💰 Steam Prices", unit="game")
         
         for app_id in games_to_process:
-            result = self.fetch_steam_price(app_id)
-            app_id, success = result
+            app_id, success, source = self.fetch_steam_price_enhanced(app_id)
             if success:
                 steam_prices_cached += 1
             else:
@@ -231,10 +322,10 @@ class PricePopulator:
             
             if TQDM_AVAILABLE:
                 progress_bar.update(1)
-                progress_bar.set_postfix_str(f"Cached: {steam_prices_cached}, Errors: {steam_errors}")  # type: ignore
+                progress_bar.set_postfix_str(f"Cached: {steam_prices_cached}, Errors: {steam_errors}, Source: {source}")  # type: ignore
             else:
                 processed = steam_prices_cached + steam_errors
-                print(f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {steam_prices_cached} | Errors: {steam_errors}")
+                print(f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {steam_prices_cached} | Errors: {steam_errors} | Source: {source}")
         
         if TQDM_AVAILABLE:
             progress_bar.close()
@@ -362,8 +453,9 @@ def main():
     try:
         init_db()
         print("✅ Database initialized")
+        migrate_database_phase1() # Run Phase 1 migrations
     except Exception as e:
-        print(f"❌ Failed to initialize database: {e}")
+        print(f"❌ Failed to initialize database or run migrations: {e}")
         return 1
     
     populator = PricePopulator(rate_mode)

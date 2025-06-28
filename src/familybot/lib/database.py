@@ -724,6 +724,28 @@ def get_steam_id_from_discord_id(discord_id: str) -> Optional[str]:
         if conn:
             conn.close()
 
+def cache_game_details_with_source(app_id: str, game_data: dict, source: str):
+    """Enhanced cache_game_details with source tracking."""
+    # Call existing cache_game_details but with source parameter
+    cache_game_details(app_id, game_data, permanent=True)
+    
+    # Update the price_source field
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE game_details_cache SET price_source = ? WHERE appid = ?",
+            (source, app_id)
+        )
+        conn.commit()
+        logger.debug(f"Updated price source for {app_id}: {source}")
+    except Exception as e:
+        logger.error(f"Failed to update price source for {app_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 def cleanup_expired_cache():
     """Remove expired cache entries from all cache tables."""
     conn = None
@@ -750,6 +772,35 @@ def cleanup_expired_cache():
             logger.info(f"Cache cleanup: removed {total_deleted} expired entries")
     except Exception as e:
         logger.error(f"Error during cache cleanup: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_database_phase1():
+    """Add price_source column to game_details_cache table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if column already exists
+        cursor.execute("PRAGMA table_info(game_details_cache)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'price_source' not in columns:
+            cursor.execute("ALTER TABLE game_details_cache ADD COLUMN price_source TEXT DEFAULT 'store_api'")
+            
+            # Update existing entries to have 'store_api' as source
+            cursor.execute("UPDATE game_details_cache SET price_source = 'store_api' WHERE price_source IS NULL")
+            
+            conn.commit()
+            logger.info("Phase 1 database migration completed: Added price_source column")
+        else:
+            logger.info("Phase 1 database migration skipped: price_source column already exists")
+        
+    except Exception as e:
+        logger.error(f"Phase 1 database migration failed: {e}")
+        raise
     finally:
         if conn:
             conn.close()
