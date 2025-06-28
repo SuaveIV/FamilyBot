@@ -310,3 +310,42 @@ def log_performance_metric(logger: logging.Logger, operation: str, duration: flo
 
 # Create a default logger for immediate use
 default_logger = logging.getLogger("familybot.default")
+
+web_log_queue = None
+
+def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
+    """
+    Set up logging for the web UI.
+    
+    Args:
+        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        
+    Returns:
+        Configured logger instance
+    """
+    global web_log_queue
+    # Convert log level string to logging constant
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    
+    # Create web logger
+    logger = logging.getLogger("familybot.web")
+    logger.setLevel(numeric_level)
+    
+    # Clear any existing handlers to avoid duplicates
+    logger.handlers.clear()
+    
+    # Create web handler
+    from .web_logging import WebSocketQueueHandler
+    web_handler = WebSocketQueueHandler()
+    web_handler.setLevel(numeric_level)
+    web_log_queue = web_handler.queue
+    
+    # Create formatter
+    web_formatter = JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
+    )
+    web_handler.setFormatter(web_formatter)
+    logger.addHandler(web_handler)
+    
+    logger.info(f"Web logging initialized - Level: {log_level}")
+    return logger
