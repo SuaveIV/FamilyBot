@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import coloredlogs
-from pythonjsonlogger.json import JsonFormatter
+from pythonjsonlogger import jsonlogger
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -98,7 +98,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         encoding='utf-8'
     )
     main_file_handler.setLevel(numeric_level)
-    main_file_handler.setFormatter(JsonFormatter(
+    main_file_handler.setFormatter(jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(main_file_handler)
@@ -112,7 +112,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         encoding='utf-8'
     )
     error_file_handler.setLevel(logging.WARNING)
-    error_file_handler.setFormatter(JsonFormatter(
+    error_file_handler.setFormatter(jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(error_file_handler)
@@ -126,7 +126,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         encoding='utf-8'
     )
     steam_file_handler.setLevel(logging.INFO)
-    steam_file_handler.setFormatter(JsonFormatter(
+    steam_file_handler.setFormatter(jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     
@@ -207,7 +207,7 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         encoding='utf-8'
     )
     script_file_handler.setLevel(numeric_level)
-    script_file_handler.setFormatter(JsonFormatter(
+    script_file_handler.setFormatter(jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(script_file_handler)
@@ -221,7 +221,7 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         encoding='utf-8'
     )
     script_error_handler.setLevel(logging.WARNING)
-    script_error_handler.setFormatter(JsonFormatter(
+    script_error_handler.setFormatter(jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(script_error_handler)
@@ -341,7 +341,7 @@ def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
     web_log_queue = web_handler.queue
     
     # Create formatter
-    web_formatter = JsonFormatter(
+    web_formatter = jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     )
     web_handler.setFormatter(web_formatter)
