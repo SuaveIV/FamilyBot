@@ -30,4 +30,4 @@ class FamilyBotClientProtocol(Protocol):
     async def get_pinned_message(self, chan_id: int) -> List[Message]: ...
 
 # Type alias that represents the bot client, hinting its structure for type checkers.
-FamilyBotClient = Client # Actual runtime class is interactions.Client
+FamilyBotClient = FamilyBotClientProtocol

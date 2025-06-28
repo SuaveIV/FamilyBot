@@ -32,7 +32,7 @@ logger = setup_bot_logging("INFO")
 
 # --- Client Setup ---
 client: FamilyBotClient = cast(FamilyBotClient, Client(token=DISCORD_API_KEY, intents=Intents.ALL))
-prefixed_commands.setup(client, default_prefix="!")
+prefixed_commands.setup(cast(Client, client), default_prefix="!")
 
 # List to keep track of background tasks for graceful shutdown
 _running_tasks = []

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - FamilyBot</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    {% include 'navbar.html' %}
+
+    <div class="container">
+        <h1>Admin Commands</h1>
+
+        <div class="command-section">
+            <h2>Database Population</h2>
+            <button class="admin-command-btn" data-command="populate" data-endpoint="/api/admin/populate-database">Populate Database</button>
+            <p class="description">Scan all family member libraries and wishlists to cache game details.</p>
+        </div>
+
+        <div class="command-section">
+            <h2>Cache Management</h2>
+            <button class="admin-command-btn" data-command="purge_game_details" data-endpoint="/api/admin/purge-game-details">Purge Game Details Cache</button>
+            <p class="description">Purge all entries from the game details cache.</p>
+            <button class="admin-command-btn" data-command="purge_wishlist" data-endpoint="/api/admin/purge-wishlist">Purge Wishlist Cache</button>
+            <p class="description">Purge all entries from the wishlist cache.</p>
+            <button class="admin-command-btn" data-command="purge_family_library" data-endpoint="/api/admin/purge-family-library">Purge Family Library Cache</button>
+            <p class="description">Purge all entries from the family library cache.</p>
+        </div>
+
+        <div class="command-section">
+            <h2>Plugin Actions</h2>
+            <button class="admin-command-btn" data-command="force_new_game" data-endpoint="/api/admin/plugin-action">Force New Game Check</button>
+            <p class="description">Force a check for new games and trigger notifications.</p>
+            <button class="admin-command-btn" data-command="force_wishlist" data-endpoint="/api/admin/plugin-action">Force Wishlist Refresh</button>
+            <p class="description">Force a refresh of the wishlist data.</p>
+        </div>
+
+        <div id="command-output">
+            <!-- Command output will be displayed here -->
+        </div>
+    </div>
+
+    <script src="/static/js/theme_switcher.js"></script>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

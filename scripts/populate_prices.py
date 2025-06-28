@@ -1,7 +1,6 @@
 import sys
 import os
 import time
-import asyncio
 import argparse
 import httpx 
 import json
@@ -36,99 +35,52 @@ import logging
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-class TokenBucket:
-    """Token bucket rate limiter for controlling API request rates."""
-    
-    def __init__(self, rate: float, capacity: Optional[int] = None):
-        """
-        Initialize token bucket.
-        
-        Args:
-            rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
-            capacity: Maximum tokens in bucket (defaults to rate * 10)
-        """
-        self.rate = rate
-        self.capacity = capacity if capacity is not None else max(1, int(rate * 10))
-        self.tokens = self.capacity
-        self.last_update = time.time()
-        self._lock = asyncio.Lock()
-    
-    async def acquire(self, tokens: int = 1) -> None:
-        """Acquire tokens from the bucket, waiting if necessary."""
-        async with self._lock:
-            now = time.time()
-            # Add tokens based on elapsed time
-            elapsed = now - self.last_update
-            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
-            self.last_update = now
-            
-            # If we don't have enough tokens, wait
-            if self.tokens < tokens:
-                wait_time = (tokens - self.tokens) / self.rate
-                await asyncio.sleep(wait_time)
-                self.tokens = 0
-            else:
-                self.tokens -= tokens
-
-
 class PricePopulator:
-    """Handles comprehensive price data population with concurrent async processing and rate limiting."""
+    """Handles comprehensive price data population with synchronous processing and rate limiting."""
     
     def __init__(self, rate_limit_mode: str = "normal"):
-        """Initialize the populator with specified rate limiting and concurrency."""
+        """Initialize the populator with specified rate limiting."""
         self.rate_limits = {
-            "fast": {"steam_api": 1.2, "store_api": 1.5, "itad_api": 1.0, "concurrency": 6},
-            "normal": {"steam_api": 1.5, "store_api": 2.0, "itad_api": 1.2, "concurrency": 4},
-            "slow": {"steam_api": 2.0, "store_api": 2.5, "itad_api": 1.5, "concurrency": 3},
-            "conservative": {"steam_api": 3.0, "store_api": 4.0, "itad_api": 2.0, "concurrency": 2}
+            "fast": {"steam_api": 1.2, "store_api": 1.5, "itad_api": 1.0},
+            "normal": {"steam_api": 1.5, "store_api": 2.0, "itad_api": 1.2},
+            "slow": {"steam_api": 2.0, "store_api": 2.5, "itad_api": 1.5},
+            "conservative": {"steam_api": 3.0, "store_api": 4.0, "itad_api": 2.0}
         }
         
         self.current_limits = self.rate_limits.get(rate_limit_mode, self.rate_limits["normal"])
-        
-        # Create token bucket rate limiters
-        self.steam_bucket = TokenBucket(1.0 / self.current_limits["steam_api"])
-        self.store_bucket = TokenBucket(1.0 / self.current_limits["store_api"])
-        self.itad_bucket = TokenBucket(1.0 / self.current_limits["itad_api"])
-        
-        # Create semaphores for controlling concurrency
-        self.steam_semaphore = asyncio.Semaphore(self.current_limits["concurrency"])
-        self.itad_semaphore = asyncio.Semaphore(self.current_limits["concurrency"])
         
         # Add retry configuration for 429 errors
         self.max_retries = 3
         self.base_backoff = 1.0
         
-        self.client = httpx.AsyncClient(timeout=15.0)
+        self.client = httpx.Client(timeout=15.0) # Changed to synchronous client
 
         print(f"🔧 Rate limiting mode: {rate_limit_mode}")
-        print(f"   Steam API: {self.current_limits['steam_api']}s (token bucket)")
-        print(f"   Store API: {self.current_limits['store_api']}s (token bucket)")
-        print(f"   ITAD API: {self.current_limits['itad_api']}s (token bucket)")
-        print(f"   Concurrency: {self.current_limits['concurrency']} simultaneous requests")
+        print(f"   Steam API: {self.current_limits['steam_api']}s (delay per request)")
+        print(f"   Store API: {self.current_limits['store_api']}s (delay per request)")
+        print(f"   ITAD API: {self.current_limits['itad_api']}s (delay per request)")
         print(f"   Retry policy: {self.max_retries} retries with exponential backoff")
     
-    async def close(self):
+    def close(self): # Changed to synchronous close
         """Closes the httpx client session."""
-        await self.client.aclose()
+        self.client.close()
 
-    async def make_request_with_retry(self, url: str, method: str = "GET", json_data: Optional[dict | list] = None, api_type: str = "store") -> Optional[httpx.Response]:
+    def make_request_with_retry(self, url: str, method: str = "GET", json_data: Optional[dict | list] = None, api_type: str = "store") -> Optional[httpx.Response]:
         """Make HTTP request with retry logic for 429 errors."""
-        bucket = self.store_bucket if api_type == "store" else self.itad_bucket
+        # Determine the appropriate sleep time based on API type
+        sleep_time = self.current_limits["store_api"] if api_type == "store" else self.current_limits["itad_api"]
         
         for attempt in range(self.max_retries + 1):
             try:
-                # Acquire token from bucket
-                await bucket.acquire()
-                
-                # Add jitter to prevent synchronized requests
+                # Add jitter to prevent synchronized requests (even in sequential mode, good practice)
                 jitter = random.uniform(0, 0.1)
-                await asyncio.sleep(jitter)
+                time.sleep(sleep_time + jitter) # Synchronous sleep
                 
                 # Make the request
                 if method == "GET":
-                    response = await self.client.get(url)
+                    response = self.client.get(url)
                 elif method == "POST":
-                    response = await self.client.post(url, json=json_data)
+                    response = self.client.post(url, json=json_data)
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
                 
@@ -137,7 +89,7 @@ class PricePopulator:
                     if attempt < self.max_retries:
                         backoff_time = self.base_backoff * (2 ** attempt) + random.uniform(0, 1)
                         logger.warning(f"Rate limited (429), retrying in {backoff_time:.1f}s (attempt {attempt + 1}/{self.max_retries + 1})")
-                        await asyncio.sleep(backoff_time)
+                        time.sleep(backoff_time) # Synchronous sleep
                         continue
                     else:
                         logger.error(f"Max retries exceeded for {url}")
@@ -149,7 +101,7 @@ class PricePopulator:
                 if attempt < self.max_retries:
                     backoff_time = self.base_backoff * (2 ** attempt)
                     logger.warning(f"Request failed: {e}, retrying in {backoff_time:.1f}s")
-                    await asyncio.sleep(backoff_time)
+                    time.sleep(backoff_time) # Synchronous sleep
                     continue
                 else:
                     logger.error(f"Request failed after {self.max_retries} retries: {e}")
@@ -216,28 +168,27 @@ class PricePopulator:
         print(f"\n🎯 Total unique wishlist games to process: {len(all_game_ids)}")
         return all_game_ids
     
-    async def fetch_steam_price(self, app_id: str) -> tuple[str, bool]:
-        """Fetch price for a single Steam game with semaphore control."""
-        async with self.steam_semaphore:
-            try:
-                game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                response = await self.make_request_with_retry(game_url, method="GET", api_type="store")
-                
-                if response is None:
-                    return app_id, False
-                
-                game_info = self.handle_api_response(f"Steam Store ({app_id})", response)
-                
-                if game_info and game_info.get(str(app_id), {}).get("data"):
-                    cache_game_details(app_id, game_info[str(app_id)]["data"], permanent=True)
-                    return app_id, True
-                else:
-                    return app_id, False
-            except Exception as e:
-                logger.error(f"Error fetching Steam price for {app_id}: {e}")
+    def fetch_steam_price(self, app_id: str) -> tuple[str, bool]:
+        """Fetch price for a single Steam game."""
+        try:
+            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+            response = self.make_request_with_retry(game_url, method="GET", api_type="store")
+            
+            if response is None:
                 return app_id, False
+            
+            game_info = self.handle_api_response(f"Steam Store ({app_id})", response)
+            
+            if game_info and game_info.get(str(app_id), {}).get("data"):
+                cache_game_details(app_id, game_info[str(app_id)]["data"], permanent=True)
+                return app_id, True
+            else:
+                return app_id, False
+        except Exception as e:
+            logger.error(f"Error fetching Steam price for {app_id}: {e}")
+            return app_id, False
 
-    async def populate_steam_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
+    def populate_steam_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
         print(f"\n💰 Starting Steam price population...")
         if not game_ids:
             print("❌ No game IDs to process")
@@ -255,7 +206,7 @@ class PricePopulator:
         
         print(f"   🎯 Games to process: {len(games_to_process)}")
         print(f"   ⏭️   Games skipped (already have price data): {games_skipped}")
-        print(f"   🚀 Processing with {self.current_limits['concurrency']} concurrent requests")
+        print(f"   🚀 Processing sequentially (1 request at a time)")
         
         if dry_run:
             print("   🔍 DRY RUN: Would fetch Steam price data")
@@ -265,47 +216,24 @@ class PricePopulator:
             print("   ✅ All games already have Steam price data")
             return 0
         
-        # Process games concurrently with real-time progress updates
         steam_prices_cached, steam_errors = 0, 0
         
         if TQDM_AVAILABLE:
             progress_bar = tqdm(total=len(games_to_process), desc="💰 Steam Prices", unit="game")
         
-        # Create a semaphore to control concurrent updates to progress
-        progress_lock = asyncio.Lock()
-        
-        async def fetch_with_progress(app_id: str) -> tuple[str, bool]:
-            """Fetch price and update progress in real-time."""
-            nonlocal steam_prices_cached, steam_errors
+        for app_id in games_to_process:
+            result = self.fetch_steam_price(app_id)
+            app_id, success = result
+            if success:
+                steam_prices_cached += 1
+            else:
+                steam_errors += 1
             
-            result = await self.fetch_steam_price(app_id)
-            
-            # Update progress atomically
-            async with progress_lock:
-                app_id, success = result
-                if success:
-                    steam_prices_cached += 1
-                else:
-                    steam_errors += 1
-                
-                if TQDM_AVAILABLE:
-                    progress_bar.update(1)
-                    progress_bar.set_postfix_str(f"Cached: {steam_prices_cached}, Errors: {steam_errors}")  # type: ignore
-                
-                return result
-        
-        # Process in smaller batches for more responsive progress updates
-        batch_size = self.current_limits['concurrency'] * 3
-        for i in range(0, len(games_to_process), batch_size):
-            batch = games_to_process[i:i + batch_size]
-            
-            # Create tasks for concurrent processing with progress updates
-            tasks = [fetch_with_progress(app_id) for app_id in batch]
-            await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Progress update for non-tqdm users
-            if not TQDM_AVAILABLE:
-                processed = min(i + batch_size, len(games_to_process))
+            if TQDM_AVAILABLE:
+                progress_bar.update(1)
+                progress_bar.set_postfix_str(f"Cached: {steam_prices_cached}, Errors: {steam_errors}")  # type: ignore
+            else:
+                processed = steam_prices_cached + steam_errors
                 print(f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {steam_prices_cached} | Errors: {steam_errors}")
         
         if TQDM_AVAILABLE:
@@ -314,45 +242,44 @@ class PricePopulator:
         print(f"\n💰 Steam price population complete!\n   ✅ Prices cached: {steam_prices_cached}\n   ❌ Errors: {steam_errors}")
         return steam_prices_cached
     
-    async def fetch_itad_price(self, app_id: str) -> tuple[str, str]:
-        """Fetch ITAD price for a single game with semaphore control. Returns (app_id, status)."""
-        async with self.itad_semaphore:
-            try:
-                lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
-                lookup_response = await self.make_request_with_retry(lookup_url, method="GET", api_type="itad")
-                
-                if lookup_response is None:
-                    return app_id, "error"
-                
-                lookup_data = self.handle_api_response(f"ITAD Lookup ({app_id})", lookup_response)
-                
-                game_id = lookup_data.get("game", {}).get("id") if lookup_data else None
-                if not game_id:
-                    return app_id, "not_found" if lookup_data else "error"
-
-                storelow_url = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
-                storelow_response = await self.make_request_with_retry(storelow_url, method="POST", json_data=[game_id], api_type="itad")
-                
-                if storelow_response is None:
-                    return app_id, "error"
-                
-                storelow_data = self.handle_api_response(f"ITAD StoreLow ({app_id})", storelow_response)
-
-                if storelow_data and storelow_data[0].get("lows"):
-                    low = storelow_data[0]["lows"][0]
-                    cache_itad_price(app_id, {
-                        'lowest_price': str(low["price"]["amount"]), 
-                        'lowest_price_formatted': f"${low['price']['amount']}", 
-                        'shop_name': low.get("shop", {}).get("name", "Unknown Store")
-                    }, permanent=True)
-                    return app_id, "cached"
-                else:
-                    return app_id, "not_found"
-            except Exception as e:
-                logger.error(f"Error fetching ITAD price for {app_id}: {e}")
+    def fetch_itad_price(self, app_id: str) -> tuple[str, str]:
+        """Fetch ITAD price for a single game. Returns (app_id, status)."""
+        try:
+            lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
+            lookup_response = self.make_request_with_retry(lookup_url, method="GET", api_type="itad")
+            
+            if lookup_response is None:
                 return app_id, "error"
+            
+            lookup_data = self.handle_api_response(f"ITAD Lookup ({app_id})", lookup_response)
+            
+            game_id = lookup_data.get("game", {}).get("id") if lookup_data else None
+            if not game_id:
+                return app_id, "not_found" if lookup_data else "error"
 
-    async def populate_itad_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
+            storelow_url = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
+            storelow_response = self.make_request_with_retry(storelow_url, method="POST", json_data=[game_id], api_type="itad")
+            
+            if storelow_response is None:
+                return app_id, "error"
+            
+            storelow_data = self.handle_api_response(f"ITAD StoreLow ({app_id})", storelow_response)
+
+            if storelow_data and storelow_data[0].get("lows"):
+                low = storelow_data[0]["lows"][0]
+                cache_itad_price(app_id, {
+                    'lowest_price': str(low["price"]["amount"]), 
+                    'lowest_price_formatted': f"${low['price']['amount']}", 
+                    'shop_name': low.get("shop", {}).get("name", "Unknown Store")
+                }, permanent=True)
+                return app_id, "cached"
+            else:
+                return app_id, "not_found"
+        except Exception as e:
+            logger.error(f"Error fetching ITAD price for {app_id}: {e}")
+            return app_id, "error"
+
+    def populate_itad_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
         print(f"\n📈 Starting ITAD price population...")
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
             print("❌ ITAD API key not configured. Skipping ITAD price population.")
@@ -366,7 +293,7 @@ class PricePopulator:
         
         print(f"   🎯 Games to process: {len(games_to_process)}")
         print(f"   ⏭️   Games skipped (already have ITAD data): {games_skipped}")
-        print(f"   🚀 Processing with {self.current_limits['concurrency']} concurrent requests")
+        print(f"   🚀 Processing sequentially (1 request at a time)")
         
         if dry_run:
             print("   🔍 DRY RUN: Would fetch ITAD price data")
@@ -375,49 +302,26 @@ class PricePopulator:
             print("   ✅ All games already have ITAD price data")
             return 0
         
-        # Process games concurrently with real-time progress updates
         itad_prices_cached, itad_errors, itad_not_found = 0, 0, 0
         
         if TQDM_AVAILABLE:
             progress_bar = tqdm(total=len(games_to_process), desc="📈 ITAD Prices", unit="game")
         
-        # Create a semaphore to control concurrent updates to progress
-        progress_lock = asyncio.Lock()
-        
-        async def fetch_itad_with_progress(app_id: str) -> tuple[str, str]:
-            """Fetch ITAD price and update progress in real-time."""
-            nonlocal itad_prices_cached, itad_errors, itad_not_found
+        for app_id in games_to_process:
+            result = self.fetch_itad_price(app_id)
+            app_id, status = result
+            if status == "cached":
+                itad_prices_cached += 1
+            elif status == "not_found":
+                itad_not_found += 1
+            elif status == "error":
+                itad_errors += 1
             
-            result = await self.fetch_itad_price(app_id)
-            
-            # Update progress atomically
-            async with progress_lock:
-                app_id, status = result
-                if status == "cached":
-                    itad_prices_cached += 1
-                elif status == "not_found":
-                    itad_not_found += 1
-                elif status == "error":
-                    itad_errors += 1
-                
-                if TQDM_AVAILABLE:
-                    progress_bar.update(1)
-                    progress_bar.set_postfix_str(f"Cached: {itad_prices_cached}, Not Found: {itad_not_found}, Errors: {itad_errors}")  # type: ignore
-                
-                return result
-        
-        # Process in smaller batches for ITAD (more conservative) with real-time updates
-        batch_size = self.current_limits['concurrency'] * 2
-        for i in range(0, len(games_to_process), batch_size):
-            batch = games_to_process[i:i + batch_size]
-            
-            # Create tasks for concurrent processing with progress updates
-            tasks = [fetch_itad_with_progress(app_id) for app_id in batch]
-            await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Progress update for non-tqdm users
-            if not TQDM_AVAILABLE:
-                processed = min(i + batch_size, len(games_to_process))
+            if TQDM_AVAILABLE:
+                progress_bar.update(1)
+                progress_bar.set_postfix_str(f"Cached: {itad_prices_cached}, Not Found: {itad_not_found}, Errors: {itad_errors}")  # type: ignore
+            else:
+                processed = itad_prices_cached + itad_not_found + itad_errors
                 print(f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {itad_prices_cached} | Not Found: {itad_not_found} | Errors: {itad_errors}")
         
         if TQDM_AVAILABLE:
@@ -426,7 +330,7 @@ class PricePopulator:
         print(f"\n📈 ITAD price population complete!\n   ✅ Prices cached: {itad_prices_cached}\n   ❓ Games not found on ITAD: {itad_not_found}\n   ❌ Errors: {itad_errors}")
         return itad_prices_cached
     
-    async def refresh_current_prices(self, game_ids: Set[str], dry_run: bool = False) -> int:
+    def refresh_current_prices(self, game_ids: Set[str], dry_run: bool = False) -> int:
         print(f"\n🔄 Refreshing current Steam prices...")
         if not game_ids:
             print("❌ No game IDs to process")
@@ -434,9 +338,9 @@ class PricePopulator:
         if dry_run:
             print(f"   🔍 DRY RUN: Would refresh {len(game_ids)} current prices")
             return 0
-        return await self.populate_steam_prices(game_ids, dry_run=False, force_refresh=True)
+        return self.populate_steam_prices(game_ids, dry_run=False, force_refresh=True)
 
-async def main():
+def main():
     parser = argparse.ArgumentParser(description="Populate comprehensive price data for FamilyBot")
     parser.add_argument("--steam-only", action="store_true", help="Only populate Steam Store prices")
     parser.add_argument("--itad-only", action="store_true", help="Only populate ITAD historical prices")
@@ -479,12 +383,12 @@ async def main():
             return 1
         
         if not args.itad_only:
-            total_steam_cached = await populator.refresh_current_prices(all_game_ids, args.dry_run) if args.refresh_current else await populator.populate_steam_prices(all_game_ids, args.dry_run, args.force_refresh)
+            total_steam_cached = populator.refresh_current_prices(all_game_ids, args.dry_run) if args.refresh_current else populator.populate_steam_prices(all_game_ids, args.dry_run, args.force_refresh)
         
         if not args.steam_only:
-            total_itad_cached = await populator.populate_itad_prices(all_game_ids, args.dry_run, args.force_refresh)
+            total_itad_cached = populator.populate_itad_prices(all_game_ids, args.dry_run, args.force_refresh)
     finally:
-        await populator.close()
+        populator.close()
 
     duration = datetime.now() - start_time
     print("\n" + "=" * 50 + "\n🎉 Price Population Complete!")
@@ -501,7 +405,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        sys.exit(asyncio.run(main()))
+        sys.exit(main())
     except KeyboardInterrupt:
         print("\n⚠️  Operation cancelled by user")
         sys.exit(1)

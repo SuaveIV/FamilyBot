@@ -313,7 +313,9 @@ class steam_family(Extension):
     async def force_new_game_command(self, ctx: PrefixedContext):
         if str(ctx.author_id) == str(ADMIN_DISCORD_ID) and ctx.guild is None:
             await ctx.send("Forcing new game notification check...")
-            await self.send_new_game()
+            from familybot.lib.plugin_admin_actions import force_new_game_action
+            result = await force_new_game_action()
+            await ctx.send(result['message'])
             logger.info("Force new game notification initiated by admin.")
             await self.bot.send_log_dm("Force Notification") # type: ignore
         else:
@@ -323,7 +325,9 @@ class steam_family(Extension):
     async def force_wishlist_command(self, ctx: PrefixedContext):
         if str(ctx.author_id) == str(ADMIN_DISCORD_ID) and ctx.guild is None:
             await ctx.send("Forcing wishlist refresh...")
-            await self.refresh_wishlist()
+            from familybot.lib.plugin_admin_actions import force_wishlist_action
+            result = await force_wishlist_action()
+            await ctx.send(result['message'])
             logger.info("Force wishlist refresh initiated by admin.")
             await self.bot.send_log_dm("Force Wishlist") # type: ignore
         else:
@@ -682,29 +686,15 @@ class steam_family(Extension):
             await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
             return
 
-        await ctx.send("🗑️ **Purging game details cache...**\nThis will clear all cached game data to force fresh USD pricing and new boolean fields on next fetch.")
-        
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            # Get count before deletion
-            cursor.execute("SELECT COUNT(*) FROM game_details_cache")
-            cache_count = cursor.fetchone()[0]
-            
-            # Clear the game details cache
-            cursor.execute("DELETE FROM game_details_cache")
-            conn.commit()
-            conn.close()
-            
-            await ctx.send(f"✅ **Cache purge complete!**\nDeleted {cache_count} cached game entries.\n\n🔄 **Next steps:**\n- Run `!full_wishlist_scan` to rebuild cache with USD pricing\n- Run `!coop 2` to cache multiplayer games\n- All future API calls will use USD pricing and new boolean fields")
-            logger.info(f"Admin purged game details cache: {cache_count} entries deleted")
-            await self.bot.send_log_dm("Cache Purge") # type: ignore
-            
-        except Exception as e:
-            logger.error(f"Error purging cache: {e}", exc_info=True)
-            await ctx.send(f"❌ **Error purging cache:** {e}")
-            await self._send_admin_dm(f"Cache purge error: {e}")
+        await ctx.send("🗑️ **Purging game details cache...**")
+        from familybot.lib.plugin_admin_actions import purge_game_details_cache_action
+        result = await purge_game_details_cache_action()
+        await ctx.send(result['message'])
+        if result['success']:
+            logger.info("Admin purged game details cache via command.")
+            await self.bot.send_log_dm("Cache Purge")
+        else:
+            await self._send_admin_dm(f"Cache purge error: {result['message']}")
 
     @prefixed_command(name="full_library_scan")
     async def full_library_scan_command(self, ctx: PrefixedContext):

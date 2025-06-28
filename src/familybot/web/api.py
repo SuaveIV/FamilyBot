@@ -17,7 +17,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from familybot.config import PROJECT_ROOT, WEB_UI_HOST, WEB_UI_PORT
 from familybot.lib.database import (
     get_db_connection, get_cached_game_details, get_cached_family_library,
-    get_cached_wishlist, cleanup_expired_cache
+    get_cached_wishlist, cleanup_expired_cache, purge_wishlist_cache, purge_family_library_cache
+)
+from familybot.lib.admin_commands import DatabasePopulator
+from familybot.lib.plugin_admin_actions import (
+    purge_game_details_cache_action,
+    force_new_game_action,
+    force_wishlist_action
 )
 from familybot.web.models import (
     BotStatus, GameDetails, FamilyMember, LogEntry, CacheStats,
@@ -106,6 +112,11 @@ async def config_page(request: Request):
 async def wishlist_page(request: Request):
     """Wishlist page"""
     return templates.TemplateResponse("wishlist.html", {"request": request, "active_page": "wishlist"})
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    """Admin page"""
+    return templates.TemplateResponse("admin.html", {"request": request, "active_page": "admin"})
 
 @app.get("/api/status", response_model=BotStatus)
 async def get_bot_status():
@@ -332,6 +343,86 @@ async def get_config_data():
             family_members_count=0,
             websocket_ip="127.0.0.1"
         )
+
+@app.post("/api/admin/populate-database", response_model=CommandResponse)
+async def populate_database_api(
+    library_only: bool = False,
+    wishlist_only: bool = False,
+    rate_limit_mode: str = "normal"
+):
+    """Trigger database population for libraries and/or wishlists."""
+    try:
+        populator = DatabasePopulator(rate_limit_mode)
+        family_members = populator.load_family_members()
+        
+        total_cached = 0
+        if not family_members:
+            raise HTTPException(status_code=400, detail="No family members configured.")
+
+        if not wishlist_only:
+            total_cached += await populator.populate_family_libraries(family_members)
+        
+        if not library_only:
+            total_cached += await populator.populate_wishlists(family_members)
+        
+        await populator.close()
+        update_last_activity()
+        return CommandResponse(success=True, message=f"Database populated. Total new games cached: {total_cached}")
+    except Exception as e:
+        logger.error(f"Error populating database: {e}")
+        return CommandResponse(success=False, message=f"Error populating database: {str(e)}")
+
+@app.post("/api/admin/purge-wishlist", response_model=CommandResponse)
+async def purge_wishlist_api():
+    """Purge all entries from the wishlist cache."""
+    try:
+        purge_wishlist_cache()
+        update_last_activity()
+        return CommandResponse(success=True, message="Wishlist cache purged successfully.")
+    except Exception as e:
+        logger.error(f"Error purging wishlist cache: {e}")
+        return CommandResponse(success=False, message=f"Error purging wishlist cache: {str(e)}")
+
+@app.post("/api/admin/purge-family-library", response_model=CommandResponse)
+async def purge_family_library_api():
+    """Purge all entries from the family library cache."""
+    try:
+        purge_family_library_cache()
+        update_last_activity()
+        return CommandResponse(success=True, message="Family library cache purged successfully.")
+    except Exception as e:
+        logger.error(f"Error purging family library cache: {e}")
+        return CommandResponse(success=False, message=f"Error purging family library cache: {str(e)}")
+
+@app.post("/api/admin/purge-game-details", response_model=CommandResponse)
+async def purge_game_details_cache_api():
+    """Purge all entries from the game details cache."""
+    try:
+        result = await purge_game_details_cache_action()
+        update_last_activity()
+        return CommandResponse(success=result["success"], message=result["message"])
+    except Exception as e:
+        logger.error(f"Error purging game details cache via API: {e}")
+        return CommandResponse(success=False, message=f"Error purging game details cache: {str(e)}")
+
+@app.post("/api/admin/plugin-action", response_model=CommandResponse)
+async def plugin_admin_action_api(command_name: str):
+    """
+    Triggers an admin action from a plugin.
+    """
+    try:
+        if command_name == "force_new_game":
+            result = await force_new_game_action()
+        elif command_name == "force_wishlist":
+            result = await force_wishlist_action()
+        else:
+            raise HTTPException(status_code=400, detail="Invalid plugin admin command.")
+        
+        update_last_activity()
+        return CommandResponse(success=result["success"], message=result["message"])
+    except Exception as e:
+        logger.error(f"Error executing plugin admin action '{command_name}': {e}")
+        return CommandResponse(success=False, message=f"Error executing plugin admin action: {str(e)}")
 
 @app.post("/api/cache/purge", response_model=CommandResponse)
 async def purge_cache(cache_type: str = "all"):

@@ -657,6 +657,35 @@ def cache_family_library(family_apps: list, cache_minutes: int = 30):
         if conn:
             conn.close()
 
+def purge_wishlist_cache():
+    """Purge all entries from the wishlist_cache table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM wishlist_cache")
+        conn.commit()
+        logger.info("Purged all entries from wishlist_cache.")
+    except Exception as e:
+        logger.error(f"Error purging wishlist_cache: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def purge_family_library_cache():
+    """Purge all entries from the family_library_cache table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM family_library_cache")
+        conn.commit()
+        logger.info("Purged all entries from family_library_cache.")
+    except Exception as e:
+        logger.error(f"Error purging family_library_cache: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 def cleanup_expired_cache():
     """Remove expired cache entries from all cache tables."""
