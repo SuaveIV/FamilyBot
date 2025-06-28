@@ -71,6 +71,29 @@
 
     <!-- Main Content -->
     <div class="container mt-4">
+        <!-- Wishlist Filters -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-filter me-2"></i>Wishlist Filters
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label for="family-member-filter" class="form-label">Family Member</label>
+                                <select id="family-member-filter" class="form-select">
+                                    <option value="">All Members</option>
+                                    <!-- Populated by JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <!-- Wishlist Summary -->
         <div class="row mb-4">
             <div class="col-12">
@@ -129,9 +152,11 @@
         let currentPage = 1;
 
         document.addEventListener('DOMContentLoaded', function() {
+            loadFamilyMembers();
             loadWishlistSummary(currentPage);
             loadBotStatus(); // Load bot status on page load
             startAutoRefresh(); // Start auto-refresh for bot status
+            document.getElementById('family-member-filter').addEventListener('change', () => loadWishlistSummary(1));
         });
 
         // Load bot status (copied from dashboard.html)
@@ -179,9 +204,30 @@
             }
         });
 
-        async function loadWishlistSummary(page) {
+        async function loadFamilyMembers() {
             try {
-                const response = await fetch(`/api/wishlist?page=${page}&limit=${ITEMS_PER_PAGE}`);
+                const response = await fetch('/api/family-members');
+                const members = await response.json();
+                const filter = document.getElementById('family-member-filter');
+                members.forEach(member => {
+                    const option = document.createElement('option');
+                    option.value = member.steam_id;
+                    option.textContent = member.friendly_name;
+                    filter.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading family members:', error);
+            }
+        }
+
+        async function loadWishlistSummary(page) {
+            const familyMemberId = document.getElementById('family-member-filter').value;
+            let url = `/api/wishlist?page=${page}&limit=${ITEMS_PER_PAGE}`;
+            if (familyMemberId) {
+                url += `&family_member_id=${familyMemberId}`;
+            }
+            try {
+                const response = await fetch(url);
                 const data = await response.json();
                 const wishlist = data.items;
                 const totalItems = data.total_items;
@@ -219,7 +265,9 @@
             
             card.innerHTML = `
                 <div class="game-info">
-                    <div class="game-title">${item.game_name || 'Unknown Game'}</div>
+                    <a href="https://store.steampowered.com/app/${item.appid}" target="_blank" class="text-decoration-none">
+                        <div class="game-title">${item.game_name || 'Unknown Game'}</div>
+                    </a>
                     <div class="game-meta">
                         App ID: ${item.appid} | Steam ID: ${item.steam_id}
                     </div>

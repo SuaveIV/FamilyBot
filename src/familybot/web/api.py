@@ -232,29 +232,35 @@ async def get_family_library(limit: int = 50, conn=Depends(get_db)):
     return games
 
 @app.get("/api/wishlist")
-async def get_wishlist_summary(page: int = 1, limit: int = 20, conn=Depends(get_db)):
+async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id: Optional[str] = None, conn=Depends(get_db)):
     """Get paginated wishlist summary across all family members"""
     cursor = conn.cursor()
     offset = (page - 1) * limit
     
     try:
-        # Get total count
-        cursor.execute("""
-            SELECT COUNT(DISTINCT w.appid)
+        # Base query
+        base_query = """
             FROM wishlist_cache w
             WHERE w.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
-        """)
+        """
+        params = []
+        if family_member_id:
+            base_query += " AND w.steam_id = ?"
+            params.append(family_member_id)
+
+        # Get total count
+        cursor.execute(f"SELECT COUNT(DISTINCT w.appid) {base_query}", params)
         total_items = cursor.fetchone()[0]
 
         # Get paginated items
-        cursor.execute(f"""
+        query = f"""
             SELECT DISTINCT w.appid, w.steam_id, g.name, g.price_data
-            FROM wishlist_cache w
+            {base_query}
             LEFT JOIN game_details_cache g ON w.appid = g.appid
-            WHERE w.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
             ORDER BY g.name
             LIMIT {limit} OFFSET {offset}
-        """)
+        """
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         
         wishlist_items = []
