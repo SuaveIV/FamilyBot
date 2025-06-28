@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -25,6 +25,7 @@ from familybot.lib.plugin_admin_actions import (
     force_new_game_action,
     force_wishlist_action
 )
+from familybot.lib.logging_config import web_log_queue
 from familybot.web.models import (
     BotStatus, GameDetails, FamilyMember, LogEntry, CacheStats,
     CommandRequest, CommandResponse, ConfigData, WishlistItem, RecentActivity
@@ -509,26 +510,40 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
                     for line in lines:
                         if line.strip():
                             # Parse log line (simplified)
-                            parts = line.strip().split(' - ', 3)
-                            if len(parts) >= 3:
-                                timestamp_str = parts[0]
-                                log_level = parts[1]
-                                message = parts[2] if len(parts) == 3 else ' - '.join(parts[2:])
-                                
+                            import json
+                            try:
+                                log_data = json.loads(line)
+                                log_level = log_data.get("levelname")
                                 if level and log_level.upper() != level.upper():
                                     continue
                                 
-                                try:
-                                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                                except:
-                                    timestamp = datetime.utcnow()
-                                
                                 logs.append(LogEntry(
-                                    timestamp=timestamp,
+                                    timestamp=log_data.get("asctime"),
                                     level=log_level,
-                                    message=message,
-                                    module=log_file.stem
+                                    message=log_data.get("message"),
+                                    module=log_data.get("name")
                                 ))
+                            except json.JSONDecodeError:
+                                parts = line.strip().split(' - ', 3)
+                                if len(parts) >= 3:
+                                    timestamp_str = parts[0]
+                                    log_level = parts[1]
+                                    message = parts[2] if len(parts) == 3 else ' - '.join(parts[2:])
+                                    
+                                    if level and log_level.upper() != level.upper():
+                                        continue
+                                    
+                                    try:
+                                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                                    except:
+                                        timestamp = datetime.utcnow()
+                                    
+                                    logs.append(LogEntry(
+                                        timestamp=timestamp,
+                                        level=log_level,
+                                        message=message,
+                                        module=log_file.stem
+                                    ))
                 except Exception as e:
                     logger.error(f"Error reading log file {log_file}: {e}")
     except Exception as e:
@@ -537,6 +552,19 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
     # Sort by timestamp and limit
     logs.sort(key=lambda x: x.timestamp, reverse=True)
     return logs[:limit]
+
+@app.websocket("/ws/logs")
+async def websocket_logs(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            log_entry = web_log_queue.get()
+            await websocket.send_text(log_entry)
+            await asyncio.sleep(0.1)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await websocket.close()
 
 # Health check endpoint
 @app.get("/health")
