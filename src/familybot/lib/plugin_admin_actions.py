@@ -16,7 +16,7 @@ from familybot.config import (
     NEW_GAME_CHANNEL_ID, WISHLIST_CHANNEL_ID, FAMILY_STEAM_ID, FAMILY_USER_DICT,
     ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
 )
-from familybot.lib.family_utils import find_in_2d_list, format_message
+from familybot.lib.family_utils import find_in_2d_list, format_message, get_family_game_list_url
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 from familybot.lib.database import (
     get_db_connection, get_cached_game_details, cache_game_details,
@@ -129,9 +129,14 @@ async def _load_family_members_from_db() -> dict:
 
         cursor.execute("SELECT steam_id, friendly_name FROM family_members")
         for row in cursor.fetchall():
-            members[row["steam_id"]] = row["friendly_name"]
-        logger.debug(f"Loaded {len(members)} family members from database.")
-
+            steam_id = row["steam_id"]
+            friendly_name = row["friendly_name"]
+            # Basic validation for SteamID64: must be 17 digits and start with '7656119'
+            if isinstance(steam_id, str) and len(steam_id) == 17 and steam_id.startswith("7656119"):
+                members[steam_id] = friendly_name
+            else:
+                logger.warning(f"Database: Invalid SteamID '{steam_id}' found for user '{friendly_name}'. Skipping this entry.")
+        logger.debug(f"Loaded {len(members)} valid family members from database.")
     except sqlite3.Error as e:
         logger.error(f"Error reading family members from DB: {e}")
     finally:
@@ -175,7 +180,7 @@ async def force_new_game_action() -> Dict[str, Any]:
         else:
             # If not cached, fetch from API
             await _rate_limit_steam_api() # Apply rate limit before API call
-            url_family_list = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=1&include_played_free_games=1".format(STEAMWORKS_API_KEY, FAMILY_STEAM_ID)
+            url_family_list = get_family_game_list_url() # Use the correct URL for family shared apps
             answer = requests.get(url_family_list, timeout=15)
             games_json = await _handle_api_response("GetFamilySharedApps", answer)
             if not games_json: 

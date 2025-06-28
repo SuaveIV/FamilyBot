@@ -1210,7 +1210,7 @@ class steam_family(Extension):
             else:
                 # If not cached, fetch from API
                 await self._rate_limit_steam_api() # Apply rate limit before API call
-                url_family_list = get_family_game_list_url()
+                url_family_list = get_family_game_list_url() # Use the correct URL for family shared apps
                 answer = requests.get(url_family_list, timeout=15)
                 games_json = await self._handle_api_response("GetFamilySharedApps", answer)
                 if not games_json: return
@@ -1228,9 +1228,13 @@ class steam_family(Extension):
             game_owner_list = {}
             game_array = []
             for game in game_list:
+                # 'exclude_reason' 3 means the game is excluded from family sharing.
+                # We only want games that are part of the shared library.
                 if game.get("exclude_reason") != 3:
                     appid = str(game.get("appid"))
                     game_array.append(appid)
+                    # The 'owner_steamids' field contains a list of SteamIDs that own the game within the family group.
+                    # If there's only one owner, we can identify them.
                     if len(game.get("owner_steamids", [])) == 1:
                         game_owner_list[appid] = str(game["owner_steamids"][0])
 
