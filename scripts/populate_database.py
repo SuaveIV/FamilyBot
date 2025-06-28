@@ -166,6 +166,81 @@ class DatabasePopulator:
             logger.error(f"Unexpected error for {api_name}: {e}")
             return None
     
+    async def get_fallback_game_info(self, app_id: str) -> Optional[dict]:
+        """Get basic game info using multiple fallback strategies for games without store pages."""
+        try:
+            # Strategy 1: Try using the steam library for more comprehensive data
+            try:
+                from steam.webapi import WebAPI
+                if STEAMWORKS_API_KEY and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE":
+                    api = WebAPI(key=STEAMWORKS_API_KEY)
+                    
+                    # Try to get app info using the steam library
+                    try:
+                        # Get app list and search for our app using the correct interface
+                        app_list = api.call('ISteamApps.GetAppList')
+                        if app_list and 'applist' in app_list and 'apps' in app_list['applist']:
+                            for app in app_list['applist']['apps']:
+                                if str(app.get('appid')) == app_id:
+                                    logger.debug(f"Found fallback name via steam library for app {app_id}: {app['name']}")
+                                    return {
+                                        'name': app['name'],
+                                        'type': 'game',
+                                        'is_free': False,
+                                        'categories': [],
+                                        'price_overview': None
+                                    }
+                    except Exception as e:
+                        logger.debug(f"Steam library app list lookup failed for {app_id}: {e}")
+            except ImportError:
+                logger.debug("Steam library not available for fallback lookup")
+            except Exception as e:
+                logger.debug(f"Steam library fallback failed for {app_id}: {e}")
+            
+            # Strategy 2: Try Steam Web API directly (original approach)
+            if STEAMWORKS_API_KEY and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE":
+                app_list_url = f"https://api.steampowered.com/ISteamApps/GetAppList/v2/"
+                
+                response = await self.make_request_with_retry(app_list_url, api_type="steam")
+                if response is not None:
+                    app_list_data = self.handle_api_response(f"GetAppList (fallback for {app_id})", response)
+                    if app_list_data:
+                        # Search for the app in the app list
+                        apps = app_list_data.get("applist", {}).get("apps", [])
+                        for app in apps:
+                            if str(app.get("appid")) == app_id:
+                                if app.get("name"):
+                                    logger.debug(f"Found fallback name via Web API for app {app_id}: {app['name']}")
+                                    return {
+                                        'name': app['name'],
+                                        'type': 'game',
+                                        'is_free': False,
+                                        'categories': [],
+                                        'price_overview': None
+                                    }
+                                break
+            
+            # Strategy 3: Last resort - create minimal entry with app ID
+            logger.debug(f"No fallback info found for app {app_id}, using minimal entry")
+            return {
+                'name': f"App {app_id}",
+                'type': 'unknown',
+                'is_free': False,
+                'categories': [],
+                'price_overview': None
+            }
+                
+        except Exception as e:
+            logger.error(f"Error in fallback lookup for app {app_id}: {e}")
+            # Return minimal entry as last resort
+            return {
+                'name': f"App {app_id}",
+                'type': 'unknown',
+                'is_free': False,
+                'categories': [],
+                'price_overview': None
+            }
+    
     def load_family_members(self) -> Dict[str, str]:
         """Load family members from database or config."""
         members = {}
@@ -539,9 +614,14 @@ class DatabasePopulator:
                 
                 game_data = game_info.get(str(app_id), {}).get("data")
                 if not game_data:
+                    # Try to get basic game info using Steam Web API as fallback
+                    fallback_data = await self.get_fallback_game_info(app_id)
+                    if fallback_data:
+                        cache_game_details(app_id, fallback_data, permanent=True)
+                        total_cached += 1
                     continue
                 
-                # Cache the game details
+                # Cache the full game details
                 cache_game_details(app_id, game_data, permanent=True)
                 total_cached += 1
                 

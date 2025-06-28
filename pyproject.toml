@@ -2,27 +2,28 @@
 
 [project]
 name = "familybot"
-version = "0.1.0"
+version = "1.0.0"
 description = "Family Bot is a discord bot mainly made to get the new games that are added to the Steam Family library."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "discord-py-interactions",
-    "requests",
+    "discord-py-interactions==5.13.0",
+    "requests==2.32.3",
     "selenium==4.24.0",
     "webdriver-manager==4.0.1",
     "websockets==12.0",
     "PyYAML==6.0.2",
-    "tqdm",
-    "httpx>=0.28.1",
-    "playwright>=1.53.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "jinja2>=3.1.0",
-    "python-multipart>=0.0.6",
-    "pydantic>=2.0.0",
-    "coloredlogs",
-    "python-json-logger",
+    "tqdm==4.66.5",
+    "httpx==0.28.1",
+    "playwright==1.53.0",
+    "fastapi==0.115.6",
+    "uvicorn==0.32.1",
+    "jinja2==3.1.4",
+    "python-multipart==0.0.12",
+    "pydantic==2.10.3",
+    "coloredlogs==15.0.1",
+    "python-json-logger==2.0.7",
+    "steam==1.4.4",
 ]
 
 [project.scripts]
