@@ -151,9 +151,14 @@ class steam_family(Extension):
 
             cursor.execute("SELECT steam_id, friendly_name FROM family_members")
             for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-            logger.debug(f"Loaded {len(members)} family members from database.")
-
+                steam_id = row["steam_id"]
+                friendly_name = row["friendly_name"]
+                # Basic validation for SteamID64: must be 17 digits and start with '7656119'
+                if isinstance(steam_id, str) and len(steam_id) == 17 and steam_id.startswith("7656119"):
+                    members[steam_id] = friendly_name
+                else:
+                    logger.warning(f"Database: Invalid SteamID '{steam_id}' found for user '{friendly_name}'. Skipping this entry.")
+            logger.debug(f"Loaded {len(members)} valid family members from database.")
         except sqlite3.Error as e:
             logger.error(f"Error reading family members from DB: {e}")
             await self._send_admin_dm(f"Error reading family members from DB: {e}")
