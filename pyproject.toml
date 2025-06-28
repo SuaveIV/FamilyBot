@@ -21,6 +21,8 @@ dependencies = [
     "jinja2>=3.1.0",
     "python-multipart>=0.0.6",
     "pydantic>=2.0.0",
+    "coloredlogs",
+    "python-json-logger",
 ]
 
 [project.scripts]
