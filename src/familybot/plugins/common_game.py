@@ -15,8 +15,9 @@ from familybot.lib.database import (
     get_cached_discord_user, cache_discord_user, cleanup_expired_cache,
     get_cached_game_details, cache_game_details
 )
-from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
+from familybot.lib.types import FamilyBotClient, FamilyBotClientProtocol, DISCORD_MESSAGE_LIMIT
 from familybot.lib.logging_config import get_logger, log_private_profile_detection, log_api_error
+from typing import cast
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)
@@ -59,7 +60,7 @@ def _migrate_users_to_db(conn: sqlite3.Connection):
 
 class common_games(Extension):
     def __init__(self, bot: FamilyBotClient):
-        self.bot: FamilyBotClient = bot  # Explicit type annotation for the bot attribute
+        self.bot: FamilyBotClientProtocol = cast(FamilyBotClientProtocol, bot)  # Cast to protocol for type checking
         logger.info("common Games Plugin loaded")
 
     async def _send_admin_dm(self, message: str) -> None:
@@ -115,10 +116,21 @@ class common_games(Extension):
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
+            
+            # Insert into 'users' table
             cursor.execute("INSERT INTO users (discord_id, steam_id) VALUES (?, ?)", (discord_id, steam_id))
+            
+            # Also insert into 'family_members' table for Web UI display
+            # Use ctx.author.display_name for friendly_name
+            friendly_name = ctx.author.display_name
+            cursor.execute(
+                "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                (steam_id, friendly_name, discord_id)
+            )
+            
             conn.commit()
-            await ctx.send("You have been successfully registered!")
-            logger.info(f"Registered Discord ID {discord_id} with Steam ID {steam_id} in DB.")
+            await ctx.send(f"You have been successfully registered as '{friendly_name}'!")
+            logger.info(f"Registered Discord ID {discord_id} with Steam ID {steam_id} in 'users' and 'family_members' DB tables.")
         except sqlite3.IntegrityError: # Specific error for UNIQUE constraint violation
             logger.warning(f"Attempted to register existing Discord ID {discord_id} or Steam ID {steam_id} (IntegrityError).")
             await ctx.send("An error occurred: This Discord ID or Steam ID might already be registered. Try `!list_users`.")

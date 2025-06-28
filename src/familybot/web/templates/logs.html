@@ -433,13 +433,7 @@
                 }
             }, 5000);
         }
-        
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
-        });
     </script>
 </body>
 </html>
+

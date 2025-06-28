@@ -15,54 +15,7 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">
-                <i class="fas fa-robot me-2"></i>FamilyBot
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/">
-                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/logs">
-                            <i class="fas fa-file-alt me-1"></i>Logs
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/config">
-                            <i class="fas fa-cog me-1"></i>Config
-                        </a>
-                    </li>
-                </ul>
-                
-                <!-- Theme Switcher Dropdown -->
-                <div class="dropdown me-3" id="theme-dropdown">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-palette me-1"></i>Theme
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <!-- Populated by JavaScript -->
-                    </ul>
-                </div>
-                
-                <!-- Status indicator -->
-                <div id="bot-status-indicator" class="status-indicator status-offline">
-                    <span class="status-dot"></span>
-                    <span>Offline</span>
-                </div>
-            </div>
-        </div>
-    </nav>
+    {% include 'navbar.html' %}
 
     <!-- Main Content -->
     <div class="container mt-4">
@@ -168,23 +121,6 @@
             </div>
         </div>
 
-        <!-- Wishlist Summary -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-heart me-2"></i>Wishlist Summary
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="wishlist-summary" class="game-list">
-                            <!-- Populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Loading Modal -->
@@ -213,56 +149,23 @@
     <script src="{{ url_for('static', path='js/theme_switcher.js') }}"></script>
     
     <!-- Dashboard JavaScript -->
+    <script src="{{ url_for('static', path='js/bot_status.js') }}"></script>
     <script>
-        // Global variables
-        let refreshInterval;
-        
-        // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             loadDashboardData();
-            startAutoRefresh();
         });
         
         // Load all dashboard data
         async function loadDashboardData() {
             try {
                 await Promise.all([
-                    loadBotStatus(),
                     loadCacheStats(),
                     loadRecentGames(),
                     loadFamilyMembers(),
-                    loadWishlistSummary()
                 ]);
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
                 showAlert('Error loading dashboard data', 'danger');
-            }
-        }
-        
-        // Load bot status
-        async function loadBotStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const status = await response.json();
-                
-                // Update status indicator
-                const indicator = document.getElementById('bot-status-indicator');
-                if (status.online) {
-                    indicator.className = 'status-indicator status-online';
-                    indicator.innerHTML = '<span class="status-dot"></span><span>Online</span>';
-                } else {
-                    indicator.className = 'status-indicator status-offline';
-                    indicator.innerHTML = '<span class="status-dot"></span><span>Offline</span>';
-                }
-                
-                // Update status metrics
-                document.getElementById('bot-online-status').textContent = status.online ? 'Online' : 'Offline';
-                document.getElementById('bot-uptime').textContent = status.uptime || '-';
-                document.getElementById('discord-status').textContent = status.discord_connected ? 'Connected' : 'Disconnected';
-                document.getElementById('websocket-status').textContent = status.websocket_active ? 'Active' : 'Inactive';
-                
-            } catch (error) {
-                console.error('Error loading bot status:', error);
             }
         }
         
@@ -368,30 +271,6 @@
             }
         }
         
-        // Load wishlist summary
-        async function loadWishlistSummary() {
-            try {
-                const response = await fetch('/api/wishlist?limit=10');
-                const wishlist = await response.json();
-                
-                const container = document.getElementById('wishlist-summary');
-                container.innerHTML = '';
-                
-                if (wishlist.length === 0) {
-                    container.innerHTML = '<p class="text-muted">No wishlist items found.</p>';
-                    return;
-                }
-                
-                wishlist.forEach(item => {
-                    const gameCard = createWishlistCard(item);
-                    container.appendChild(gameCard);
-                });
-                
-            } catch (error) {
-                console.error('Error loading wishlist:', error);
-            }
-        }
-        
         // Create game card element
         function createGameCard(game) {
             const card = document.createElement('div');
@@ -410,31 +289,6 @@
                     </div>
                     <div class="game-badges">
                         ${badges.join(' ')}
-                    </div>
-                </div>
-            `;
-            
-            return card;
-        }
-        
-        // Create wishlist card element
-        function createWishlistCard(item) {
-            const card = document.createElement('div');
-            card.className = 'game-card';
-            
-            let priceInfo = '';
-            if (item.price_data) {
-                priceInfo = `<span class="badge bg-primary">$${(item.price_data.final / 100).toFixed(2)}</span>`;
-            }
-            
-            card.innerHTML = `
-                <div class="game-info">
-                    <div class="game-title">${item.game_name || 'Unknown Game'}</div>
-                    <div class="game-meta">
-                        App ID: ${item.appid} | Steam ID: ${item.steam_id}
-                    </div>
-                    <div class="game-badges">
-                        ${priceInfo}
                     </div>
                 </div>
             `;
@@ -471,19 +325,6 @@
             }
         }
         
-        // Refresh status
-        async function refreshStatus() {
-            await loadBotStatus();
-            showAlert('Status refreshed', 'info');
-        }
-        
-        // Start auto-refresh
-        function startAutoRefresh() {
-            refreshInterval = setInterval(async () => {
-                await loadBotStatus();
-            }, 30000); // Refresh every 30 seconds
-        }
-        
         // Show loading modal
         function showLoading(show) {
             const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
@@ -518,13 +359,6 @@
                 }
             }, 5000);
         }
-        
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-            }
-        });
     </script>
 </body>
 </html>

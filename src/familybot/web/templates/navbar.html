@@ -1,0 +1,53 @@
+<!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="fas fa-robot me-2"></i>FamilyBot
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'wishlist' %}active{% endif %}" href="/wishlist">
+                            <i class="fas fa-heart me-1"></i>Wishlist
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'logs' %}active{% endif %}" href="/logs">
+                            <i class="fas fa-file-alt me-1"></i>Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'config' %}active{% endif %}" href="/config">
+                            <i class="fas fa-cog me-1"></i>Config
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- Theme Switcher Dropdown -->
+                <div class="dropdown me-3" id="theme-dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-palette me-1"></i>Theme
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <!-- Populated by JavaScript -->
+                    </ul>
+                </div>
+                
+                <!-- Status indicator -->
+                <div id="bot-status-indicator" class="status-indicator status-offline">
+                    <span class="status-dot"></span>
+                    <span>Offline</span>
+                </div>
+            </div>
+        </div>
+    </nav>

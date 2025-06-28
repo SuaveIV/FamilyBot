@@ -214,6 +214,44 @@ def init_db():
         if conn:
             conn.close()
 
+def sync_family_members_from_config():
+    """Synchronizes family members from config.yml into the family_members database table.
+    This ensures that members defined in the configuration are always present in the DB."""
+    conn = None
+    try:
+        from familybot.config import FAMILY_USER_DICT
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        for steam_id, friendly_name in FAMILY_USER_DICT.items():
+            # Check if the member already exists
+            cursor.execute("SELECT friendly_name FROM family_members WHERE steam_id = ?", (steam_id,))
+            existing_member = cursor.fetchone()
+            
+            if existing_member:
+                # Update friendly_name if it has changed
+                if existing_member['friendly_name'] != friendly_name:
+                    cursor.execute(
+                        "UPDATE family_members SET friendly_name = ? WHERE steam_id = ?",
+                        (friendly_name, steam_id)
+                    )
+                    logger.info(f"Updated friendly name for Steam ID {steam_id} to '{friendly_name}'.")
+            else:
+                # Insert new member
+                cursor.execute(
+                    "INSERT INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                    (steam_id, friendly_name, None) # Discord ID can be added later
+                )
+                logger.info(f"Added new family member: '{friendly_name}' (Steam ID: {steam_id}).")
+        
+        conn.commit()
+        logger.info("Family members synchronized from config.yml to database.")
+    except Exception as e:
+        logger.error(f"Error synchronizing family members from config: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 
 # === CACHE HELPER FUNCTIONS ===
 

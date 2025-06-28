@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyBot Wishlist</title>
+    
+    <!-- Bootstrap/Bootswatch CSS (dynamically loaded) -->
+    <link id="theme-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="fas fa-robot me-2"></i>FamilyBot
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/wishlist">
+                            <i class="fas fa-heart me-1"></i>Wishlist
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logs">
+                            <i class="fas fa-file-alt me-1"></i>Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/config">
+                            <i class="fas fa-cog me-1"></i>Config
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- Theme Switcher Dropdown -->
+                <div class="dropdown me-3" id="theme-dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-palette me-1"></i>Theme
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <!-- Populated by JavaScript -->
+                    </ul>
+                </div>
+                
+                <!-- Status indicator -->
+                <div id="bot-status-indicator" class="status-indicator status-offline">
+                    <span class="status-dot"></span>
+                    <span>Offline</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Wishlist Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-heart me-2"></i>Wishlist
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="wishlist-summary" class="game-list">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                        <nav aria-label="Wishlist pagination">
+                            <ul class="pagination justify-content-center" id="wishlist-pagination">
+                                <!-- Pagination links will be populated here -->
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div>Processing...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;">
+        <!-- Alerts will be inserted here -->
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Theme Switcher -->
+    <script src="{{ url_for('static', path='js/theme_switcher.js') }}"></script>
+    
+    <!-- Wishlist JavaScript -->
+    <script>
+        // Global variables
+        let refreshInterval;
+
+        const ITEMS_PER_PAGE = 20; // Define items per page for pagination
+        let currentPage = 1;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadWishlistSummary(currentPage);
+            loadBotStatus(); // Load bot status on page load
+            startAutoRefresh(); // Start auto-refresh for bot status
+        });
+
+        // Load bot status (copied from dashboard.html)
+        async function loadBotStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                // Update status indicator
+                const indicator = document.getElementById('bot-status-indicator');
+                if (indicator) { // Check if indicator exists on the page
+                    if (status.online) {
+                        indicator.className = 'status-indicator status-online';
+                        indicator.innerHTML = '<span class="status-dot"></span><span>Online</span>';
+                    } else {
+                        indicator.className = 'status-indicator status-offline';
+                        indicator.innerHTML = '<span class="status-dot"></span><span>Offline</span>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading bot status:', error);
+            }
+        }
+
+        // Refresh status (copied from dashboard.html)
+        async function refreshStatus() {
+            await loadBotStatus();
+            showAlert('Status refreshed', 'info');
+        }
+
+        // Start auto-refresh (copied from dashboard.html)
+        function startAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval); // Clear any existing interval
+            }
+            refreshInterval = setInterval(async () => {
+                await loadBotStatus();
+            }, 30000); // Refresh every 30 seconds
+        }
+
+        // Cleanup on page unload (copied from dashboard.html)
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+
+        async function loadWishlistSummary(page) {
+            try {
+                const response = await fetch(`/api/wishlist?page=${page}&limit=${ITEMS_PER_PAGE}`);
+                const data = await response.json();
+                const wishlist = data.items;
+                const totalItems = data.total_items;
+
+                const container = document.getElementById('wishlist-summary');
+                container.innerHTML = '';
+                
+                if (wishlist.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No wishlist items found.</p>';
+                    return;
+                }
+                
+                wishlist.forEach(item => {
+                    const gameCard = createWishlistCard(item);
+                    container.appendChild(gameCard);
+                });
+
+                updatePagination(totalItems, page, 'wishlist-pagination', loadWishlistSummary);
+                
+            } catch (error) {
+                console.error('Error loading wishlist:', error);
+                showAlert('Error loading wishlist data', 'danger');
+            }
+        }
+        
+        // Create wishlist card element (reused from dashboard.html)
+        function createWishlistCard(item) {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+            
+            let priceInfo = '';
+            if (item.price_data) {
+                priceInfo = `<span class="badge bg-primary">$${(item.price_data.final / 100).toFixed(2)}</span>`;
+            }
+            
+            card.innerHTML = `
+                <div class="game-info">
+                    <div class="game-title">${item.game_name || 'Unknown Game'}</div>
+                    <div class="game-meta">
+                        App ID: ${item.appid} | Steam ID: ${item.steam_id}
+                    </div>
+                    <div class="game-badges">
+                        ${priceInfo}
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        function updatePagination(totalItems, currentPage, paginationId, loadFunction) {
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+            const paginationContainer = document.getElementById(paginationId);
+            paginationContainer.innerHTML = '';
+
+            if (totalPages <= 1) {
+                return; // No pagination needed for 1 or fewer pages
+            }
+
+            // First page button
+            const firstPageBtn = document.createElement('li');
+            firstPageBtn.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            firstPageBtn.innerHTML = `<a class="page-link" href="#" aria-label="First"><span aria-hidden="true">&laquo;&laquo;</span></a>`;
+            firstPageBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (currentPage > 1) {
+                    loadFunction(1);
+                }
+            });
+            paginationContainer.appendChild(firstPageBtn);
+
+            // Previous button
+            const prevItem = document.createElement('li');
+            prevItem.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            prevItem.innerHTML = `<a class="page-link" href="#" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a>`;
+            prevItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (currentPage > 1) {
+                    loadFunction(currentPage - 1);
+                }
+            });
+            paginationContainer.appendChild(prevItem);
+
+            // Page numbers
+            const maxPagesToShow = 5; // Maximum number of page links to display
+            let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+            let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+            if (endPage - startPage + 1 < maxPagesToShow) {
+                startPage = Math.max(1, endPage - maxPagesToShow + 1);
+            }
+
+            if (startPage > 1) {
+                const firstPageItem = document.createElement('li');
+                firstPageItem.className = 'page-item';
+                firstPageItem.innerHTML = `<a class="page-link" href="#">1</a>`;
+                firstPageItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loadFunction(1);
+                });
+                paginationContainer.appendChild(firstPageItem);
+                if (startPage > 2) {
+                    const ellipsisItem = document.createElement('li');
+                    ellipsisItem.className = 'page-item disabled';
+                    ellipsisItem.innerHTML = `<span class="page-link">...</span>`;
+                    paginationContainer.appendChild(ellipsisItem);
+                }
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageItem = document.createElement('li');
+                pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                pageItem.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+                pageItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loadFunction(i);
+                });
+                paginationContainer.appendChild(pageItem);
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const ellipsisItem = document.createElement('li');
+                    ellipsisItem.className = 'page-item disabled';
+                    ellipsisItem.innerHTML = `<span class="page-link">...</span>`;
+                    paginationContainer.appendChild(ellipsisItem);
+                }
+                const lastPageItem = document.createElement('li');
+                lastPageItem.className = 'page-item';
+                lastPageItem.innerHTML = `<a class="page-link" href="#">${totalPages}</a>`;
+                lastPageItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loadFunction(totalPages);
+                });
+                paginationContainer.appendChild(lastPageItem);
+            }
+
+            // Next button
+            const nextItem = document.createElement('li');
+            nextItem.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            nextItem.innerHTML = `<a class="page-link" href="#" aria-label="Next"><span aria-hidden="true">&raquo;</span></a>`;
+            nextItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (currentPage < totalPages) {
+                    loadFunction(currentPage + 1);
+                }
+            });
+            paginationContainer.appendChild(nextItem);
+
+            // Last page button
+            const lastPageBtn = document.createElement('li');
+            lastPageBtn.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            lastPageBtn.innerHTML = `<a class="page-link" href="#" aria-label="Last"><span aria-hidden="true">&raquo;&raquo;</span></a>`;
+            lastPageBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (currentPage < totalPages) {
+                    loadFunction(totalPages);
+                }
+            });
+            paginationContainer.appendChild(lastPageBtn);
+        }
+
+        // Show loading modal (reused from dashboard.html)
+        function showLoading(show) {
+            const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            if (show) {
+                modal.show();
+            } else {
+                modal.hide();
+            }
+        }
+        
+        // Show alert (reused from dashboard.html)
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alert-container');
+            const alertId = 'alert-' + Date.now();
+            
+            const alert = document.createElement('div');
+            alert.id = alertId;
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            container.appendChild(alert);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const alertElement = document.getElementById(alertId);
+                if (alertElement) {
+                    const bsAlert = new bootstrap.Alert(alertElement);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

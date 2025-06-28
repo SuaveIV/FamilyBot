@@ -90,17 +90,22 @@ def get_db():
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Main dashboard page"""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse("dashboard.html", {"request": request, "active_page": "dashboard"})
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
     """Logs viewer page"""
-    return templates.TemplateResponse("logs.html", {"request": request})
+    return templates.TemplateResponse("logs.html", {"request": request, "active_page": "logs"})
 
 @app.get("/config", response_class=HTMLResponse)
 async def config_page(request: Request):
     """Configuration page"""
-    return templates.TemplateResponse("config.html", {"request": request})
+    return templates.TemplateResponse("config.html", {"request": request, "active_page": "config"})
+
+@app.get("/wishlist", response_class=HTMLResponse)
+async def wishlist_page(request: Request):
+    """Wishlist page"""
+    return templates.TemplateResponse("wishlist.html", {"request": request, "active_page": "wishlist"})
 
 @app.get("/api/status", response_model=BotStatus)
 async def get_bot_status():
@@ -192,18 +197,29 @@ async def get_family_library(limit: int = 50, conn=Depends(get_db)):
     
     return games
 
-@app.get("/api/wishlist", response_model=List[WishlistItem])
-async def get_wishlist_summary(conn=Depends(get_db)):
-    """Get wishlist summary across all family members"""
+@app.get("/api/wishlist")
+async def get_wishlist_summary(page: int = 1, limit: int = 20, conn=Depends(get_db)):
+    """Get paginated wishlist summary across all family members"""
     cursor = conn.cursor()
+    offset = (page - 1) * limit
+    
     try:
+        # Get total count
         cursor.execute("""
+            SELECT COUNT(DISTINCT w.appid)
+            FROM wishlist_cache w
+            WHERE w.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
+        """)
+        total_items = cursor.fetchone()[0]
+
+        # Get paginated items
+        cursor.execute(f"""
             SELECT DISTINCT w.appid, w.steam_id, g.name, g.price_data
             FROM wishlist_cache w
             LEFT JOIN game_details_cache g ON w.appid = g.appid
             WHERE w.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
             ORDER BY g.name
-            LIMIT 100
+            LIMIT {limit} OFFSET {offset}
         """)
         rows = cursor.fetchall()
         
@@ -224,10 +240,10 @@ async def get_wishlist_summary(conn=Depends(get_db)):
                 price_data=price_data
             ))
         
-        return wishlist_items
+        return {"items": wishlist_items, "total_items": total_items}
     except sqlite3.OperationalError:
         # Table doesn't exist yet
-        return []
+        return {"items": [], "total_items": 0}
 
 @app.get("/api/recent-games", response_model=List[GameDetails])
 async def get_recent_games(limit: int = 10, conn=Depends(get_db)):

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 # Import modules from your project's new package structure
 from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID, WEB_UI_ENABLED, WEB_UI_HOST, WEB_UI_PORT
 from familybot.WebSocketServer import start_websocket_server_task
-from familybot.lib.database import init_db, get_db_connection
+from familybot.lib.database import init_db, get_db_connection, sync_family_members_from_config
 from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
 from familybot.lib.utils import truncate_message_list, split_message
 
@@ -179,9 +179,13 @@ async def run_application():
     try:
         init_db()
         logger.info("Database initialized successfully.")
+        
+        # Synchronize family members from config.yml to the database
+        sync_family_members_from_config()
+        logger.info("Family members synchronized from config.yml.")
     except Exception as e:
-        logger.critical(f"Failed to initialize database: {e}", exc_info=True)
-        await send_log_dm(f"CRITICAL ERROR: Database failed to initialize: {e}")
+        logger.critical(f"Failed to initialize database or sync family members: {e}", exc_info=True)
+        await send_log_dm(f"CRITICAL ERROR: Database failed to initialize or sync family members: {e}")
         sys.exit(1)
 
     # Start the WebSocket server as an asyncio task
