@@ -70,17 +70,29 @@ The behavior is controlled by `.pre-commit-config.yaml`:
 repos:
   - repo: local
     hooks:
+      - id: pylint
+        name: Pylint
+        entry: uv run pylint
+        language: system
+        types: [python]
+        files: ^(src/|scripts/).*\.py$
+        args: [--rcfile=.pylintrc]
+      
       - id: version-bump
         name: Auto-bump version
         entry: uv run python scripts/bump_version.py patch
         language: system
         stages: [pre-commit]
         pass_filenames: false
-        always_run: true
+        always_run: false
         verbose: true
 ```
 
-**Important**: The configuration uses `uv run python` to ensure the script runs in the correct Python environment managed by uv.
+**Important**:
+
+- The configuration uses `uv run` to ensure scripts run in the correct Python environment managed by uv
+- Pylint runs first - if it fails, the version bump will not occur
+- This ensures code quality is maintained before version increments
 
 ## Usage
 
@@ -127,6 +139,20 @@ To test all pre-commit hooks without making a commit:
 ```bash
 pre-commit run --all-files
 ```
+
+### Manual Linting
+
+To run pylint manually on the codebase:
+
+```bash
+# Using the dedicated lint script
+uv run python scripts/lint.py
+
+# Or run pylint directly
+uv run pylint src/ scripts/ --rcfile=.pylintrc
+```
+
+**Note**: When pylint finds issues, a detailed log file is automatically created in `logs/scripts/` with a timestamp (e.g., `pylint_errors_20250629_194238.log`). This log contains the full pylint output for later review and debugging.
 
 ## Benefits
 

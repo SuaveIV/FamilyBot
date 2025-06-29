@@ -35,6 +35,7 @@ familybot-test = "scripts.test_token_plugin:main"
 familybot-populate = "scripts.populate_database:main"
 familybot-inspect-db = "inspect_db:inspect_database"
 familybot-setup-precommit = "scripts.setup_precommit:main"
+familybot-lint = "scripts.lint:main"
 
 [tool.setuptools]
 # This tells setuptools to look for your package(s) inside the 'src' directory.

@@ -4,11 +4,19 @@
 repos:
   - repo: local
     hooks:
+      - id: pylint
+        name: Pylint
+        entry: uv run pylint
+        language: system
+        types: [python]
+        files: ^(src/|scripts/).*\.py$
+        args: [--rcfile=.pylintrc]
+      
       - id: version-bump
         name: Auto-bump version
         entry: uv run python scripts/bump_version.py patch
         language: system
         stages: [pre-commit]
         pass_filenames: false
-        always_run: true
+        always_run: false
         verbose: true
