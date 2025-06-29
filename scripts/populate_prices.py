@@ -424,15 +424,28 @@ class PricePopulator:
             
             search_response = self.make_request_with_retry(search_url, method="GET", api_type="itad")
             if search_response is None:
+                logger.debug(f"ITAD search request failed for {game_name}")
                 return "error"
             
             search_data = self.handle_api_response(f"ITAD Search ({game_name})", search_response)
-            if not search_data or len(search_data) == 0:
+            if search_data is None:
+                logger.debug(f"ITAD search response parsing failed for {game_name}")
+                return "error"
+            
+            # Check if search_data is a list and has results
+            if not isinstance(search_data, list) or len(search_data) == 0:
+                logger.debug(f"ITAD search returned no results for {game_name}")
                 return "not_found"
             
             # Take the first match (most relevant)
-            game_id = search_data[0].get('id')
+            first_result = search_data[0]
+            if not isinstance(first_result, dict):
+                logger.debug(f"ITAD search result format unexpected for {game_name}")
+                return "not_found"
+            
+            game_id = first_result.get('id')
             if not game_id:
+                logger.debug(f"ITAD search result missing game ID for {game_name}")
                 return "not_found"
             
             # Now get price data using the found game ID with games/prices/v3
@@ -440,23 +453,43 @@ class PricePopulator:
             prices_response = self.make_request_with_retry(prices_url, method="POST", json_data=[game_id], api_type="itad")
             
             if prices_response is None:
+                logger.debug(f"ITAD prices request failed for {game_name} (ID: {game_id})")
                 return "error"
             
             prices_data = self.handle_api_response(f"ITAD Prices ({game_name})", prices_response)
+            if prices_data is None:
+                logger.debug(f"ITAD prices response parsing failed for {game_name}")
+                return "error"
             
-            if prices_data and len(prices_data) > 0 and prices_data[0].get("historyLow"):
-                history_low = prices_data[0]["historyLow"]["all"]
-                
-                # Cache with enhanced metadata
-                cache_itad_price_enhanced(app_id, {
-                    'lowest_price': str(history_low["amount"]), 
-                    'lowest_price_formatted': f"${history_low['amount']}", 
-                    'shop_name': "Historical Low (All Stores)"
-                }, lookup_method='name_search', steam_game_name=game_name, permanent=True)
-                
-                return "cached"
-            else:
+            # Check if prices_data is a list and has results
+            if not isinstance(prices_data, list) or len(prices_data) == 0:
+                logger.debug(f"ITAD prices returned no data for {game_name}")
                 return "not_found"
+            
+            first_price_result = prices_data[0]
+            if not isinstance(first_price_result, dict):
+                logger.debug(f"ITAD prices result format unexpected for {game_name}")
+                return "not_found"
+            
+            history_low_data = first_price_result.get("historyLow")
+            if not history_low_data or not isinstance(history_low_data, dict):
+                logger.debug(f"ITAD prices missing historyLow data for {game_name}")
+                return "not_found"
+            
+            history_low = history_low_data.get("all")
+            if not history_low or not isinstance(history_low, dict):
+                logger.debug(f"ITAD prices missing historyLow.all data for {game_name}")
+                return "not_found"
+            
+            # Cache with enhanced metadata
+            cache_itad_price_enhanced(app_id, {
+                'lowest_price': str(history_low["amount"]), 
+                'lowest_price_formatted': f"${history_low['amount']}", 
+                'shop_name': "Historical Low (All Stores)"
+            }, lookup_method='name_search', steam_game_name=game_name, permanent=True)
+            
+            logger.debug(f"ITAD name search successful for {game_name}: ${history_low['amount']}")
+            return "cached"
                 
         except Exception as e:
             logger.error(f"ITAD name search failed for {game_name}: {e}")
