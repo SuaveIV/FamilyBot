@@ -535,6 +535,47 @@ def cache_itad_price(appid: str, price_data: dict, permanent: bool = False, cach
         if conn:
             conn.close()
 
+def cache_itad_price_enhanced(appid: str, price_data: dict, lookup_method: str = 'appid', steam_game_name: Optional[str] = None, permanent: bool = True, cache_hours: int = 6):
+    """Enhanced ITAD price caching with lookup method tracking for Phase 2."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        from datetime import datetime, timedelta
+        
+        now = datetime.utcnow()
+        if permanent:
+            expires_at_str = None
+            permanent_val = 1
+        else:
+            expires_at = now + timedelta(hours=cache_hours)
+            expires_at_str = expires_at.isoformat() + 'Z'
+            permanent_val = 0
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO itad_price_cache 
+            (appid, lowest_price, lowest_price_formatted, shop_name, lookup_method, steam_game_name, cached_at, expires_at, permanent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            appid,
+            price_data.get('lowest_price'),
+            price_data.get('lowest_price_formatted'),
+            price_data.get('shop_name'),
+            lookup_method,
+            steam_game_name,
+            now.isoformat() + 'Z',
+            expires_at_str,
+            permanent_val
+        ))
+        conn.commit()
+        cache_type = "permanently" if permanent else f"for {cache_hours} hours"
+        logger.debug(f"Cached ITAD price for {appid} {cache_type} (method: {lookup_method}, name: {steam_game_name})")
+    except Exception as e:
+        logger.error(f"Error caching enhanced ITAD price for {appid}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 
 def get_cached_wishlist(steam_id: str):
     """Get cached wishlist data if not expired, returns None if not found or expired."""
@@ -800,6 +841,42 @@ def migrate_database_phase1():
         
     except Exception as e:
         logger.error(f"Phase 1 database migration failed: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_database_phase2():
+    """Add ITAD lookup method tracking columns to itad_price_cache table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if columns already exist
+        cursor.execute("PRAGMA table_info(itad_price_cache)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        migrations_needed = []
+        if 'lookup_method' not in columns:
+            migrations_needed.append(('lookup_method', "TEXT DEFAULT 'appid'"))
+        if 'steam_game_name' not in columns:
+            migrations_needed.append(('steam_game_name', "TEXT"))
+        
+        for column_name, column_def in migrations_needed:
+            cursor.execute(f"ALTER TABLE itad_price_cache ADD COLUMN {column_name} {column_def}")
+            logger.info(f"Phase 2 database migration: Added {column_name} column to itad_price_cache")
+        
+        if migrations_needed:
+            # Update existing entries to have 'appid' as default lookup method
+            cursor.execute("UPDATE itad_price_cache SET lookup_method = 'appid' WHERE lookup_method IS NULL")
+            conn.commit()
+            logger.info("Phase 2 database migration completed: Added ITAD lookup method tracking columns")
+        else:
+            logger.info("Phase 2 database migration skipped: All columns already exist")
+        
+    except Exception as e:
+        logger.error(f"Phase 2 database migration failed: {e}")
         raise
     finally:
         if conn:

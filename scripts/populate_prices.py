@@ -23,7 +23,8 @@ from familybot.config import STEAMWORKS_API_KEY, FAMILY_USER_DICT, ITAD_API_KEY
 from familybot.lib.database import (
     init_db, get_db_connection, get_cached_game_details, cache_game_details,
     get_cached_wishlist, cache_wishlist, get_cached_itad_price, cache_itad_price,
-    cache_game_details_with_source, migrate_database_phase1
+    cache_game_details_with_source, migrate_database_phase1, migrate_database_phase2,
+    cache_itad_price_enhanced
 )
 from familybot.lib.family_utils import find_in_2d_list
 from familybot.lib.logging_config import setup_script_logging
@@ -333,42 +334,137 @@ class PricePopulator:
         print(f"\n💰 Steam price population complete!\n   ✅ Prices cached: {steam_prices_cached}\n   ❌ Errors: {steam_errors}")
         return steam_prices_cached
     
-    def fetch_itad_price(self, app_id: str) -> tuple[str, str]:
-        """Fetch ITAD price for a single game. Returns (app_id, status)."""
+    def fetch_itad_price_enhanced(self, app_id: str) -> tuple[str, str]:
+        """Enhanced ITAD fetching with Steam library assistance and name-based search fallback."""
+        
+        # Strategy 1: Current ITAD App ID lookup (keep existing)
+        result = self.fetch_itad_by_appid(app_id)
+        if result == "cached":
+            return app_id, result
+        
+        # Strategy 2: Steam library assisted game identification
+        game_info = self.get_steam_library_game_info(app_id)
+        if game_info and game_info.get('name'):
+            result = self.fetch_itad_by_name(app_id, game_info['name'])
+            if result == "cached":
+                return app_id, result
+        
+        # Strategy 3: Enhanced name variations (future implementation)
+        # Could try alternative names, remove subtitles, etc.
+        
+        return app_id, "not_found"
+
+    def fetch_itad_by_appid(self, app_id: str) -> str:
+        """Original ITAD App ID lookup method."""
         try:
             lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
             lookup_response = self.make_request_with_retry(lookup_url, method="GET", api_type="itad")
             
             if lookup_response is None:
-                return app_id, "error"
+                return "error"
             
             lookup_data = self.handle_api_response(f"ITAD Lookup ({app_id})", lookup_response)
             
             game_id = lookup_data.get("game", {}).get("id") if lookup_data else None
             if not game_id:
-                return app_id, "not_found" if lookup_data else "error"
+                return "not_found" if lookup_data else "error"
 
-            storelow_url = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
-            storelow_response = self.make_request_with_retry(storelow_url, method="POST", json_data=[game_id], api_type="itad")
+            # Use games/prices/v3 for comprehensive price data (Phase 2 enhancement)
+            prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+            prices_response = self.make_request_with_retry(prices_url, method="POST", json_data=[game_id], api_type="itad")
             
-            if storelow_response is None:
-                return app_id, "error"
+            if prices_response is None:
+                return "error"
             
-            storelow_data = self.handle_api_response(f"ITAD StoreLow ({app_id})", storelow_response)
+            prices_data = self.handle_api_response(f"ITAD Prices ({app_id})", prices_response)
 
-            if storelow_data and storelow_data[0].get("lows"):
-                low = storelow_data[0]["lows"][0]
-                cache_itad_price(app_id, {
-                    'lowest_price': str(low["price"]["amount"]), 
-                    'lowest_price_formatted': f"${low['price']['amount']}", 
-                    'shop_name': low.get("shop", {}).get("name", "Unknown Store")
-                }, permanent=True)
-                return app_id, "cached"
+            if prices_data and len(prices_data) > 0 and prices_data[0].get("historyLow"):
+                history_low = prices_data[0]["historyLow"]["all"]
+                cache_itad_price_enhanced(app_id, {
+                    'lowest_price': str(history_low["amount"]), 
+                    'lowest_price_formatted': f"${history_low['amount']}", 
+                    'shop_name': "Historical Low (All Stores)"
+                }, lookup_method='appid', permanent=True)
+                return "cached"
             else:
-                return app_id, "not_found"
+                return "not_found"
         except Exception as e:
-            logger.error(f"Error fetching ITAD price for {app_id}: {e}")
-            return app_id, "error"
+            logger.error(f"Error fetching ITAD price by App ID for {app_id}: {e}")
+            return "error"
+
+    def get_steam_library_game_info(self, app_id: str) -> Optional[dict]:
+        """Get enhanced game info from Steam library for ITAD matching."""
+        try:
+            if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+                return None
+            
+            api = WebAPI(key=STEAMWORKS_API_KEY)
+            
+            # Get app list and find our app
+            app_list = api.call('ISteamApps.GetAppList')
+            if app_list and 'applist' in app_list:
+                for app in app_list['applist']['apps']:
+                    if str(app.get('appid')) == app_id:
+                        return {
+                            'name': app['name'],
+                            'appid': app['appid']
+                        }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Steam library game info failed for {app_id}: {e}")
+            return None
+
+    def fetch_itad_by_name(self, app_id: str, game_name: str) -> str:
+        """Try ITAD lookup by game name when App ID lookup fails."""
+        try:
+            # Use ITAD search API to find game by name
+            search_url = f"https://api.isthereanydeal.com/games/search/v1?key={ITAD_API_KEY}&title={game_name}"
+            
+            search_response = self.make_request_with_retry(search_url, method="GET", api_type="itad")
+            if search_response is None:
+                return "error"
+            
+            search_data = self.handle_api_response(f"ITAD Search ({game_name})", search_response)
+            if not search_data or len(search_data) == 0:
+                return "not_found"
+            
+            # Take the first match (most relevant)
+            game_id = search_data[0].get('id')
+            if not game_id:
+                return "not_found"
+            
+            # Now get price data using the found game ID with games/prices/v3
+            prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+            prices_response = self.make_request_with_retry(prices_url, method="POST", json_data=[game_id], api_type="itad")
+            
+            if prices_response is None:
+                return "error"
+            
+            prices_data = self.handle_api_response(f"ITAD Prices ({game_name})", prices_response)
+            
+            if prices_data and len(prices_data) > 0 and prices_data[0].get("historyLow"):
+                history_low = prices_data[0]["historyLow"]["all"]
+                
+                # Cache with enhanced metadata
+                cache_itad_price_enhanced(app_id, {
+                    'lowest_price': str(history_low["amount"]), 
+                    'lowest_price_formatted': f"${history_low['amount']}", 
+                    'shop_name': "Historical Low (All Stores)"
+                }, lookup_method='name_search', steam_game_name=game_name, permanent=True)
+                
+                return "cached"
+            else:
+                return "not_found"
+                
+        except Exception as e:
+            logger.error(f"ITAD name search failed for {game_name}: {e}")
+            return "error"
+
+    def fetch_itad_price(self, app_id: str) -> tuple[str, str]:
+        """Fetch ITAD price for a single game using enhanced method. Returns (app_id, status)."""
+        return self.fetch_itad_price_enhanced(app_id)
 
     def populate_itad_prices(self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False) -> int:
         print(f"\n📈 Starting ITAD price population...")
@@ -454,6 +550,7 @@ def main():
         init_db()
         print("✅ Database initialized")
         migrate_database_phase1() # Run Phase 1 migrations
+        migrate_database_phase2() # Run Phase 2 migrations
     except Exception as e:
         print(f"❌ Failed to initialize database or run migrations: {e}")
         return 1

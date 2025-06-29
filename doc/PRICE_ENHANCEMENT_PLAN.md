@@ -64,7 +64,7 @@ App ID → ITAD Lookup → ITAD Game ID → ITAD StoreLow API → Cache ITAD Pri
 
 ### **Phase 1: Enhanced Steam Library Fallback**
 
-**Target Version**: v1.0.4  
+**Target Version**: v1.0.5 (Already Implemented)
 **Timeline**: Immediate implementation  
 **Risk Level**: Low  
 
@@ -108,7 +108,7 @@ ALTER TABLE game_details_cache ADD COLUMN price_source TEXT DEFAULT 'store_api';
 
 ### **Phase 2: Enhanced ITAD Game Identification**
 
-**Target Version**: v1.0.5  
+**Target Version**: v1.0.6
 **Timeline**: After Phase 1 completion and testing  
 **Risk Level**: Medium  
 
@@ -153,7 +153,7 @@ ALTER TABLE itad_price_cache ADD COLUMN steam_game_name TEXT;
 
 ### **Phase 3: Advanced Integration & Optimization**
 
-**Target Version**: v1.0.6  
+**Target Version**: v1.0.7
 **Timeline**: After Phase 2 completion and validation  
 **Risk Level**: Low (polish and optimization)  
 
@@ -568,7 +568,7 @@ git commit -m "feat: complete Phase 1 Steam library price enhancement
 - Enhanced error handling and logging
 - Improve price data coverage for delisted games
 
-Version: v1.0.4"
+Version: v1.0.5"
 ```
 
 ### **Phase 2 Commit Strategy**
@@ -588,7 +588,7 @@ git commit -m "feat: complete Phase 2 ITAD enhancement
 - Enhanced ITAD lookup method tracking
 - Improve historical price data coverage
 
-Version: v1.0.5"
+Version: v1.0.6"
 ```
 
 ---
