@@ -2,7 +2,7 @@
 
 [project]
 name = "familybot"
-version = "1.0.12"
+version = "1.0.13"
 description = "Family Bot is a discord bot mainly made to get the new games that are added to the Steam Family library."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -25,6 +25,7 @@ dependencies = [
     "python-json-logger==2.0.7",
     "steam==1.4.4",
     "pre-commit==4.0.1",
+    "pylint==3.3.1",
 ]
 
 [project.scripts]
