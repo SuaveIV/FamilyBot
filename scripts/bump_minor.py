@@ -11,9 +11,9 @@ from bump_version import bump_version
 
 if __name__ == "__main__":
     if bump_version("minor"):
-        print("✅ Minor version bumped successfully!")
-        print("💡 Don't forget to commit the changes:")
+        print("Minor version bumped successfully!")
+        print("Don't forget to commit the changes:")
         print("   git add pyproject.toml && git commit -m 'bump: minor version'")
     else:
-        print("❌ Failed to bump minor version")
+        print("Failed to bump minor version")
         sys.exit(1)

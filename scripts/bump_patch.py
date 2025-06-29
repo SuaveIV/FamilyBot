@@ -11,9 +11,9 @@ from bump_version import bump_version
 
 if __name__ == "__main__":
     if bump_version("patch"):
-        print("✅ Patch version bumped successfully!")
-        print("💡 Don't forget to commit the changes:")
+        print("Patch version bumped successfully!")
+        print("Don't forget to commit the changes:")
         print("   git add pyproject.toml && git commit -m 'bump: patch version'")
     else:
-        print("❌ Failed to bump patch version")
+        print("Failed to bump patch version")
         sys.exit(1)

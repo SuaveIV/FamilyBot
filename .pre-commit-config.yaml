@@ -1,0 +1,14 @@
+# Pre-commit configuration for FamilyBot
+# This replaces the bash-based git hooks with a more reliable Python-based solution
+
+repos:
+  - repo: local
+    hooks:
+      - id: version-bump
+        name: Auto-bump version
+        entry: uv run python scripts/bump_version.py patch
+        language: system
+        stages: [pre-commit]
+        pass_filenames: false
+        always_run: true
+        verbose: true
