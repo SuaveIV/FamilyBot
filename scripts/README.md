@@ -1,16 +1,16 @@
 # FamilyBot Scripts
 
-This directory contains utility scripts for managing FamilyBot's cache and database operations.
+This directory contains a suite of powerful utility scripts for managing FamilyBot's database, cache, and overall performance.
 
 ## Database Population Scripts
 
 ### `populate_database.py` - Standalone Database Population
 
-A comprehensive script that populates the FamilyBot database with game data without requiring Discord interaction. Perfect for initial setup or complete database rebuilds.
+A comprehensive script that populates the FamilyBot database with game data, wishlists, and family library information without requiring Discord interaction. This script is perfect for initial setup or complete database rebuilds.
 
 ### `populate_prices.py` - Wishlist Price Data Population
 
-A specialized script that pre-populates both Steam Store prices and ITAD historical price data for **family wishlist games only**. **Perfect for Steam Summer/Winter Sales** when you want maximum speed for deal detection commands.
+A specialized script that pre-populates both Steam Store prices and ITAD historical price data for **family wishlist games only**. This is **essential for maximizing performance during Steam Summer/Winter Sales** when you want to achieve the fastest possible deal detection speeds.
 
 #### Features
 
@@ -128,28 +128,28 @@ uv run python -m src.familybot.FamilyBot
 
 ## Cache Purge Scripts
 
-These scripts help you clear various types of cached data to force fresh data retrieval or troubleshoot issues.
+The cache purge scripts allow you to clear various types of cached data, forcing fresh data retrieval and enabling troubleshooting:
 
 ### Available Scripts
 
 #### Game Details Cache Purging
 
-- **`purge_cache.ps1`** / **`purge_cache.sh`** - Purges game details cache
+- **`purge_cache.ps1`** / **`purge_cache.sh`** - Purges the game details cache
   - Clears all cached Steam game information (names, prices, categories, etc.)
   - Forces fresh USD pricing on next API calls
   - Useful when you want to refresh pricing data or fix currency issues
 
 #### Wishlist Cache Purging  
 
-- **`purge_wishlist.ps1`** / **`purge_wishlist.sh`** - Purges wishlist cache
+- **`purge_wishlist.ps1`** / **`purge_wishlist.sh`** - Purges the wishlist cache
   - Clears all cached family member wishlist data
   - Forces fresh wishlist data on next refresh
   - Useful when family members have updated their wishlists
 
 #### Family Library Cache Purging
 
-- **`purge_family_library.ps1`** / **`purge_family_library.sh`** - Purges family library cache
-  - Clears cached family shared library data
+- **`purge_family_library.ps1`** / **`purge_family_library.sh`** - Purges the family library cache
+  - Clears the cached family shared library data
   - Forces fresh library data on next check
   - Useful when new games have been added to family sharing
 

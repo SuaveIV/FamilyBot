@@ -9,7 +9,7 @@ Family Bot is a Discord bot primarily designed to notify about new games that ar
 
 ## Project Structure
 
-The project follows a modern Python package structure:
+The project follows a modern Python package structure with the following key components:
 
 ```bash
 FamilyBot/
@@ -56,24 +56,24 @@ FamilyBot consists of several interconnected components:
 
 ### Main Bot (`FamilyBot.py`)
 
-- **Discord Bot**: Handles all Discord interactions using interactions.py
-- **Plugin System**: Automatically loads plugins from the `plugins/` directory
+- **Discord Bot**: Handles all Discord interactions using the interactions.py library
+- **Plugin System**: Automatically loads plugins from the `plugins/` directory, enabling modular and extensible functionality
 - **Database Management**: SQLite database for caching game data, wishlists, and user information
-- **WebSocket Server**: Receives tokens from the Token_Sender component
-- **Command-line Interface**: Supports cache management and maintenance operations
+- **WebSocket Server**: Receives tokens from the Token_Sender component for secure communication
+- **Command-line Interface**: Supports cache management, database population, and other maintenance operations
 
 ### Token Sender Plugin (`plugins/token_sender.py`)
 
-- **Automated Token Extraction**: Uses Playwright with Chromium to extract Steam web API tokens
-- **Integrated Plugin**: Runs as a plugin within the main bot process (no separate WebSocket communication needed)
-- **Enhanced Session Management**: Uses explicit storage state saving for reliable Steam login persistence
-- **Admin Commands**: Provides `!force_token` and `!token_status` commands for monitoring and control
-- **Easy Setup**: Automated browser profile creation with `scripts/setup_browser.py`
+- **Automated Token Extraction**: Uses the Playwright library with Chromium to reliably extract Steam web API tokens
+- **Integrated Plugin**: Runs as a plugin within the main bot process, eliminating the need for separate WebSocket communication
+- **Enhanced Session Management**: Utilizes explicit storage state saving to ensure reliable and persistent Steam login sessions
+- **Admin Commands**: Provides `!force_token` and `!token_status` commands for monitoring and controlling the token extraction process
+- **Easy Setup**: Automated browser profile creation with the `scripts/setup_browser.py` script
 
 ### Legacy Token Sender (`Token_Sender/getToken.py`)
 
-- **Deprecated**: Original standalone Selenium-based implementation (preserved for reference)
-- **Migration Complete**: New plugin provides all functionality with significant improvements
+- **Deprecated**: Original standalone Selenium-based implementation, preserved for reference purposes only
+- **Migration Complete**: The new Token Sender plugin provides all the necessary functionality with significant improvements and enhancements
 
 ### Plugin Architecture
 
@@ -83,19 +83,19 @@ FamilyBot consists of several interconnected components:
 
 ### Database System
 
-- **SQLite Backend**: Lightweight, file-based database for data persistence
-- **Caching Strategy**: Intelligent caching of Steam API responses to minimize API calls
-- **Performance Optimization**: Pre-populated price data for faster deal detection
+- **SQLite Backend**: Lightweight, file-based database for efficient data persistence
+- **Caching Strategy**: Intelligent caching of Steam API responses to minimize the number of API calls required
+- **Performance Optimization**: Pre-populating price data for family wishlist games, enabling faster deal detection during sales periods
 
 ### Web UI (`web/`)
 
-- **Modern Interface**: FastAPI-powered web dashboard for bot management and monitoring
-- **Real-time Monitoring**: Live bot status, cache statistics, and system health metrics
-- **Log Management**: Advanced log viewer with filtering, search, and export capabilities
-- **Theme Support**: 16+ Bootswatch themes including comprehensive dark mode options
-- **Cache Control**: Web-based cache management and purge operations
-- **Configuration Help**: Built-in setup guides and configuration templates
-- **Responsive Design**: Mobile-friendly interface that works on all devices
+- **Modern Interface**: FastAPI-powered web dashboard for comprehensive bot management and monitoring
+- **Real-time Monitoring**: Live bot status, cache statistics, recent game activity, family member information, and overall system health metrics
+- **Log Management**: Advanced log viewer with powerful filtering, search, and export capabilities
+- **Theme Support**: 16+ Bootswatch themes, including comprehensive dark mode options, providing a visually appealing and customizable user experience
+- **Cache Control**: Web-based interface for purging various cache types and monitoring cache statistics
+- **Configuration Help**: Built-in setup guides and configuration templates to assist users in the initial bot setup
+- **Responsive Design**: Mobile-friendly interface that seamlessly adapts to desktop, tablet, and mobile devices
 
 ## Installation
 
@@ -343,19 +343,21 @@ To stop the bots, go to their respective terminal windows and press `Ctrl+C`. Bo
 
 ## Utility Scripts
 
-The `scripts/` directory contains powerful utility scripts for database management and performance optimization:
+The `scripts/` directory contains a suite of powerful utility scripts for managing the FamilyBot's database, cache, and overall performance:
 
 ### Database Population Scripts
 
-- **`populate_database.py`** - Comprehensive database population script that fetches game data, wishlists, and family libraries. Perfect for initial setup or complete rebuilds.
-- **`populate_prices.py`** - Specialized price data population script that pre-populates both Steam Store prices and ITAD historical price data for **family wishlist games only**. **Essential for Steam Summer/Winter Sales** to maximize deal detection speed.
+- **`populate_database.py`** - A comprehensive script that populates the FamilyBot database with game data, wishlists, and family library information without requiring Discord interaction. This script is perfect for initial setup or complete database rebuilds.
+- **`populate_prices.py`** - A specialized script that pre-populates both Steam Store prices and ITAD historical price data for **family wishlist games only**. This is **essential for maximizing performance during Steam Summer/Winter Sales** when you want to achieve the fastest possible deal detection speeds.
 
 ### Cache Management Scripts
 
-- **`purge_cache.ps1/.sh`** - Purge game details cache to force fresh USD pricing
-- **`purge_wishlist.ps1/.sh`** - Purge wishlist cache when family members update their wishlists
-- **`purge_family_library.ps1/.sh`** - Purge family library cache when new games are added
-- **`purge_all_cache.ps1/.sh`** - Purge ALL cache data for complete reset
+The cache purge scripts allow you to clear various types of cached data, forcing fresh data retrieval and enabling troubleshooting:
+
+- **`purge_cache.ps1/.sh`** - Purges the game details cache, clearing all cached Steam game information (names, prices, categories, etc.) and forcing fresh USD pricing on the next API calls. This is useful when you want to refresh pricing data or fix any currency-related issues.
+- **`purge_wishlist.ps1/.sh`** - Purges the wishlist cache, clearing all cached family member wishlist data and forcing a fresh wishlist data refresh. This is helpful when family members have updated their Steam wishlists.
+- **`purge_family_library.ps1/.sh`** - Purges the family library cache, clearing the cached family shared library data and forcing a fresh library data check. This is useful when new games have been added to the family sharing.
+- **`purge_all_cache.ps1/.sh`** - Purges ALL cache data, completely resetting the cached information. This should be used with caution, as it will require time to rebuild all the caches.
 
 ### Usage Examples
 
