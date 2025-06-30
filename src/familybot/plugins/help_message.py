@@ -1,15 +1,17 @@
 # In src/familybot/plugins/help_message.py
 
 # Explicitly import what's needed from interactions
-from interactions import Extension, listen
-from string import Template
-import os
 import logging
-from datetime import datetime # For admin DM timestamp
-from familybot.config import HELP_CHANNEL_ID, ADMIN_DISCORD_ID, PLUGIN_PATH
-from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
-from familybot.lib.utils import truncate_message_list
+import os
+from datetime import datetime  # For admin DM timestamp
+from string import Template
+
+from interactions import Extension, listen
+
+from familybot.config import ADMIN_DISCORD_ID, HELP_CHANNEL_ID, PLUGIN_PATH
 from familybot.lib.logging_config import get_logger
+from familybot.lib.types import DISCORD_MESSAGE_LIMIT, FamilyBotClient
+from familybot.lib.utils import truncate_message_list
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)

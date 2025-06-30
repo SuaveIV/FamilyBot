@@ -1,8 +1,10 @@
 # Pydantic models for FamilyBot Web API
 
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel
+
 
 class BotStatus(BaseModel):
     """Bot status information"""

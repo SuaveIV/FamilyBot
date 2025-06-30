@@ -17,14 +17,16 @@ Usage:
     python scripts/steamworks_json_converter.py --api-type app_details --stdin < steam_store_response.json
 """
 
-import sys
-import os
-import json
 import argparse
-import requests
+import json
+import os
+import sys
 import time
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import requests
+
 
 def convert_owned_games(data: Dict[str, Any], steam_id: Optional[str] = None) -> Dict[str, Any]:
     """Convert GetOwnedGames API response to FamilyBot format."""

@@ -1,10 +1,12 @@
 # In src/familybot/lib/types.py
 
 import asyncio
-from typing import Protocol, List, Union, LiteralString, TYPE_CHECKING # Import necessary types
+from typing import (TYPE_CHECKING, List,  # Import necessary types
+                    LiteralString, Protocol, Union)
 
 # Import core interactions types that might be part of the protocol's methods' signatures
-from interactions import BaseChannel, User, Message, Client, GuildText # Add other types if needed
+from interactions import (BaseChannel, Client,  # Add other types if needed
+                          GuildText, Message, User)
 
 # Discord API Constants
 DISCORD_MESSAGE_LIMIT = 1950  # Maximum characters allowed in a Discord message (with safety buffer)

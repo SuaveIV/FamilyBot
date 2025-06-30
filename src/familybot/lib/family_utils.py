@@ -1,11 +1,14 @@
 # In src/familybot/lib/family_utils.py
 
 import json
-import requests
 import logging
-from familybot.config import FAMILY_STEAM_ID, FAMILY_USER_DICT # Import FAMILY_USER_DICT here
+
+import requests
+
+from familybot.config import FAMILY_STEAM_ID  # Import FAMILY_USER_DICT here
+from familybot.config import FAMILY_USER_DICT
+from familybot.lib.token_manager import get_token  # <<< IMPORT get_token here
 from familybot.lib.utils import get_lowest_price
-from familybot.lib.token_manager import get_token # <<< IMPORT get_token here
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)

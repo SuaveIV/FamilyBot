@@ -5,8 +5,8 @@ This script tests the token extraction functionality without running the full bo
 """
 
 import asyncio
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add the src directory to the Python path
@@ -22,16 +22,18 @@ except ImportError:
 
 # Import configuration
 try:
-    from familybot.config import PROJECT_ROOT, TOKEN_SAVE_PATH, BROWSER_PROFILE_PATH
+    from familybot.config import (BROWSER_PROFILE_PATH, PROJECT_ROOT,
+                                  TOKEN_SAVE_PATH)
 except ImportError as e:
     print(f"❌ Could not import configuration: {e}")
     print("Make sure you're running this from the FamilyBot root directory")
     sys.exit(1)
 
-import json
 import base64
 import binascii
+import json
 from datetime import datetime
+
 
 class TokenTester:
     def __init__(self):

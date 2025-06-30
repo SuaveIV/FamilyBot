@@ -13,6 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
 import coloredlogs
 from pythonjsonlogger import jsonlogger
 
@@ -32,7 +33,7 @@ def sanitize_log_message(message: str) -> str:
     """
     # Mask potential API keys (look for long alphanumeric strings)
     import re
-    
+
     # Mask Steam API keys (32 character hex strings)
     message = re.sub(r'\b[A-F0-9]{32}\b', '[STEAM_API_KEY]', message, flags=re.IGNORECASE)
     

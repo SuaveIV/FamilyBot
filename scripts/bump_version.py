@@ -10,6 +10,7 @@ import re
 import sys
 from pathlib import Path
 
+
 def bump_version(version_type="patch"):
     """
     Bump version in pyproject.toml

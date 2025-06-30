@@ -10,6 +10,7 @@ import os
 import stat
 from pathlib import Path
 
+
 def setup_pre_commit_hook():
     """Setup the pre-commit hook for automatic version bumping"""
     

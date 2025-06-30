@@ -1,23 +1,28 @@
 # In src/familybot/plugins/common_game.py
 
-from interactions import Extension, listen, Task, IntervalTrigger
-from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
 import json
-import requests
-import os
 import logging
-import sqlite3 # Import sqlite3 for specific error handling
-
-from familybot.config import ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
-from familybot.lib.utils import get_common_elements_in_lists, truncate_message_list
-from familybot.lib.database import (
-    get_db_connection, get_cached_user_games, cache_user_games,
-    get_cached_discord_user, cache_discord_user, cleanup_expired_cache,
-    get_cached_game_details, cache_game_details
-)
-from familybot.lib.types import FamilyBotClient, FamilyBotClientProtocol, DISCORD_MESSAGE_LIMIT
-from familybot.lib.logging_config import get_logger, log_private_profile_detection, log_api_error
+import os
+import sqlite3  # Import sqlite3 for specific error handling
 from typing import cast
+
+import requests
+from interactions import Extension, IntervalTrigger, Task, listen
+from interactions.ext.prefixed_commands import (PrefixedContext,
+                                                prefixed_command)
+
+from familybot.config import ADMIN_DISCORD_ID, PROJECT_ROOT, STEAMWORKS_API_KEY
+from familybot.lib.database import (cache_discord_user, cache_game_details,
+                                    cache_user_games, cleanup_expired_cache,
+                                    get_cached_discord_user,
+                                    get_cached_game_details,
+                                    get_cached_user_games, get_db_connection)
+from familybot.lib.logging_config import (get_logger, log_api_error,
+                                          log_private_profile_detection)
+from familybot.lib.types import (DISCORD_MESSAGE_LIMIT, FamilyBotClient,
+                                 FamilyBotClientProtocol)
+from familybot.lib.utils import (get_common_elements_in_lists,
+                                 truncate_message_list)
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)

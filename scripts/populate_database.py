@@ -1,13 +1,14 @@
-import sys
-import os
-import time
-import asyncio
 import argparse
-import httpx
+import asyncio
 import json
+import os
 import random
+import sys
+import time
 from datetime import datetime
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Optional, Set
+
+import httpx
 
 try:
     from tqdm import tqdm
@@ -21,19 +22,25 @@ except ImportError:
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from familybot.config import STEAMWORKS_API_KEY, FAMILY_USER_DICT
-from familybot.lib.database import (
-    init_db, get_db_connection, get_cached_game_details, cache_game_details,
-    get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library
-)
-from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list
-from familybot.lib.logging_config import setup_script_logging, log_private_profile_detection, log_api_error, log_rate_limit, log_performance_metric
+from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
+from familybot.lib.database import (cache_family_library, cache_game_details,
+                                    cache_wishlist, get_cached_family_library,
+                                    get_cached_game_details,
+                                    get_cached_wishlist, get_db_connection,
+                                    init_db)
+from familybot.lib.family_utils import (find_in_2d_list,
+                                        get_family_game_list_url)
+from familybot.lib.logging_config import (log_api_error,
+                                          log_performance_metric,
+                                          log_private_profile_detection,
+                                          log_rate_limit, setup_script_logging)
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("populate_database", "INFO")
 
 # Suppress verbose HTTP request logging from httpx
 import logging
+
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 

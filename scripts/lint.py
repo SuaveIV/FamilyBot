@@ -6,11 +6,12 @@ This script runs pylint on the project's Python files with the configured
 settings from .pylintrc.
 """
 
+import os
 import subprocess
 import sys
-import os
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 
 def main():
     """Main linting function"""

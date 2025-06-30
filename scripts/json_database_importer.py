@@ -18,20 +18,19 @@ Supported JSON formats:
 5. Batch operations: {"type": "batch", "data": [{"type": "user", ...}, {"type": "family_member", ...}]}
 """
 
-import sys
-import os
-import json
 import argparse
+import json
 import logging
+import os
+import sys
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from familybot.lib.database import (
-    init_db, get_db_connection, cache_game_details
-)
+from familybot.lib.database import (cache_game_details, get_db_connection,
+                                    init_db)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

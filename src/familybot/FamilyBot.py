@@ -1,31 +1,33 @@
 # In src/familybot/FamilyBot.py
 
 # Import necessary libraries
-import os
+import argparse
 import asyncio
+import logging
+import os
 import signal
 import sys
-import argparse
-import logging 
 from datetime import datetime
-from typing import cast, TYPE_CHECKING
-from interactions import Client, Intents, listen, GuildText, BaseChannel, Message 
+from typing import TYPE_CHECKING, cast
+
+import uvicorn  # Import uvicorn
+from interactions import (BaseChannel, Client, GuildText, Intents, Message,
+                          listen)
 from interactions.ext import prefixed_commands
-import uvicorn # Import uvicorn
 
 if TYPE_CHECKING:
     from interactions import User
 
 # Import modules from your project's new package structure
-from familybot.config import DISCORD_API_KEY, ADMIN_DISCORD_ID, WEB_UI_ENABLED, WEB_UI_HOST, WEB_UI_PORT
-from familybot.WebSocketServer import start_websocket_server_task
-from familybot.lib.database import init_db, get_db_connection, sync_family_members_from_config
-from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
-from familybot.lib.utils import truncate_message_list, split_message
-
-
+from familybot.config import (ADMIN_DISCORD_ID, DISCORD_API_KEY,
+                              WEB_UI_ENABLED, WEB_UI_HOST, WEB_UI_PORT)
+from familybot.lib.database import (get_db_connection, init_db,
+                                    sync_family_members_from_config)
 # Import our centralized logging configuration
-from familybot.lib.logging_config import setup_bot_logging, get_logger
+from familybot.lib.logging_config import get_logger, setup_bot_logging
+from familybot.lib.types import DISCORD_MESSAGE_LIMIT, FamilyBotClient
+from familybot.lib.utils import split_message, truncate_message_list
+from familybot.WebSocketServer import start_websocket_server_task
 
 # Setup comprehensive logging for the bot
 logger = setup_bot_logging("INFO")
@@ -155,8 +157,9 @@ async def start_discord_bot():
 
 async def start_web_server_main():
     """Starts the FastAPI web server using uvicorn Server."""
-    from familybot.web.api import app as web_app, set_bot_client
-    
+    from familybot.web.api import app as web_app
+    from familybot.web.api import set_bot_client
+
     # Set the bot client reference in the web API
     set_bot_client(client)
     
@@ -532,3 +535,4 @@ def main():
     except Exception as e:
         logger.error(f"Unexpected error during startup: {e}", exc_info=True)
         sys.exit(1)
+

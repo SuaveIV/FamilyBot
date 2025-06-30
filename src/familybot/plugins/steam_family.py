@@ -1,32 +1,37 @@
 # In src/familybot/plugins/steam_family.py
 
-from interactions import Extension, listen, Task, IntervalTrigger, GuildText
-from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
-import requests
-import json
-import time
-import logging
 import asyncio
-from datetime import datetime
+import json
+import logging
 import sqlite3
+import time
+from datetime import datetime
+
+import requests
+from interactions import Extension, GuildText, IntervalTrigger, Task, listen
+from interactions.ext.prefixed_commands import (PrefixedContext,
+                                                prefixed_command)
 
 # Import necessary items from your config and lib modules
-from familybot.config import (
-    NEW_GAME_CHANNEL_ID, WISHLIST_CHANNEL_ID, FAMILY_STEAM_ID, FAMILY_USER_DICT, # FAMILY_USER_DICT kept for migration
-    ADMIN_DISCORD_ID, STEAMWORKS_API_KEY, PROJECT_ROOT
-)
-from familybot.lib.family_utils import get_family_game_list_url, find_in_2d_list, format_message
+from familybot.config import (  # FAMILY_USER_DICT kept for migration
+    ADMIN_DISCORD_ID, FAMILY_STEAM_ID, FAMILY_USER_DICT, NEW_GAME_CHANNEL_ID,
+    PROJECT_ROOT, STEAMWORKS_API_KEY, WISHLIST_CHANNEL_ID)
+from familybot.lib.database import \
+    get_steam_id_from_friendly_name  # Added this import
+from familybot.lib.database import (cache_family_library, cache_game_details,
+                                    cache_wishlist, get_cached_family_library,
+                                    get_cached_game_details,
+                                    get_cached_wishlist, get_db_connection)
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
-from familybot.lib.database import (
-    get_db_connection, get_cached_game_details, cache_game_details,
-    get_cached_wishlist, cache_wishlist, get_cached_family_library, cache_family_library,
-    get_steam_id_from_friendly_name # Added this import
-)
-from familybot.lib.utils import get_lowest_price, ProgressTracker, truncate_message_list
-from familybot.lib.types import FamilyBotClient, DISCORD_MESSAGE_LIMIT
-
+from familybot.lib.family_utils import (find_in_2d_list, format_message,
+                                        get_family_game_list_url)
 # Import enhanced logging configuration
-from familybot.lib.logging_config import get_logger, log_private_profile_detection, log_api_error, log_rate_limit
+from familybot.lib.logging_config import (get_logger, log_api_error,
+                                          log_private_profile_detection,
+                                          log_rate_limit)
+from familybot.lib.types import DISCORD_MESSAGE_LIMIT, FamilyBotClient
+from familybot.lib.utils import (ProgressTracker, get_lowest_price,
+                                 truncate_message_list)
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)
@@ -319,7 +324,8 @@ class steam_family(Extension):
     async def force_new_game_command(self, ctx: PrefixedContext):
         if str(ctx.author_id) == str(ADMIN_DISCORD_ID) and ctx.guild is None:
             await ctx.send("Forcing new game notification check...")
-            from familybot.lib.plugin_admin_actions import force_new_game_action
+            from familybot.lib.plugin_admin_actions import \
+                force_new_game_action
             result = await force_new_game_action()
             await ctx.send(result['message'])
             logger.info("Force new game notification initiated by admin.")
@@ -331,7 +337,8 @@ class steam_family(Extension):
     async def force_wishlist_command(self, ctx: PrefixedContext):
         if str(ctx.author_id) == str(ADMIN_DISCORD_ID) and ctx.guild is None:
             await ctx.send("Forcing wishlist refresh...")
-            from familybot.lib.plugin_admin_actions import force_wishlist_action
+            from familybot.lib.plugin_admin_actions import \
+                force_wishlist_action
             result = await force_wishlist_action()
             await ctx.send(result['message'])
             logger.info("Force wishlist refresh initiated by admin.")
@@ -715,7 +722,8 @@ class steam_family(Extension):
             return
 
         await ctx.send("🗑️ **Purging game details cache...**")
-        from familybot.lib.plugin_admin_actions import purge_game_details_cache_action
+        from familybot.lib.plugin_admin_actions import \
+            purge_game_details_cache_action
         result = await purge_game_details_cache_action()
         await ctx.send(result['message'])
         if result['success']:
@@ -1266,7 +1274,8 @@ class steam_family(Extension):
         """Background task to check for new games every hour."""
         logger.info("Running new game task...")
         try:
-            from familybot.lib.plugin_admin_actions import force_new_game_action
+            from familybot.lib.plugin_admin_actions import \
+                force_new_game_action
             result = await force_new_game_action()
             if result['success'] and 'New games detected' in result['message']:
                 # Only send to channel if new games were actually found
@@ -1281,7 +1290,8 @@ class steam_family(Extension):
         """Background task to refresh wishlist every 6 hours."""
         logger.info("Running wishlist task...")
         try:
-            from familybot.lib.plugin_admin_actions import force_wishlist_action
+            from familybot.lib.plugin_admin_actions import \
+                force_wishlist_action
             result = await force_wishlist_action()
             if result['success'] and 'Details:' in result['message']:
                 # Only update channel if there are actual results

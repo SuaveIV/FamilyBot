@@ -1,12 +1,13 @@
-import sys
-import os
-import time
 import argparse
-import httpx 
 import json
+import os
 import random
+import sys
+import time
 from datetime import datetime
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Optional, Set
+
+import httpx
 
 try:
     from tqdm import tqdm
@@ -19,22 +20,27 @@ except ImportError:
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from familybot.config import STEAMWORKS_API_KEY, FAMILY_USER_DICT, ITAD_API_KEY
-from familybot.lib.database import (
-    init_db, get_db_connection, get_cached_game_details, cache_game_details,
-    get_cached_wishlist, cache_wishlist, get_cached_itad_price, cache_itad_price,
-    cache_game_details_with_source, migrate_database_phase1, migrate_database_phase2,
-    cache_itad_price_enhanced
-)
+from steam.webapi import WebAPI
+
+from familybot.config import FAMILY_USER_DICT, ITAD_API_KEY, STEAMWORKS_API_KEY
+from familybot.lib.database import (cache_game_details,
+                                    cache_game_details_with_source,
+                                    cache_itad_price,
+                                    cache_itad_price_enhanced, cache_wishlist,
+                                    get_cached_game_details,
+                                    get_cached_itad_price, get_cached_wishlist,
+                                    get_db_connection, init_db,
+                                    migrate_database_phase1,
+                                    migrate_database_phase2)
 from familybot.lib.family_utils import find_in_2d_list
 from familybot.lib.logging_config import setup_script_logging
-from steam.webapi import WebAPI
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("populate_prices", "INFO")
 
 # Suppress verbose HTTP request logging from httpx
 import logging
+
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 

@@ -1,9 +1,10 @@
 # File: scripts/setup_browser.py
 import asyncio
-from playwright.async_api import async_playwright
-import os
 import json
+import os
 from pathlib import Path
+
+from playwright.async_api import async_playwright
 
 # Define the path for your dedicated browser profile
 # This will be created inside your FamilyBot project directory (one level up from scripts/)

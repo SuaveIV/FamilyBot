@@ -1,35 +1,35 @@
 # FastAPI application for FamilyBot Web UI
 
-import os
-import logging
 import asyncio
+import logging
+import os
 import sqlite3
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 
 from familybot.config import PROJECT_ROOT, WEB_UI_HOST, WEB_UI_PORT
-from familybot.lib.database import (
-    get_db_connection, get_cached_game_details, get_cached_family_library,
-    get_cached_wishlist, cleanup_expired_cache, purge_wishlist_cache, purge_family_library_cache
-)
 from familybot.lib.admin_commands import DatabasePopulator
+from familybot.lib.database import (cleanup_expired_cache,
+                                    get_cached_family_library,
+                                    get_cached_game_details,
+                                    get_cached_wishlist, get_db_connection,
+                                    purge_family_library_cache,
+                                    purge_wishlist_cache)
+from familybot.lib.logging_config import setup_web_logging, web_log_queue
 from familybot.lib.plugin_admin_actions import (
-    purge_game_details_cache_action,
-    force_new_game_action,
-    force_wishlist_action
-)
-from familybot.lib.logging_config import web_log_queue, setup_web_logging
-from familybot.web.models import (
-    BotStatus, GameDetails, FamilyMember, LogEntry, CacheStats,
-    CommandRequest, CommandResponse, ConfigData, WishlistItem, RecentActivity
-)
+    force_new_game_action, force_wishlist_action,
+    purge_game_details_cache_action)
+from familybot.web.models import (BotStatus, CacheStats, CommandRequest,
+                                  CommandResponse, ConfigData, FamilyMember,
+                                  GameDetails, LogEntry, RecentActivity,
+                                  WishlistItem)
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +132,9 @@ async def get_bot_status():
     # Check token validity using the token plugin's logic
     token_valid = False
     try:
-        from familybot.config import PROJECT_ROOT, TOKEN_SAVE_PATH
         import os
+
+        from familybot.config import PROJECT_ROOT, TOKEN_SAVE_PATH
         
         token_save_dir = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
         token_file_path = os.path.join(token_save_dir, "token")
@@ -360,13 +361,11 @@ async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
 async def get_config_data():
     """Get sanitized configuration data"""
     try:
-        from familybot.config import (
-            DISCORD_API_KEY, ADMIN_DISCORD_ID, EPIC_CHANNEL_ID,
-            FAMILY_STEAM_ID, NEW_GAME_CHANNEL_ID,
-            WISHLIST_CHANNEL_ID, HELP_CHANNEL_ID,
-            IP_ADDRESS
-        )
-        
+        from familybot.config import (ADMIN_DISCORD_ID, DISCORD_API_KEY,
+                                      EPIC_CHANNEL_ID, FAMILY_STEAM_ID,
+                                      HELP_CHANNEL_ID, IP_ADDRESS,
+                                      NEW_GAME_CHANNEL_ID, WISHLIST_CHANNEL_ID)
+
         # Count family members
         conn = get_db_connection()
         cursor = conn.cursor()

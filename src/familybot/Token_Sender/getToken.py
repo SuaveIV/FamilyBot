@@ -1,28 +1,29 @@
 # In src/familybot/Token_Sender/getToken.py
 
 # Importing necessary libraries
-from selenium import webdriver
-from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.firefox.options import Options
-from webdriver_manager.firefox import GeckoDriverManager
-from selenium.webdriver.common.by import By
-from datetime import datetime, timedelta
 import asyncio
-import websockets
 import base64
 import json
-import os
-import yaml
 import logging
-import signal # For graceful shutdown
-import sys # For graceful shutdown
+import os
+import signal  # For graceful shutdown
+import sys  # For graceful shutdown
+from datetime import datetime, timedelta
 from pathlib import Path
+
+import websockets
+import yaml
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.firefox import GeckoDriverManager
 
 # Add the src directory to the Python path for logging imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import enhanced logging configuration
-from familybot.lib.logging_config import setup_script_logging, log_api_error
+from familybot.lib.logging_config import log_api_error, setup_script_logging
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("token_sender", "INFO")
@@ -60,7 +61,8 @@ if not all([SERVER_IP, TOKEN_SAVE_PATH, FIREFOX_PROFILE_PATH]):
 # If TOKEN_SAVE_PATH is meant to be relative to getToken.py's location, then adjust here.
 # For simplicity and consistency with other files, let's assume it's relative to PROJECT_ROOT
 try:
-    from familybot.config import PROJECT_ROOT # Import PROJECT_ROOT from main config
+    from familybot.config import \
+        PROJECT_ROOT  # Import PROJECT_ROOT from main config
     ACTUAL_TOKEN_SAVE_DIR = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
 except ImportError:
     logger.warning("Could not import PROJECT_ROOT from familybot.config. Assuming TOKEN_SAVE_PATH is absolute or relative to current working directory.")

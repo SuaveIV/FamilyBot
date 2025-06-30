@@ -1,12 +1,15 @@
 # In src/familybot/WebSocketServer.py
 
 import asyncio
-import websockets
 import base64
 import json
 import logging
-from familybot.config import IP_ADDRESS, PROJECT_ROOT # Import PROJECT_ROOT for token file paths
-import os # For os.path.join
+import os  # For os.path.join
+
+import websockets
+
+from familybot.config import (  # Import PROJECT_ROOT for token file paths
+    IP_ADDRESS, PROJECT_ROOT)
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)

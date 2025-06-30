@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def install_precommit():
     """Install pre-commit hooks"""
     try:

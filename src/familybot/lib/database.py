@@ -1,9 +1,10 @@
 # In src/familybot/lib/database.py
 
-import sqlite3
-import os
 import logging
-from typing import Optional # Import Optional
+import os
+import sqlite3
+from typing import Optional  # Import Optional
+
 from familybot.config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)

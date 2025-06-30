@@ -1,17 +1,19 @@
 # In src/familybot/plugins/free_epicgames.py
 
 # Explicitly import what's needed from interactions
-from interactions import Extension, listen, Task, IntervalTrigger
-from interactions.ext.prefixed_commands import prefixed_command, PrefixedContext
-from datetime import datetime, timedelta
-import requests
 import json
 import logging
+from datetime import datetime, timedelta
+
+import requests
+from interactions import Extension, IntervalTrigger, Task, listen
+from interactions.ext.prefixed_commands import (PrefixedContext,
+                                                prefixed_command)
 
 # Import from config
-from familybot.config import EPIC_CHANNEL_ID, ADMIN_DISCORD_ID
-from familybot.lib.types import FamilyBotClient
+from familybot.config import ADMIN_DISCORD_ID, EPIC_CHANNEL_ID
 from familybot.lib.logging_config import get_logger, log_api_error
+from familybot.lib.types import FamilyBotClient
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)

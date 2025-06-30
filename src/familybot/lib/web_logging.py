@@ -1,6 +1,7 @@
-import logging
 import asyncio
+import logging
 from logging import LogRecord
+
 
 class WebSocketQueueHandler(logging.Handler):
     def __init__(self, level=logging.NOTSET):

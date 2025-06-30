@@ -1,8 +1,9 @@
 # In src/familybot/config.py
 
-import yaml
+import os  # Import os for path manipulation
 from pathlib import Path
-import os # Import os for path manipulation
+
+import yaml
 
 # Get the path to the current script (config.py)
 current_script_path = Path(__file__)
@@ -70,3 +71,4 @@ WEB_UI_ENABLED = config.get("web_ui", {}).get("enabled", True)
 WEB_UI_HOST = config.get("web_ui", {}).get("host", "127.0.0.1")
 WEB_UI_PORT = config.get("web_ui", {}).get("port", 8080)
 WEB_UI_DEFAULT_THEME = config.get("web_ui", {}).get("default_theme", "default")
+
