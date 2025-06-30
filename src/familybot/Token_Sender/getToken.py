@@ -129,7 +129,7 @@ async def get_token():
         await asyncio.sleep(3) # Give page time to load and JS to execute
 
         key = driver.page_source
-        
+
         # Check if rawdata-tab exists before clicking or if the data is already accessible
         try:
             rawtab = driver.find_element(By.ID, "rawdata-tab")

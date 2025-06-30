@@ -121,10 +121,10 @@ class common_games(Extension):
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            
+
             # Insert into 'users' table
             cursor.execute("INSERT INTO users (discord_id, steam_id) VALUES (?, ?)", (discord_id, steam_id))
-            
+
             # Also insert into 'family_members' table for Web UI display
             # Use ctx.author.display_name for friendly_name
             friendly_name = ctx.author.display_name
@@ -132,7 +132,7 @@ class common_games(Extension):
                 "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
                 (steam_id, friendly_name, discord_id)
             )
-            
+
             conn.commit()
             await ctx.send(f"You have been successfully registered as '{friendly_name}'!")
             logger.info(f"Registered Discord ID {discord_id} with Steam ID {steam_id} in 'users' and 'family_members' DB tables.")
@@ -211,7 +211,7 @@ class common_games(Extension):
 
                 for game in user_game_list_json:
                     temp_game_list.append(game["appid"])
-                
+
                 # Cache the results for 6 hours
                 cache_user_games(steam_id, temp_game_list, cache_hours=6)
                 game_lists.append(temp_game_list)
@@ -243,7 +243,7 @@ class common_games(Extension):
 
         header = "Common Multiplayer Games:\n"
         game_entries = []
-        
+
         for game_appid in common_game_appids:
             try:
                 # Try to get cached game details first
@@ -255,7 +255,7 @@ class common_games(Extension):
                     # If not cached, fetch from API
                     game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
                     logger.info(f"Fetching app details from API for AppID: {game_appid}")
-                    
+
                     app_info_response = requests.get(game_url, timeout=10)
                     app_info_response.raise_for_status()
 
@@ -268,19 +268,19 @@ class common_games(Extension):
                     if not game_data or not game_info_json.get(str(game_appid), {}).get("success"):
                         logger.warning(f"Could not get data for AppID {game_appid} or success=false. Response: {app_info_response.text}")
                         continue
-                    
+
                     # Cache the game details permanently
                     cache_game_details(str(game_appid), game_data, permanent=True)
 
                 if game_data.get("type") == "game":
                     # Use cached boolean fields for faster performance if available
                     is_multiplayer = game_data.get("is_multiplayer")
-                    
+
                     # Fallback to category analysis if boolean field not available
                     if is_multiplayer is None:
                         categories = game_data.get("categories", [])
                         is_multiplayer = any(cat.get("id") in [1, 36, 38] for cat in categories)
-                    
+
                     if is_multiplayer:
                         game_name = game_data.get("name", f"Unknown Game ({game_appid})")
                         game_entries.append(f"- {game_name}")
@@ -314,7 +314,7 @@ class common_games(Extension):
 
         header = "Here are the users currently registered:\n"
         user_entries = []
-        
+
         for discord_id in registered_users.keys():
             # Try to get cached username first
             cached_username = get_cached_discord_user(discord_id)
@@ -337,7 +337,7 @@ class common_games(Extension):
         # Use utility function to handle message truncation
         footer_template = "\n... and {count} more users!"
         final_message = truncate_message_list(user_entries, header, footer_template)
-        
+
         await self.bot.send_dm(ctx.author_id, final_message)
 
     @Task.create(IntervalTrigger(hours=6))

@@ -142,17 +142,17 @@ def init_db():
         logger.info("Database: 'itad_price_cache' table checked/created.")
 
         # --- MIGRATION LOGIC for adding columns to existing tables ---
-        
+
         # 1. Check and add 'detected_at' to saved_games
         cursor.execute("PRAGMA table_info(saved_games)")
         saved_games_columns = [col[1] for col in cursor.fetchall()]
-        
+
         if 'detected_at' not in saved_games_columns:
             logger.info("Database: 'detected_at' column not found in 'saved_games'. Attempting to add.")
             try:
                 cursor.execute("ALTER TABLE saved_games ADD COLUMN detected_at TEXT")
                 logger.info("Database: Added 'detected_at' column to 'saved_games' table.")
-                
+
                 cursor.execute("UPDATE saved_games SET detected_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW') WHERE detected_at IS NULL")
                 conn.commit()
                 logger.info("Database: Updated existing rows in 'saved_games' with timestamps.")
@@ -166,13 +166,13 @@ def init_db():
         # 2. Check and add new columns to game_details_cache
         cursor.execute("PRAGMA table_info(game_details_cache)")
         game_cache_columns = [col[1] for col in cursor.fetchall()]
-        
+
         new_columns = [
             ('is_multiplayer', 'BOOLEAN DEFAULT 0'),
             ('is_coop', 'BOOLEAN DEFAULT 0'),
             ('is_family_shared', 'BOOLEAN DEFAULT 0')
         ]
-        
+
         for column_name, column_def in new_columns:
             if column_name not in game_cache_columns:
                 logger.info(f"Database: '{column_name}' column not found in 'game_details_cache'. Attempting to add.")
@@ -189,13 +189,13 @@ def init_db():
         # 3. Check and add 'permanent' column to itad_price_cache
         cursor.execute("PRAGMA table_info(itad_price_cache)")
         itad_cache_columns = [col[1] for col in cursor.fetchall()]
-        
+
         if 'permanent' not in itad_cache_columns:
             logger.info("Database: 'permanent' column not found in 'itad_price_cache'. Attempting to add.")
             try:
                 cursor.execute("ALTER TABLE itad_price_cache ADD COLUMN permanent BOOLEAN DEFAULT 1")
                 logger.info("Database: Added 'permanent' column to 'itad_price_cache' table.")
-                
+
                 # Update existing rows to have permanent=1 (historical prices are permanent by default)
                 cursor.execute("UPDATE itad_price_cache SET permanent = 1 WHERE permanent IS NULL")
                 conn.commit()
@@ -206,7 +206,7 @@ def init_db():
                 logger.error(f"Database: Unexpected error during 'permanent' column migration: {e}", exc_info=True)
         else:
             logger.debug("Database: 'permanent' column already exists in 'itad_price_cache'.")
-        
+
         # --- END MIGRATION LOGIC ---
 
         conn.commit() # Final commit
@@ -224,12 +224,12 @@ def sync_family_members_from_config():
         from familybot.config import FAMILY_USER_DICT
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         for steam_id, friendly_name in FAMILY_USER_DICT.items():
             # Check if the member already exists
             cursor.execute("SELECT friendly_name FROM family_members WHERE steam_id = ?", (steam_id,))
             existing_member = cursor.fetchone()
-            
+
             if existing_member:
                 # Update friendly_name if it has changed
                 if existing_member['friendly_name'] != friendly_name:
@@ -245,7 +245,7 @@ def sync_family_members_from_config():
                     (steam_id, friendly_name, None) # Discord ID can be added later
                 )
                 logger.info(f"Added new family member: '{friendly_name}' (Steam ID: {steam_id}).")
-        
+
         conn.commit()
         logger.info("Family members synchronized from config.yml to database.")
     except Exception as e:
@@ -264,9 +264,9 @@ def get_cached_game_details(appid: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT name, type, is_free, categories, price_data, permanent, 
+            SELECT name, type, is_free, categories, price_data, permanent,
                    is_multiplayer, is_coop, is_family_shared
-            FROM game_details_cache 
+            FROM game_details_cache
             WHERE appid = ? AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         """, (appid,))
         row = cursor.fetchone()
@@ -296,7 +296,7 @@ def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
     is_multiplayer = False
     is_coop = False
     is_family_shared = False
-    
+
     for cat in categories:
         cat_id = cat.get("id")
         if cat_id == 1:  # Multi-player
@@ -308,7 +308,7 @@ def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
             is_coop = True
         elif cat_id == 62:  # Family Sharing
             is_family_shared = True
-    
+
     return is_multiplayer, is_coop, is_family_shared
 
 
@@ -320,22 +320,22 @@ def cache_game_details(appid: str, game_data: dict, permanent: bool = True, cach
         cursor = conn.cursor()
         import json
         from datetime import datetime, timedelta
-        
+
         now = datetime.utcnow()
         expires_at = None
-        
+
         if not permanent and cache_hours:
             expires_at = now + timedelta(hours=cache_hours)
             expires_at_str = expires_at.isoformat() + 'Z'
         else:
             expires_at_str = None  # NULL for permanent cache
-        
+
         # Analyze categories to determine multiplayer/co-op/family sharing status
         categories = game_data.get('categories', [])
         is_multiplayer, is_coop, is_family_shared = _analyze_game_categories(categories)
-        
+
         cursor.execute("""
-            INSERT OR REPLACE INTO game_details_cache 
+            INSERT OR REPLACE INTO game_details_cache
             (appid, name, type, is_free, categories, price_data, is_multiplayer, is_coop, is_family_shared, cached_at, expires_at, permanent)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
@@ -375,7 +375,7 @@ def get_cached_user_games(steam_id: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT appid FROM user_games_cache 
+            SELECT appid FROM user_games_cache
             WHERE steam_id = ? AND expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
         """, (steam_id,))
         rows = cursor.fetchall()
@@ -397,13 +397,13 @@ def cache_user_games(steam_id: str, appids: list, cache_hours: int = 6):
         conn = get_db_connection()
         cursor = conn.cursor()
         from datetime import datetime, timedelta
-        
+
         now = datetime.utcnow()
         expires_at = now + timedelta(hours=cache_hours)
-        
+
         # Clear existing cache for this user
         cursor.execute("DELETE FROM user_games_cache WHERE steam_id = ?", (steam_id,))
-        
+
         # Insert new cache entries
         cache_entries = [
             (steam_id, str(appid), now.isoformat() + 'Z', expires_at.isoformat() + 'Z')
@@ -429,7 +429,7 @@ def get_cached_discord_user(discord_id: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT username FROM discord_users_cache 
+            SELECT username FROM discord_users_cache
             WHERE discord_id = ? AND expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
         """, (discord_id,))
         row = cursor.fetchone()
@@ -451,12 +451,12 @@ def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
         conn = get_db_connection()
         cursor = conn.cursor()
         from datetime import datetime, timedelta
-        
+
         now = datetime.utcnow()
         expires_at = now + timedelta(hours=cache_hours)
-        
+
         cursor.execute("""
-            INSERT OR REPLACE INTO discord_users_cache 
+            INSERT OR REPLACE INTO discord_users_cache
             (discord_id, username, cached_at, expires_at)
             VALUES (?, ?, ?, ?)
         """, (discord_id, username, now.isoformat() + 'Z', expires_at.isoformat() + 'Z'))
@@ -477,7 +477,7 @@ def get_cached_itad_price(appid: str):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT lowest_price, lowest_price_formatted, shop_name, permanent
-            FROM itad_price_cache 
+            FROM itad_price_cache
             WHERE appid = ? AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         """, (appid,))
         row = cursor.fetchone()
@@ -504,7 +504,7 @@ def cache_itad_price(appid: str, price_data: dict, permanent: bool = False, cach
         conn = get_db_connection()
         cursor = conn.cursor()
         from datetime import datetime, timedelta
-        
+
         now = datetime.utcnow()
         if permanent:
             expires_at_str = None
@@ -513,9 +513,9 @@ def cache_itad_price(appid: str, price_data: dict, permanent: bool = False, cach
             expires_at = now + timedelta(hours=cache_hours)
             expires_at_str = expires_at.isoformat() + 'Z'
             permanent_val = 0
-        
+
         cursor.execute("""
-            INSERT OR REPLACE INTO itad_price_cache 
+            INSERT OR REPLACE INTO itad_price_cache
             (appid, lowest_price, lowest_price_formatted, shop_name, cached_at, expires_at, permanent)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
@@ -543,7 +543,7 @@ def cache_itad_price_enhanced(appid: str, price_data: dict, lookup_method: str =
         conn = get_db_connection()
         cursor = conn.cursor()
         from datetime import datetime, timedelta
-        
+
         now = datetime.utcnow()
         if permanent:
             expires_at_str = None
@@ -552,9 +552,9 @@ def cache_itad_price_enhanced(appid: str, price_data: dict, lookup_method: str =
             expires_at = now + timedelta(hours=cache_hours)
             expires_at_str = expires_at.isoformat() + 'Z'
             permanent_val = 0
-        
+
         cursor.execute("""
-            INSERT OR REPLACE INTO itad_price_cache 
+            INSERT OR REPLACE INTO itad_price_cache
             (appid, lowest_price, lowest_price_formatted, shop_name, lookup_method, steam_game_name, cached_at, expires_at, permanent)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
@@ -585,7 +585,7 @@ def get_cached_wishlist(steam_id: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT appid FROM wishlist_cache 
+            SELECT appid FROM wishlist_cache
             WHERE steam_id = ? AND expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
         """, (steam_id,))
         rows = cursor.fetchall()
@@ -607,13 +607,13 @@ def cache_wishlist(steam_id: str, appids: list, cache_hours: int = 168):
         conn = get_db_connection()
         cursor = conn.cursor()
         from datetime import datetime, timedelta
-        
+
         now = datetime.utcnow()
         expires_at = now + timedelta(hours=cache_hours)
-        
+
         # Clear existing cache for this user
         cursor.execute("DELETE FROM wishlist_cache WHERE steam_id = ?", (steam_id,))
-        
+
         # Insert new cache entries
         cache_entries = [
             (steam_id, str(appid), now.isoformat() + 'Z', expires_at.isoformat() + 'Z')
@@ -639,7 +639,7 @@ def get_cached_family_library():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT appid, owner_steamids, exclude_reason FROM family_library_cache 
+            SELECT appid, owner_steamids, exclude_reason FROM family_library_cache
             WHERE expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
         """, ())
         rows = cursor.fetchall()
@@ -670,13 +670,13 @@ def cache_family_library(family_apps: list, cache_minutes: int = 30):
         cursor = conn.cursor()
         import json
         from datetime import datetime, timedelta
-        
+
         now = datetime.utcnow()
         expires_at = now + timedelta(minutes=cache_minutes)
-        
+
         # Clear existing cache
         cursor.execute("DELETE FROM family_library_cache")
-        
+
         # Insert new cache entries
         cache_entries = []
         for app in family_apps:
@@ -687,7 +687,7 @@ def cache_family_library(family_apps: list, cache_minutes: int = 30):
                 now.isoformat() + 'Z',
                 expires_at.isoformat() + 'Z'
             ))
-        
+
         cursor.executemany("""
             INSERT INTO family_library_cache (appid, owner_steamids, exclude_reason, cached_at, expires_at)
             VALUES (?, ?, ?, ?, ?)
@@ -770,7 +770,7 @@ def cache_game_details_with_source(app_id: str, game_data: dict, source: str):
     """Enhanced cache_game_details with source tracking."""
     # Call existing cache_game_details but with source parameter
     cache_game_details(app_id, game_data, permanent=True)
-    
+
     # Update the price_source field
     conn = None
     try:
@@ -794,21 +794,21 @@ def cleanup_expired_cache():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        tables = ['game_details_cache', 'user_games_cache', 'wishlist_cache', 
+
+        tables = ['game_details_cache', 'user_games_cache', 'wishlist_cache',
                  'discord_users_cache', 'family_library_cache', 'itad_price_cache']
-        
+
         total_deleted = 0
         for table in tables:
             cursor.execute(f"""
-                DELETE FROM {table} 
+                DELETE FROM {table}
                 WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
             """)
             deleted = cursor.rowcount
             total_deleted += deleted
             if deleted > 0:
                 logger.debug(f"Cleaned up {deleted} expired entries from {table}")
-        
+
         conn.commit()
         if total_deleted > 0:
             logger.info(f"Cache cleanup: removed {total_deleted} expired entries")
@@ -824,22 +824,22 @@ def migrate_database_phase1():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Check if column already exists
         cursor.execute("PRAGMA table_info(game_details_cache)")
         columns = [col[1] for col in cursor.fetchall()]
-        
+
         if 'price_source' not in columns:
             cursor.execute("ALTER TABLE game_details_cache ADD COLUMN price_source TEXT DEFAULT 'store_api'")
-            
+
             # Update existing entries to have 'store_api' as source
             cursor.execute("UPDATE game_details_cache SET price_source = 'store_api' WHERE price_source IS NULL")
-            
+
             conn.commit()
             logger.info("Phase 1 database migration completed: Added price_source column")
         else:
             logger.info("Phase 1 database migration skipped: price_source column already exists")
-        
+
     except Exception as e:
         logger.error(f"Phase 1 database migration failed: {e}")
         raise
@@ -853,21 +853,21 @@ def migrate_database_phase2():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Check if columns already exist
         cursor.execute("PRAGMA table_info(itad_price_cache)")
         columns = [col[1] for col in cursor.fetchall()]
-        
+
         migrations_needed = []
         if 'lookup_method' not in columns:
             migrations_needed.append(('lookup_method', "TEXT DEFAULT 'appid'"))
         if 'steam_game_name' not in columns:
             migrations_needed.append(('steam_game_name', "TEXT"))
-        
+
         for column_name, column_def in migrations_needed:
             cursor.execute(f"ALTER TABLE itad_price_cache ADD COLUMN {column_name} {column_def}")
             logger.info(f"Phase 2 database migration: Added {column_name} column to itad_price_cache")
-        
+
         if migrations_needed:
             # Update existing entries to have 'appid' as default lookup method
             cursor.execute("UPDATE itad_price_cache SET lookup_method = 'appid' WHERE lookup_method IS NULL")
@@ -875,7 +875,7 @@ def migrate_database_phase2():
             logger.info("Phase 2 database migration completed: Added ITAD lookup method tracking columns")
         else:
             logger.info("Phase 2 database migration skipped: All columns already exist")
-        
+
     except Exception as e:
         logger.error(f"Phase 2 database migration failed: {e}")
         raise

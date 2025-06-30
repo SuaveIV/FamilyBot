@@ -59,36 +59,36 @@ class steam_family(Extension):
         """Enforce rate limiting for Steam API calls (non-storefront)."""
         current_time = time.time()
         time_since_last_call = current_time - self._last_steam_api_call
-        
+
         if time_since_last_call < self.STEAM_API_RATE_LIMIT:
             sleep_time = self.STEAM_API_RATE_LIMIT - time_since_last_call
             logger.debug(f"Rate limiting Steam API call, sleeping for {sleep_time:.2f} seconds")
             await asyncio.sleep(sleep_time)
-        
+
         self._last_steam_api_call = time.time()
 
     async def _rate_limit_steam_store_api(self) -> None:
         """Enforce rate limiting for Steam Store API calls (e.g., appdetails)."""
         current_time = time.time()
         time_since_last_call = current_time - self._last_steam_store_api_call
-        
+
         if time_since_last_call < self.STEAM_STORE_API_RATE_LIMIT:
             sleep_time = self.STEAM_STORE_API_RATE_LIMIT - time_since_last_call
             logger.debug(f"Rate limiting Steam Store API call, sleeping for {sleep_time:.2f} seconds")
             await asyncio.sleep(sleep_time)
-        
+
         self._last_steam_store_api_call = time.time()
 
     async def _rate_limit_full_scan(self) -> None:
         """Enforce slower rate limiting for full wishlist scans to avoid hitting API limits."""
         current_time = time.time()
         time_since_last_call = current_time - self._last_steam_store_api_call
-        
+
         if time_since_last_call < self.FULL_SCAN_RATE_LIMIT:
             sleep_time = self.FULL_SCAN_RATE_LIMIT - time_since_last_call
             logger.debug(f"Rate limiting full scan API call, sleeping for {sleep_time:.2f} seconds")
             await asyncio.sleep(sleep_time)
-        
+
         self._last_steam_store_api_call = time.time()
 
     async def _send_admin_dm(self, message: str) -> None:
@@ -139,7 +139,7 @@ class steam_family(Extension):
                     config_members_to_insert = []
                     for steam_id, name in FAMILY_USER_DICT.items():
                         config_members_to_insert.append((steam_id, name, None))
-                    
+
                     try:
                         if config_members_to_insert:
                             cursor.executemany("INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)", config_members_to_insert)
@@ -202,7 +202,7 @@ class steam_family(Extension):
         if number_str is None:
             await ctx.send("❌ **Missing required parameter!**\n\n**Usage:** `!coop NUMBER_OF_COPIES`\n**Example:** `!coop 2` (to find games with 2+ copies)\n\n**Note:** The number must be greater than 1.")
             return
-            
+
         try:
             number = int(number_str)
         except ValueError:
@@ -237,7 +237,7 @@ class steam_family(Extension):
                     logger.warning("No games found in family game list response.")
                     await loading_message.edit(content="No games found in the family library.")
                     return
-                
+
                 # Cache the family library for 30 minutes
                 cache_family_library(game_list, cache_minutes=30)
 
@@ -269,7 +269,7 @@ class steam_family(Extension):
                     if not game_data:
                         logger.warning(f"No game data found for AppID {game_appid} in app details response for coop check.")
                         continue
-                    
+
                     # Cache the game details permanently (game details rarely change)
                     cache_game_details(game_appid, game_data, permanent=True)
 
@@ -277,26 +277,26 @@ class steam_family(Extension):
                     # Use cached boolean fields for faster performance
                     is_family_shared = game_data.get("is_family_shared", False)
                     is_multiplayer = game_data.get("is_multiplayer", False)
-                    
+
                     if is_family_shared and is_multiplayer:
                             game_name = game_data.get("name", f"Unknown Game ({game_appid})")
-                            
+
                             # Add pricing information if available
                             try:
                                 current_price = game_data.get('price_overview', {}).get('final_formatted', 'N/A')
                                 lowest_price = get_lowest_price(int(game_appid))
-                                
+
                                 price_info = []
                                 if current_price != 'N/A':
                                     price_info.append(f"Current: {current_price}")
                                 if lowest_price != 'N/A':
                                     price_info.append(f"Lowest: ${lowest_price}")
-                                
+
                                 if price_info:
                                     game_name += f" ({' | '.join(price_info)})"
                             except Exception as e:
                                 logger.warning(f"Could not get pricing info for coop game {game_appid}: {e}")
-                            
+
                             coop_game_names.append(game_name)
                     else:
                         logger.debug(f"Game {game_appid} is not categorized as family shared (ID 62).")
@@ -360,10 +360,10 @@ class steam_family(Extension):
 
         start_time = time.time()  # Initialize start time for tracking progress
         await ctx.send("🔍 **Forcing deals check and posting to wishlist channel...**")
-        
+
         try:
             current_family_members = await self._load_family_members_from_db()
-            
+
             target_user_steam_ids = []
             if target_friendly_name:
                 # Find the SteamID for the given friendly name
@@ -372,7 +372,7 @@ class steam_family(Extension):
                     if friendly_name.lower() == target_friendly_name.lower():
                         found_steam_id = steam_id
                         break
-                
+
                 if found_steam_id:
                     target_user_steam_ids.append(found_steam_id)
                     await ctx.send(f"🔍 **Checking deals for {target_friendly_name}'s wishlist...**")
@@ -387,7 +387,7 @@ class steam_family(Extension):
             global_wishlist = []
             for user_steam_id in target_user_steam_ids:
                 user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
-                
+
                 # Try to get cached wishlist first
                 cached_wishlist = get_cached_wishlist(user_steam_id)
                 if cached_wishlist is not None:
@@ -406,10 +406,10 @@ class steam_family(Extension):
                     if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
                         logger.warning(f"Force deals: Cannot fetch wishlist for {user_name_for_log} - Steam API key not configured")
                         continue
-                    
+
                     wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
                     logger.info(f"Force deals: Fetching fresh wishlist from API for {user_name_for_log}")
-                    
+
                     try:
                         await self._rate_limit_steam_api()
                         wishlist_response = requests.get(wishlist_url, timeout=15)
@@ -418,7 +418,7 @@ class steam_family(Extension):
                             continue
 
                         wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)
-                        if not wishlist_json: 
+                        if not wishlist_json:
                             continue
 
                         wishlist_items = wishlist_json.get("response", {}).get("items", [])
@@ -452,11 +452,11 @@ class steam_family(Extension):
                         logger.error(f"Force deals: Error fetching wishlist for {user_name_for_log}: {e}")
                         await self._send_admin_dm(f"Force deals wishlist error for {user_name_for_log}: {e}")
                         continue
-            
+
             if not global_wishlist:
                 await ctx.send("❌ No wishlist games found to check for deals. This could be due to private profiles or empty wishlists.")
                 return
-            
+
             deals_found = []
             games_checked = 0
             max_games_to_check = 100  # Higher limit for force command
@@ -469,13 +469,13 @@ class steam_family(Extension):
                 app_id = item[0]
                 interested_users = item[1]
                 games_checked += 1
-                
+
                 # Report progress using ProgressTracker
                 if progress_tracker.should_report_progress(index + 1):
                     context_info = f"games checked | {len(deals_found)} deals found"
                     progress_msg = progress_tracker.get_progress_message(index + 1, context_info)
                     await ctx.send(progress_msg)
-                
+
                 try:
                     # Get cached game details first
                     cached_game = get_cached_game_details(app_id)
@@ -488,33 +488,33 @@ class steam_family(Extension):
                         app_info_response = requests.get(game_url, timeout=10)
                         game_info_json = await self._handle_api_response("AppDetails (Force Deals)", app_info_response)
                         if not game_info_json: continue
-                        
+
                         game_data = game_info_json.get(str(app_id), {}).get("data")
                         if not game_data: continue
-                        
+
                         # Cache the game details
                         cache_game_details(app_id, game_data, permanent=True)
-                    
+
                     game_name = game_data.get("name", f"Unknown Game ({app_id})")
                     # Handle both cached data (price_data) and fresh API data (price_overview)
                     price_overview = game_data.get("price_overview") or game_data.get("price_data")
-                    
+
                     if not price_overview:
                         logger.debug(f"Force deals: No price data found for {app_id} ({game_name})")
                         continue
-                    
+
                     # Check if game is on sale
                     discount_percent = price_overview.get("discount_percent", 0)
                     current_price = price_overview.get("final_formatted", "N/A")
                     original_price = price_overview.get("initial_formatted", current_price)
-                    
+
                     # Get historical low price
                     lowest_price = get_lowest_price(int(app_id))
-                    
+
                     # Determine if this is a good deal (more lenient criteria for force command)
                     is_good_deal = False
                     deal_reason = ""
-                    
+
                     if discount_percent >= 30:  # Lower threshold for force command
                         is_good_deal = True
                         deal_reason = f"🔥 **{discount_percent}% OFF**"
@@ -528,7 +528,7 @@ class steam_family(Extension):
                                 deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
                         except (ValueError, TypeError):
                             pass
-                    
+
                     if is_good_deal:
                         user_names = [current_family_members.get(uid, f"Unknown") for uid in interested_users]
                         deal_info = {
@@ -542,16 +542,16 @@ class steam_family(Extension):
                             'interested_users': user_names
                         }
                         deals_found.append(deal_info)
-                
+
                 except Exception as e:
                     logger.warning(f"Force deals: Error checking deals for game {app_id}: {e}")
                     continue
-            
+
             # Format and send results to wishlist channel
             if deals_found:
                 target_info = f" for {target_friendly_name}" if target_friendly_name else ""
                 message_parts = [f"🎯 **Current Deals Alert{target_info}** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"]
-                
+
                 for deal in deals_found:  # Show all deals found
                     message_parts.append(f"**{deal['name']}**\n")
                     message_parts.append(f"{deal['deal_reason']}\n")
@@ -564,9 +564,9 @@ class steam_family(Extension):
                     if len(deal['interested_users']) > 3:
                         message_parts.append(f" +{len(deal['interested_users']) - 3} more")
                     message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
-                
+
                 final_message = "".join(message_parts)
-                
+
                 # Send to wishlist channel
                 try:
                     await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, final_message)  # type: ignore
@@ -580,7 +580,7 @@ class steam_family(Extension):
             else:
                 await ctx.send(f"📊 **Force deals complete!** No significant deals found among {games_checked} games checked.")
                 logger.info(f"Force deals: No deals found among {games_checked} games")
-            
+
         except Exception as e:
             logger.critical(f"Force deals: Critical error during force deals check: {e}", exc_info=True)
             await ctx.send(f"❌ **Critical error during force deals:** {e}")
@@ -748,11 +748,11 @@ class steam_family(Extension):
 
         start_time = datetime.now()
         await ctx.send("🔄 **Starting full library scan...**\nThis will scan all family members' complete game libraries with rate limiting to avoid API limits.\n⏱️ This may take several minutes depending on library sizes.")
-        
+
         try:
             current_family_members = await self._load_family_members_from_db()
             all_unique_steam_ids_to_check = set(current_family_members.keys())
-            
+
             if not all_unique_steam_ids_to_check:
                 await ctx.send("❌ No family members found to scan.")
                 return
@@ -768,16 +768,16 @@ class steam_family(Extension):
             for user_steam_id in all_unique_steam_ids_to_check:
                 user_name_for_log = current_family_members.get(user_steam_id, f"Unknown ({user_steam_id})")
                 processed_members += 1
-                
+
                 try:
                     # Get user's owned games
                     await self._rate_limit_steam_api()
                     owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}&include_appinfo=1&include_played_free_games=1"
                     logger.info(f"Full library scan: Fetching owned games for {user_name_for_log}")
-                    
+
                     owned_games_response = requests.get(owned_games_url, timeout=15)
                     owned_games_json = await self._handle_api_response(f"GetOwnedGames ({user_name_for_log})", owned_games_response)
-                    
+
                     if not owned_games_json:
                         error_count += 1
                         continue
@@ -794,7 +794,7 @@ class steam_family(Extension):
                     # Calculate 10% intervals for progress updates
                     total_user_games = len(games)
                     progress_interval = max(1, total_user_games // 10)  # Update every 10%
-                    
+
                     # Process each game with rate limiting and progress updates
                     for i, game in enumerate(games):
                         app_id = str(game.get("appid"))
@@ -815,10 +815,10 @@ class steam_family(Extension):
                             await self._rate_limit_steam_store_api()
                             game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                             logger.debug(f"Full library scan: Fetching details for AppID: {app_id}")
-                            
+
                             game_info_response = requests.get(game_url, timeout=10)
                             game_info_json = await self._handle_api_response("AppDetails (Library Scan)", game_info_response)
-                            
+
                             if not game_info_json:
                                 continue
 
@@ -846,7 +846,7 @@ class steam_family(Extension):
             # Final summary
             end_time = datetime.now()
             scan_duration = end_time - start_time
-            
+
             summary_msg = f"✅ **Full library scan complete!**\n"
             summary_msg += f"⏱️ **Duration:** {scan_duration.total_seconds():.1f} seconds\n"
             summary_msg += f"👥 **Members processed:** {processed_members}/{total_members}\n"
@@ -855,7 +855,7 @@ class steam_family(Extension):
             if error_count > 0:
                 summary_msg += f"❌ **Errors:** {error_count}\n"
             summary_msg += f"🚀 **All future commands will benefit from cached game data!**"
-            
+
             await ctx.send(summary_msg)
             logger.info(f"Full library scan completed: {processed_members} members, {total_games_cached} games cached, {scan_duration.total_seconds():.1f}s duration")
             await self.bot.send_log_dm("Full Library Scan") # type: ignore
@@ -882,7 +882,7 @@ class steam_family(Extension):
         start_time = datetime.now()
         start_time_float = time.time()  # Add float timestamp for progress calculations
         await ctx.send("🔄 **Starting comprehensive wishlist scan...**\nThis will process ALL common wishlist games with slower rate limiting to avoid API limits.\n⏱️ This may take several minutes depending on the number of games.")
-        
+
         try:
             # Step 1: Collect all wishlist data (same as regular refresh)
             logger.info("Full wishlist scan: Starting comprehensive scan...")
@@ -961,7 +961,7 @@ class steam_family(Extension):
 
             # Sort by AppID (descending) for consistent processing order
             sorted_all_duplicate_games = sorted(all_duplicate_games, key=lambda x: x[0], reverse=True)
-            
+
             total_games = len(sorted_all_duplicate_games)
             await ctx.send(f"📊 **Found {total_games} common wishlist games to process.**\n🐌 Using {self.FULL_SCAN_RATE_LIMIT}s delays between API calls to avoid rate limits...")
 
@@ -979,7 +979,7 @@ class steam_family(Extension):
             for item in sorted_all_duplicate_games:
                 app_id = item[0]
                 processed_count += 1
-                
+
                 # Report progress using ProgressTracker
                 if progress_tracker.should_report_progress(processed_count):
                     context_info = f"games | ✅ {len(duplicate_games_for_display)} qualified | ⏭️ {skipped_count} skipped"
@@ -987,7 +987,7 @@ class steam_family(Extension):
                         context_info += f" | ❌ {error_count} errors"
                     progress_msg = progress_tracker.get_progress_message(processed_count, context_info)
                     await ctx.send(progress_msg)
-                
+
                 try:
                     # Check if we have cached game details first
                     cached_game = get_cached_game_details(app_id)
@@ -997,10 +997,10 @@ class steam_family(Extension):
                     else:
                         # Use slower rate limiting for full scan
                         await self._rate_limit_full_scan()
-                        
+
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         logger.info(f"Full scan: Fetching app details for AppID: {app_id} ({processed_count}/{total_games})")
-                        
+
                         game_info_response = requests.get(game_url, timeout=10)
                         game_info_json = await self._handle_api_response("AppDetails (Full Scan)", game_info_response)
                         if not game_info_json:
@@ -1012,7 +1012,7 @@ class steam_family(Extension):
                             logger.warning(f"Full scan: No game data found for AppID {app_id}")
                             error_count += 1
                             continue
-                        
+
                         # Cache the game details permanently
                         cache_game_details(app_id, game_data, permanent=True)
 
@@ -1039,7 +1039,7 @@ class steam_family(Extension):
             # Step 4: Update the wishlist channel with results
             end_time = datetime.now()
             scan_duration = end_time - start_time
-            
+
             try:
                 wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
                 if not wishlist_channel or not isinstance(wishlist_channel, GuildText):
@@ -1068,7 +1068,7 @@ class steam_family(Extension):
                 if error_count > 0:
                     summary_msg += f"❌ **Errors:** {error_count}\n"
                 summary_msg += f"📝 **Wishlist channel updated with all results.**"
-                
+
                 await ctx.send(summary_msg)
                 logger.info(f"Full wishlist scan completed: {processed_count} processed, {len(duplicate_games_for_display)} qualified, {scan_duration.total_seconds():.1f}s duration")
 
@@ -1088,7 +1088,7 @@ class steam_family(Extension):
     @prefixed_command(name="deals")
     async def check_deals_command(self, ctx: PrefixedContext):
         loading_message = await ctx.send("🔍 Checking for current deals on your wishlist...")
-        
+
         try:
             # Get the SteamID of the user who called the command
             from familybot.lib.database import get_steam_id_from_discord_id
@@ -1102,7 +1102,7 @@ class steam_family(Extension):
 
             # Collect wishlist games for the calling user only
             global_wishlist = []
-            
+
             # Try to get cached wishlist first
             cached_wishlist = get_cached_wishlist(user_steam_id)
             if cached_wishlist is not None:
@@ -1114,10 +1114,10 @@ class steam_family(Extension):
                 if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
                     await loading_message.edit(content="❌ Steam API key is not configured. Cannot fetch wishlist.")
                     return
-                
+
                 wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
                 logger.info(f"Deals: Fetching fresh wishlist from API for {user_name_for_log}")
-                
+
                 try:
                     await self._rate_limit_steam_api()
                     wishlist_response = requests.get(wishlist_url, timeout=15)
@@ -1152,11 +1152,11 @@ class steam_family(Extension):
                     logger.error(f"Deals: Error fetching wishlist for {user_name_for_log}: {e}")
                     await loading_message.edit(content="❌ Error fetching your wishlist. Please try again later.")
                     return
-            
+
             if not global_wishlist:
                 await loading_message.edit(content="📭 No wishlist games found to check for deals.")
                 return
-            
+
             # Check for deals
             deals_found = []
             games_checked = 0
@@ -1168,7 +1168,7 @@ class steam_family(Extension):
             for item in global_wishlist[:max_games_to_check]:
                 app_id = item[0]
                 games_checked += 1
-                
+
                 try:
                     # Get cached game details first
                     cached_game = get_cached_game_details(app_id)
@@ -1182,33 +1182,33 @@ class steam_family(Extension):
                         game_info_json = await self._handle_api_response("AppDetails (Deals)", app_info_response)
                         if not game_info_json:
                             continue
-                        
+
                         game_data = game_info_json.get(str(app_id), {}).get("data")
                         if not game_data:
                             continue
-                        
+
                         # Cache the game details
                         cache_game_details(app_id, game_data, permanent=True)
-                    
+
                     game_name = game_data.get("name", f"Unknown Game ({app_id})")
                     # Handle both cached data (price_data) and fresh API data (price_overview)
                     price_overview = game_data.get("price_overview") or game_data.get("price_data")
-                    
+
                     if not price_overview:
                         continue
-                    
+
                     # Check if game is on sale
                     discount_percent = price_overview.get("discount_percent", 0)
                     current_price = price_overview.get("final_formatted", "N/A")
                     original_price = price_overview.get("initial_formatted", current_price)
-                    
+
                     # Get historical low price
                     lowest_price = get_lowest_price(int(app_id))
-                    
+
                     # Determine if this is a good deal (stricter criteria for user command)
                     is_good_deal = False
                     deal_reason = ""
-                    
+
                     if discount_percent >= 50:  # Higher threshold for user command
                         is_good_deal = True
                         deal_reason = f"🔥 **{discount_percent}% OFF**"
@@ -1222,7 +1222,7 @@ class steam_family(Extension):
                                 deal_reason = f"💎 **Historical Low** ({discount_percent}% off)"
                         except (ValueError, TypeError):
                             pass
-                    
+
                     if is_good_deal:
                         deal_info = {
                             'name': game_name,
@@ -1234,15 +1234,15 @@ class steam_family(Extension):
                             'deal_reason': deal_reason
                         }
                         deals_found.append(deal_info)
-                
+
                 except Exception as e:
                     logger.warning(f"Deals: Error checking deals for game {app_id}: {e}")
                     continue
-            
+
             # Format and send results
             if deals_found:
                 message_parts = [f"🎯 **Current Deals on Your Wishlist** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"]
-                
+
                 for deal in deals_found[:10]:  # Show top 10 deals
                     message_parts.append(f"**{deal['name']}**\n")
                     message_parts.append(f"{deal['deal_reason']}\n")
@@ -1252,17 +1252,17 @@ class steam_family(Extension):
                     if deal['lowest_price'] != "N/A":
                         message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
                     message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
-                
+
                 if len(deals_found) > 10:
                     message_parts.append(f"... and {len(deals_found) - 10} more deals!")
-                
+
                 final_message = "".join(message_parts)
                 await loading_message.edit(content=final_message)
                 logger.info(f"Deals: Found {len(deals_found)} deals for {user_name_for_log}")
             else:
                 await loading_message.edit(content=f"📊 **No significant deals found** among {games_checked} games checked.\n\n💡 Try the `!force_deals` command (admin only) for more lenient deal detection.")
                 logger.info(f"Deals: No deals found for {user_name_for_log} among {games_checked} games")
-            
+
         except Exception as e:
             logger.critical(f"Deals: Critical error during deals check: {e}", exc_info=True)
             await loading_message.edit(content="❌ An unexpected error occurred while checking for deals.")

@@ -162,9 +162,9 @@ async def start_web_server_main():
 
     # Set the bot client reference in the web API
     set_bot_client(client)
-    
+
     logger.info(f"Starting Web UI server on http://{WEB_UI_HOST}:{WEB_UI_PORT}")
-    
+
     # Use uvicorn.Server for async operation instead of uvicorn.run
     config = uvicorn.Config(
         web_app,
@@ -182,7 +182,7 @@ async def run_application():
     try:
         init_db()
         logger.info("Database initialized successfully.")
-        
+
         # Synchronize family members from config.yml to the database
         sync_family_members_from_config()
         logger.info("Family members synchronized from config.yml.")
@@ -203,7 +203,7 @@ async def run_application():
             discord_bot_task = asyncio.create_task(start_discord_bot())
             _running_tasks.append(discord_bot_task)
             logger.info("Discord bot task scheduled as background.")
-            
+
             # Start the Web UI server (blocking call)
             await start_web_server_main() # This will block the event loop
         else:
@@ -242,7 +242,7 @@ async def on_startup():
     # This event listener will now only be called once the bot is connected.
     # Most startup logic has moved to run_application()
     pass # Keep it empty for now or for future Discord-specific startup logic
-    
+
 @listen()
 async def on_disconnect():
     # This will be called when the Discord client disconnects.
@@ -258,25 +258,25 @@ def purge_game_cache() -> None:
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Get count before deletion
         cursor.execute("SELECT COUNT(*) FROM game_details_cache")
         cache_count = cursor.fetchone()[0]
-        
+
         if cache_count == 0:
             print("✅ Game details cache is already empty.")
             return
-        
+
         # Confirm deletion
         print(f"⚠️  Found {cache_count} cached game entries.")
         confirm = input("Are you sure you want to purge all game details cache? (y/N): ").strip().lower()
-        
+
         if confirm in ['y', 'yes']:
             # Clear the game details cache
             cursor.execute("DELETE FROM game_details_cache")
             conn.commit()
             conn.close()
-            
+
             print(f"✅ Cache purge complete! Deleted {cache_count} cached game entries.")
             print("\n🔄 Next steps:")
             print("- Start the bot and run !full_wishlist_scan to rebuild cache with USD pricing")
@@ -284,7 +284,7 @@ def purge_game_cache() -> None:
             print("- All future API calls will use USD pricing and new boolean fields")
         else:
             print("❌ Cache purge cancelled.")
-            
+
     except Exception as e:
         print(f"❌ Error purging cache: {e}")
         logger.error(f"Error purging cache from command line: {e}", exc_info=True)
@@ -295,34 +295,34 @@ def purge_wishlist_cache() -> None:
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Get count before deletion
         cursor.execute("SELECT COUNT(DISTINCT steam_id) FROM wishlist_cache")
         user_count = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM wishlist_cache")
         total_count = cursor.fetchone()[0]
-        
+
         if total_count == 0:
             print("✅ Wishlist cache is already empty.")
             return
-        
+
         # Confirm deletion
         print(f"⚠️  Found {total_count} cached wishlist entries from {user_count} users.")
         confirm = input("Are you sure you want to purge all wishlist cache? (y/N): ").strip().lower()
-        
+
         if confirm in ['y', 'yes']:
             # Clear the wishlist cache
             cursor.execute("DELETE FROM wishlist_cache")
             conn.commit()
             conn.close()
-            
+
             print(f"✅ Wishlist cache purge complete! Deleted {total_count} entries from {user_count} users.")
             print("\n🔄 Next steps:")
             print("- Start the bot and run !force_wishlist to rebuild wishlist cache")
             print("- Or wait for the next automatic wishlist refresh (runs every 24 hours)")
         else:
             print("❌ Wishlist cache cancelled.")
-            
+
     except Exception as e:
         print(f"❌ Error purging wishlist cache: {e}")
         logger.error(f"Error purging wishlist cache from command line: {e}", exc_info=True)
@@ -333,32 +333,32 @@ def purge_family_library_cache() -> None:
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Get count before deletion
         cursor.execute("SELECT COUNT(*) FROM family_library_cache")
         cache_count = cursor.fetchone()[0]
-        
+
         if cache_count == 0:
             print("✅ Family library cache is already empty.")
             return
-        
+
         # Confirm deletion
         print(f"⚠️  Found {cache_count} cached family library entries.")
         confirm = input("Are you sure you want to purge family library cache? (y/N): ").strip().lower()
-        
+
         if confirm in ['y', 'yes']:
             # Clear the family library cache
             cursor.execute("DELETE FROM family_library_cache")
             conn.commit()
             conn.close()
-            
+
             print(f"✅ Family library cache purge complete! Deleted {cache_count} entries.")
             print("\n🔄 Next steps:")
             print("- Start the bot and run !force to rebuild family library cache")
             print("- Or wait for the next automatic refresh (runs every hour)")
         else:
             print("❌ Family library cache cancelled.")
-            
+
     except Exception as e:
         print(f"❌ Error purging family library cache: {e}")
         logger.error(f"Error purging family library cache from command line: {e}", exc_info=True)
@@ -369,7 +369,7 @@ def purge_all_cache() -> None:
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Get counts before deletion
         cursor.execute("SELECT COUNT(*) FROM game_details_cache")
         game_count = cursor.fetchone()[0]
@@ -381,13 +381,13 @@ def purge_all_cache() -> None:
         user_games_count = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM itad_price_cache")
         itad_count = cursor.fetchone()[0]
-        
+
         total_count = game_count + wishlist_count + family_count + user_games_count + itad_count
-        
+
         if total_count == 0:
             print("✅ All caches are already empty.")
             return
-        
+
         # Show breakdown
         print(f"⚠️  Found cached data:")
         print(f"   - Game details: {game_count} entries")
@@ -396,9 +396,9 @@ def purge_all_cache() -> None:
         print(f"   - User games: {user_games_count} entries")
         print(f"   - ITAD prices: {itad_count} entries")
         print(f"   - Total: {total_count} entries")
-        
+
         confirm = input("Are you sure you want to purge ALL cache data? (y/N): ").strip().lower()
-        
+
         if confirm in ['y', 'yes']:
             # Clear all caches
             cursor.execute("DELETE FROM game_details_cache")
@@ -408,7 +408,7 @@ def purge_all_cache() -> None:
             cursor.execute("DELETE FROM itad_price_cache")
             conn.commit()
             conn.close()
-            
+
             print(f"✅ All cache purge complete! Deleted {total_count} total entries.")
             print("\n🔄 Next steps:")
             print("- Start the bot to begin rebuilding caches automatically")
@@ -416,7 +416,7 @@ def purge_all_cache() -> None:
             print("- Run !coop 2 to cache multiplayer games")
         else:
             print("❌ Cache purge cancelled.")
-            
+
     except Exception as e:
         print(f"❌ Error purging all cache: {e}")
         logger.error(f"Error purging all cache from command line: {e}", exc_info=True)
@@ -426,7 +426,7 @@ def purge_all_cache() -> None:
 if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='FamilyBot - Discord bot for Steam family management')
-    parser.add_argument('--purge-cache', action='store_true', 
+    parser.add_argument('--purge-cache', action='store_true',
                        help='Purge game details cache to force fresh USD pricing and new boolean fields')
     parser.add_argument('--purge-wishlist', action='store_true',
                        help='Purge wishlist cache to force fresh wishlist data')
@@ -438,9 +438,9 @@ if __name__ == "__main__":
                        help='Scan all family members\' complete game libraries and cache game details')
     parser.add_argument('--full-wishlist-scan', action='store_true',
                        help='Perform comprehensive scan of ALL common wishlist games')
-    
+
     args = parser.parse_args()
-    
+
     # Handle command line operations
     if args.purge_cache:
         print("🗑️ Purging game details cache...")
@@ -463,7 +463,7 @@ if __name__ == "__main__":
         print("Please start the bot and use the Discord command: !full_library_scan")
         print("This command requires Discord interaction for progress updates and admin verification.")
         sys.exit(1)
-    
+
     # Normal bot startup with proper signal handling
     logger.info("Starting FamilyBot client...")
     try:
@@ -481,14 +481,14 @@ client.send_log_dm = send_log_dm  # type: ignore
 client.send_dm = send_dm  # type: ignore
 client.edit_msg = edit_msg  # type: ignore
 client.get_pinned_message = get_pinned_message  # type: ignore
-    
+
 
 def main():
     """Entry point for the familybot script alias."""
     # This function allows the bot to be run via 'uv run familybot'
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='FamilyBot - Discord bot for Steam family management')
-    parser.add_argument('--purge-cache', action='store_true', 
+    parser.add_argument('--purge-cache', action='store_true',
                        help='Purge game details cache to force fresh USD pricing and new boolean fields')
     parser.add_argument('--purge-wishlist', action='store_true',
                        help='Purge wishlist cache to force fresh wishlist data')
@@ -500,9 +500,9 @@ def main():
                        help='Scan all family members\' complete game libraries and cache game details')
     parser.add_argument('--full-wishlist-scan', action='store_true',
                        help='Perform comprehensive scan of ALL common wishlist games')
-    
+
     args = parser.parse_args()
-    
+
     # Handle command line operations
     if args.purge_cache:
         print("🗑️ Purging game details cache...")
@@ -525,7 +525,7 @@ def main():
         print("Please start the bot and use the Discord command: !full_library_scan")
         print("This command requires Discord interaction for progress updates and admin verification.")
         sys.exit(1)
-    
+
     # Normal bot startup with proper signal handling
     logger.info("Starting FamilyBot client...")
     try:

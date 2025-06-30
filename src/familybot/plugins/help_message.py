@@ -79,7 +79,7 @@ class help_message(Extension):
 
         # Build command sections as separate items for better truncation control
         command_sections = []
-        
+
         for file_name in plugin_files:
             if file_name.endswith(".py") and not file_name.startswith("__"):
                 file_path = os.path.join(PLUGIN_PATH, file_name)
@@ -95,7 +95,7 @@ class help_message(Extension):
                                     name = parts[1].strip()
                                     if name.startswith("!"):
                                         name = name[1:]  # Remove the leading !
-                                    
+
                                     data = {
                                         'name' : name,
                                         'description' : parts[2].strip(),
@@ -127,7 +127,7 @@ class help_message(Extension):
             if not pinned_messages:
                 # Use centralized send_to_channel function which handles message splitting
                 await self.bot.send_to_channel(HELP_CHANNEL_ID, full_help_message)
-                
+
                 # Get the channel to pin the message
                 if help_channel and hasattr(help_channel, 'fetch_message'):
                     # Get the last message in the channel (should be our help message)

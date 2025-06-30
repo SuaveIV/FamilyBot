@@ -34,7 +34,7 @@ def _migrate_gamelist_to_db(conn: sqlite3.Connection):
                     if appid:
                         # For old games, use 'NOW' for detected_at, as we don't have historical data
                         appids_to_insert.append((appid,)) # Only appid for default timestamp
-                
+
                 if appids_to_insert:
                     cursor = conn.cursor()
                     # Use INSERT OR IGNORE in case some games already exist from a partial run

@@ -50,14 +50,14 @@ def get_lowest_price(steam_app_id: int) -> str:
         if answer_storelow and answer_storelow[0].get("lows") and answer_storelow[0]["lows"]:
             price_amount = answer_storelow[0]["lows"][0]["price"]["amount"]
             shop_name = answer_storelow[0]["lows"][0].get("shop", {}).get("name", "Unknown Store")
-            
+
             # Cache the price data permanently (historical lowest price)
             cache_itad_price(str(steam_app_id), {
                 'lowest_price': str(price_amount),
                 'lowest_price_formatted': f"${price_amount}",
                 'shop_name': shop_name
             }, permanent=True)
-            
+
             logger.debug(f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}")
             return str(price_amount)
         else:
@@ -102,76 +102,76 @@ def get_common_elements_in_lists(list_of_lists: list) -> list:
 class ProgressTracker:
     """
     Tracks progress and generates formatted progress messages with time estimation.
-    
+
     Args:
         total_items: Total number of items to process
         progress_interval: Percentage interval for reporting (default: 10)
     """
-    
+
     # Constants
     DEFAULT_PROGRESS_INTERVAL = 10
     MIN_ELAPSED_TIME_FOR_ESTIMATION = 1  # Seconds
     SECONDS_PER_MINUTE = 60
-    
+
     def __init__(self, total_items: int, progress_interval: int = DEFAULT_PROGRESS_INTERVAL) -> None:
         if total_items < 0:
             raise ValueError("total_items must be non-negative")
         if not 1 <= progress_interval <= 100:
             raise ValueError("progress_interval must be between 1 and 100")
-            
+
         self.total_items = total_items
         self.progress_interval = progress_interval
         self.start_time = time.time()
         self.last_reported_percent = 0
-        
+
     def should_report_progress(self, processed_count: int) -> bool:
         """Check if progress should be reported based on interval."""
         if self.total_items == 0:
             return False
-            
+
         current_percent = min(100, int(processed_count * 100 / self.total_items))
         return current_percent // self.progress_interval > self.last_reported_percent // self.progress_interval
-    
+
     def get_progress_message(self, processed_count: int, context_info: str = "") -> str:
         """Generate formatted progress message with time estimation."""
         if self.total_items == 0:
             return "No items to process"
-            
+
         # Calculate once and reuse
         progress_ratio = processed_count / self.total_items
         current_percent = min(100, int(progress_ratio * 100))
         elapsed_time = time.time() - self.start_time
-        
+
         # Build base message
         progress_msg = f"📊 **Progress: {current_percent}%** ({processed_count}/{self.total_items}"
         if context_info:
             progress_msg += f" {context_info}"
         progress_msg += ")"
-        
+
         # Add time estimation if we have meaningful progress
         if current_percent > 0 and elapsed_time > self.MIN_ELAPSED_TIME_FOR_ESTIMATION:
             time_msg = self._safe_time_calculation(elapsed_time, progress_ratio)
             progress_msg += time_msg
-        
+
         self.last_reported_percent = current_percent
         return progress_msg
-    
+
     def _safe_time_calculation(self, elapsed_time: float, progress_ratio: float) -> str:
         """Safely calculate time remaining with error handling."""
         try:
             if progress_ratio <= 0 or elapsed_time <= 0:
                 return ""
-                
+
             estimated_total = elapsed_time / progress_ratio
             remaining = max(0, estimated_total - elapsed_time)
-            
+
             if remaining >= self.SECONDS_PER_MINUTE:
                 return f" | ⏱️ ~{int(remaining / self.SECONDS_PER_MINUTE)} min remaining"
             elif remaining >= 1:
                 return f" | ⏱️ ~{int(remaining)} sec remaining"
             else:
                 return " | ⏱️ Almost done!"
-                
+
         except (ZeroDivisionError, OverflowError, ValueError):
             logger.warning("Error calculating time estimation")
             return ""
@@ -180,23 +180,23 @@ class ProgressTracker:
 def split_message(message: str, max_length: int = 1900) -> List[str]:
     """
     Split a message into multiple parts that fit within Discord's character limit.
-    
+
     Args:
         message: The message to split
         max_length: Maximum length per message part (default 1900 to stay well under 2000 limit)
-    
+
     Returns:
         List of message parts
     """
     if len(message) <= max_length:
         return [message]
-    
+
     parts = []
     current_part = ""
-    
+
     # Split by lines first to preserve formatting
     lines = message.split('\n')
-    
+
     for line in lines:
         # If a single line is too long, we need to split it
         if len(line) > max_length:
@@ -204,7 +204,7 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
             if current_part:
                 parts.append(current_part.rstrip())
                 current_part = ""
-            
+
             # Split the long line by words
             words = line.split(' ')
             for word in words:
@@ -228,57 +228,57 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
                 current_part = line + "\n"
             else:
                 current_part += line + "\n"
-    
+
     # Add any remaining content
     if current_part:
         parts.append(current_part.rstrip())
-    
+
     return parts
 
 
-def truncate_message_list(items: List[str], header: str = "", footer_template: str = "\n... and {count} more items!", 
+def truncate_message_list(items: List[str], header: str = "", footer_template: str = "\n... and {count} more items!",
                          max_length: int = 1900) -> str:
     """
     Truncates a list of items to fit within Discord's message limit.
-    
+
     Args:
         items: List of strings to include in the message
         header: Optional header text to prepend
         footer_template: Template for footer when truncation occurs. Use {count} for remaining items count.
         max_length: Maximum message length (defaults to Discord's limit)
-    
+
     Returns:
         Formatted message string that fits within the character limit
     """
     if not items:
         return header
-    
+
     # Build full content first
     full_content = header + '\n'.join(items)
-    
+
     # If it fits, return as-is
     if len(full_content) <= max_length:
         return full_content
-    
+
     # Calculate available space for items
     sample_footer = footer_template.format(count=999)  # Use max digits for calculation
     available_space = max_length - len(header) - len(sample_footer)
-    
+
     if available_space <= 0:
         logger.warning(f"Header and footer too long for message truncation. Header: {len(header)}, Footer: {len(sample_footer)}")
         return header[:max_length]
-    
+
     # Add items until we run out of space
     truncated_items = []
     current_length = 0
-    
+
     for item in items:
         item_length = len(item) + 1  # +1 for newline
         if current_length + item_length > available_space:
             break
         truncated_items.append(item)
         current_length += item_length
-    
+
     # Build final message
     if len(truncated_items) < len(items):
         remaining_count = len(items) - len(truncated_items)

@@ -24,10 +24,10 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 def sanitize_log_message(message: str) -> str:
     """
     Sanitize log messages to remove or mask sensitive information.
-    
+
     Args:
         message: Raw log message
-        
+
     Returns:
         Sanitized log message with sensitive data masked
     """
@@ -36,51 +36,51 @@ def sanitize_log_message(message: str) -> str:
 
     # Mask Steam API keys (32 character hex strings)
     message = re.sub(r'\b[A-F0-9]{32}\b', '[STEAM_API_KEY]', message, flags=re.IGNORECASE)
-    
+
     # Mask Discord tokens (longer base64-like strings)
     message = re.sub(r'\b[A-Za-z0-9+/]{50,}\b', '[DISCORD_TOKEN]', message)
-    
+
     # Mask potential passwords or secrets
     message = re.sub(r'(password|secret|key|token)[\s=:]+[^\s]+', r'\1=[MASKED]', message, flags=re.IGNORECASE)
-    
+
     return message
 
 
 def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     """
     Set up comprehensive logging for the main FamilyBot application.
-    
+
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        
+
     Returns:
         Configured logger instance
     """
     # Create logs directory if it doesn't exist
     logs_dir = PROJECT_ROOT / "logs"
     logs_dir.mkdir(exist_ok=True)
-    
+
     # Convert log level string to logging constant
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    
+
     # Create main logger
     logger = logging.getLogger("familybot")
     logger.setLevel(numeric_level)
-    
+
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
-    
+
     # Create formatters
     detailed_formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
+
     error_formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - [%(funcName)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
+
     # 1. Console handler (all levels)
     # Use coloredlogs for prettier console output
     coloredlogs.install(
@@ -89,7 +89,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         fmt='%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
+
     # 2. Main log file (all levels) - rotating
     main_log_file = logs_dir / "familybot.log"
     main_file_handler = logging.handlers.RotatingFileHandler(
@@ -103,7 +103,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(main_file_handler)
-    
+
     # 3. Error log file (WARNING and above) - rotating
     error_log_file = logs_dir / "familybot_errors.log"
     error_file_handler = logging.handlers.RotatingFileHandler(
@@ -117,7 +117,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(error_file_handler)
-    
+
     # 4. Steam API specific log file
     steam_log_file = logs_dir / "steam_api.log"
     steam_file_handler = logging.handlers.RotatingFileHandler(
@@ -130,27 +130,27 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     steam_file_handler.setFormatter(jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
-    
+
     # Create a filter for Steam API related logs
     class SteamAPIFilter(logging.Filter):
         def filter(self, record):
             return any(keyword in record.getMessage().lower() for keyword in [
                 'steam', 'api', 'rate limit', 'private profile', 'success:2'
             ])
-    
+
     steam_file_handler.addFilter(SteamAPIFilter())
     logger.addHandler(steam_file_handler)
-    
+
     # Add a custom filter to sanitize all log messages
     class SanitizeFilter(logging.Filter):
         def filter(self, record):
             record.msg = sanitize_log_message(str(record.msg))
             return True
-    
+
     # Apply sanitization to all handlers
     for handler in logger.handlers:
         handler.addFilter(SanitizeFilter())
-    
+
     logger.info(f"Bot logging initialized - Level: {log_level}, Logs dir: {logs_dir}")
     return logger
 
@@ -158,39 +158,39 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
 def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.Logger:
     """
     Set up logging for utility scripts.
-    
+
     Args:
         script_name: Name of the script (e.g., 'populate_database', 'populate_prices')
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        
+
     Returns:
         Configured logger instance
     """
     # Create logs directory if it doesn't exist
     logs_dir = PROJECT_ROOT / "logs" / "scripts"
     logs_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Convert log level string to logging constant
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    
+
     # Create script-specific logger
     logger = logging.getLogger(f"script.{script_name}")
     logger.setLevel(numeric_level)
-    
+
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
-    
+
     # Create formatters
     script_formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
+
     progress_formatter = logging.Formatter(
         '%(asctime)s - %(message)s',
         datefmt='%H:%M:%S'
     )
-    
+
     # 1. Console handler (INFO and above for scripts)
     coloredlogs.install(
         level=log_level,
@@ -198,7 +198,7 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         fmt='%(asctime)s - %(message)s',
         datefmt='%H:%M:%S'
     )
-    
+
     # 2. Script-specific log file
     script_log_file = logs_dir / f"{script_name}.log"
     script_file_handler = logging.handlers.RotatingFileHandler(
@@ -212,7 +212,7 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(script_file_handler)
-    
+
     # 3. Combined script errors log
     script_errors_file = logs_dir / "script_errors.log"
     script_error_handler = logging.handlers.RotatingFileHandler(
@@ -226,17 +226,17 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     ))
     logger.addHandler(script_error_handler)
-    
+
     # Add sanitization filter
     class SanitizeFilter(logging.Filter):
         def filter(self, record):
             record.msg = sanitize_log_message(str(record.msg))
             return True
-    
+
     # Apply sanitization to all handlers
     for handler in logger.handlers:
         handler.addFilter(SanitizeFilter())
-    
+
     logger.info(f"Script logging initialized for {script_name} - Level: {log_level}")
     return logger
 
@@ -244,10 +244,10 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
 def get_logger(name: str) -> logging.Logger:
     """
     Get a logger instance with the specified name.
-    
+
     Args:
         name: Logger name (typically __name__)
-        
+
     Returns:
         Logger instance
     """
@@ -257,7 +257,7 @@ def get_logger(name: str) -> logging.Logger:
 def log_private_profile_detection(logger: logging.Logger, user_name: str, steam_id: str, operation: str):
     """
     Log private profile detection with consistent formatting.
-    
+
     Args:
         logger: Logger instance
         user_name: Friendly name of the user
@@ -270,7 +270,7 @@ def log_private_profile_detection(logger: logging.Logger, user_name: str, steam_
 def log_api_error(logger: logging.Logger, api_name: str, error: Exception, context: Optional[str] = None):
     """
     Log API errors with consistent formatting and context.
-    
+
     Args:
         logger: Logger instance
         api_name: Name of the API (e.g., 'Steam Store', 'ITAD')
@@ -284,7 +284,7 @@ def log_api_error(logger: logging.Logger, api_name: str, error: Exception, conte
 def log_rate_limit(logger: logging.Logger, api_name: str, backoff_time: float, reason: str = ""):
     """
     Log rate limiting events.
-    
+
     Args:
         logger: Logger instance
         api_name: Name of the API being rate limited
@@ -298,7 +298,7 @@ def log_rate_limit(logger: logging.Logger, api_name: str, backoff_time: float, r
 def log_performance_metric(logger: logging.Logger, operation: str, duration: float, count: int = 1):
     """
     Log performance metrics for operations.
-    
+
     Args:
         logger: Logger instance
         operation: Name of the operation
@@ -317,36 +317,36 @@ web_log_queue = None
 def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
     """
     Set up logging for the web UI.
-    
+
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        
+
     Returns:
         Configured logger instance
     """
     global web_log_queue
     # Convert log level string to logging constant
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    
+
     # Create web logger
     logger = logging.getLogger("familybot.web")
     logger.setLevel(numeric_level)
-    
+
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
-    
+
     # Create web handler
     from .web_logging import WebSocketQueueHandler
     web_handler = WebSocketQueueHandler()
     web_handler.setLevel(numeric_level)
     web_log_queue = web_handler.queue
-    
+
     # Create formatter
     web_formatter = jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
     )
     web_handler.setFormatter(web_formatter)
     logger.addHandler(web_handler)
-    
+
     logger.info(f"Web logging initialized - Level: {log_level}")
     return logger

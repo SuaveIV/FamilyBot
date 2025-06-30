@@ -80,7 +80,7 @@ templates = Jinja2Templates(directory=str(templates_dir))
 # Dependency to get database connection
 def get_db():
     """Get database connection with thread safety for FastAPI, using the main bot's connection logic.
-    
+
     This function now uses `get_db_connection()` from `familybot.lib.database`, which
     is configured to connect to `bot_data.db` (located in the project root), ensuring
     consistency across the application.
@@ -123,34 +123,34 @@ async def admin_page(request: Request):
 async def get_bot_status():
     """Get bot status information"""
     global _bot_client, _bot_start_time, _last_activity
-    
+
     uptime = None
     if _bot_start_time:
         uptime_delta = datetime.utcnow() - _bot_start_time
         uptime = str(uptime_delta).split('.')[0]  # Remove microseconds
-    
+
     # Check token validity using the token plugin's logic
     token_valid = False
     try:
         import os
 
         from familybot.config import PROJECT_ROOT, TOKEN_SAVE_PATH
-        
+
         token_save_dir = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
         token_file_path = os.path.join(token_save_dir, "token")
         exp_file_path = os.path.join(token_save_dir, "token_exp")
-        
+
         # Check if token files exist and token is not expired
         if os.path.exists(token_file_path) and os.path.exists(exp_file_path):
             with open(exp_file_path, 'r') as f:
                 exp_timestamp = float(f.read().strip())
-            
+
             now_timestamp = datetime.utcnow().timestamp()
             token_valid = now_timestamp < exp_timestamp
     except Exception as e:
         logger.error(f"Error checking token status: {e}")
         token_valid = False
-    
+
     return BotStatus(
         online=_bot_client is not None,
         uptime=uptime,
@@ -164,7 +164,7 @@ async def get_bot_status():
 async def get_cache_stats(conn=Depends(get_db)):
     """Get cache statistics"""
     cursor = conn.cursor()
-    
+
     stats = {}
     tables = {
         'game_details': 'game_details_cache',
@@ -174,7 +174,7 @@ async def get_cache_stats(conn=Depends(get_db)):
         'itad_prices': 'itad_price_cache',
         'discord_users': 'discord_users_cache'
     }
-    
+
     for key, table in tables.items():
         try:
             cursor.execute(f"SELECT COUNT(*) FROM {table}")
@@ -182,7 +182,7 @@ async def get_cache_stats(conn=Depends(get_db)):
         except sqlite3.OperationalError:
             # Table doesn't exist yet
             stats[key] = 0
-    
+
     return CacheStats(**stats)
 
 @app.get("/api/family-members", response_model=List[FamilyMember])
@@ -192,7 +192,7 @@ async def get_family_members(conn=Depends(get_db)):
     try:
         cursor.execute("SELECT steam_id, friendly_name, discord_id FROM family_members")
         rows = cursor.fetchall()
-        
+
         return [
             FamilyMember(
                 steam_id=row['steam_id'],
@@ -211,12 +211,12 @@ async def get_family_library(limit: int = 50, conn=Depends(get_db)):
     family_apps = get_cached_family_library()
     if not family_apps:
         return []
-    
+
     games = []
     for app in family_apps[:limit]:
         appid = str(app['appid'])
         game_details = get_cached_game_details(appid)
-        
+
         if game_details:
             games.append(GameDetails(
                 appid=appid,
@@ -229,7 +229,7 @@ async def get_family_library(limit: int = 50, conn=Depends(get_db)):
                 is_coop=game_details.get('is_coop', False),
                 is_family_shared=game_details.get('is_family_shared', False)
             ))
-    
+
     return games
 
 @app.get("/api/wishlist")
@@ -237,7 +237,7 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
     """Get paginated wishlist summary across all family members"""
     cursor = conn.cursor()
     offset = (page - 1) * limit
-    
+
     try:
         # Base query - don't use DISTINCT when showing all members
         # Temporarily remove expiration filter to show all data for testing
@@ -249,12 +249,12 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
             """
             params = [family_member_id]
             count_query = f"SELECT COUNT(*) {base_query}"
-            
+
             # Get paginated items for specific member
             query = f"""
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM wishlist_cache w
-                LEFT JOIN game_details_cache g ON w.appid = g.appid 
+                LEFT JOIN game_details_cache g ON w.appid = g.appid
                     AND (g.permanent = 1 OR g.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
                 WHERE w.steam_id = ?
                 ORDER BY g.name LIMIT {limit} OFFSET {offset}
@@ -266,12 +266,12 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
             """
             params = []
             count_query = f"SELECT COUNT(*) {base_query}"
-            
+
             # Get paginated items for all members
             query = f"""
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM wishlist_cache w
-                LEFT JOIN game_details_cache g ON w.appid = g.appid 
+                LEFT JOIN game_details_cache g ON w.appid = g.appid
                     AND (g.permanent = 1 OR g.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
                 ORDER BY g.name, w.steam_id LIMIT {limit} OFFSET {offset}
             """
@@ -283,7 +283,7 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
         # Get paginated items
         cursor.execute(query, params)
         rows = cursor.fetchall()
-        
+
         wishlist_items = []
         for row in rows:
             price_data = None
@@ -293,14 +293,14 @@ async def get_wishlist_summary(page: int = 1, limit: int = 20, family_member_id:
                     price_data = json.loads(row['price_data'])
                 except:
                     pass
-            
+
             wishlist_items.append(WishlistItem(
                 appid=row['appid'],
                 steam_id=row['steam_id'],
                 game_name=row['name'],
                 price_data=price_data
             ))
-        
+
         return {"items": wishlist_items, "total_items": total_items}
     except sqlite3.OperationalError:
         # Table doesn't exist yet
@@ -312,7 +312,7 @@ async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT s.appid, s.detected_at, g.name, g.type, g.is_free, g.categories, 
+            SELECT s.appid, s.detected_at, g.name, g.type, g.is_free, g.categories,
                    g.price_data, g.is_multiplayer, g.is_coop, g.is_family_shared
             FROM saved_games s
             LEFT JOIN game_details_cache g ON s.appid = g.appid
@@ -320,26 +320,26 @@ async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
             LIMIT ?
         """, (limit,))
         rows = cursor.fetchall()
-        
+
         games = []
         for row in rows:
             categories = []
             price_data = None
-            
+
             if row['categories']:
                 import json
                 try:
                     categories = json.loads(row['categories'])
                 except:
                     pass
-            
+
             if row['price_data']:
                 import json
                 try:
                     price_data = json.loads(row['price_data'])
                 except:
                     pass
-            
+
             games.append(GameDetails(
                 appid=row['appid'],
                 name=row['name'],
@@ -351,7 +351,7 @@ async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
                 is_coop=bool(row['is_coop']) if row['is_coop'] is not None else False,
                 is_family_shared=bool(row['is_family_shared']) if row['is_family_shared'] is not None else False
             ))
-        
+
         return games
     except sqlite3.OperationalError:
         # Table doesn't exist yet
@@ -372,7 +372,7 @@ async def get_config_data():
         cursor.execute("SELECT COUNT(*) FROM family_members")
         family_count = cursor.fetchone()[0]
         conn.close()
-        
+
         return ConfigData(
             discord_configured=bool(DISCORD_API_KEY and ADMIN_DISCORD_ID),
             steam_family_configured=bool(FAMILY_STEAM_ID and NEW_GAME_CHANNEL_ID),
@@ -402,17 +402,17 @@ async def populate_database_api(
     try:
         populator = DatabasePopulator(rate_limit_mode)
         family_members = populator.load_family_members()
-        
+
         total_cached = 0
         if not family_members:
             raise HTTPException(status_code=400, detail="No family members configured.")
 
         if not wishlist_only:
             total_cached += await populator.populate_family_libraries(family_members)
-        
+
         if not library_only:
             total_cached += await populator.populate_wishlists(family_members)
-        
+
         await populator.close()
         update_last_activity()
         return CommandResponse(success=True, message=f"Database populated. Total new games cached: {total_cached}")
@@ -469,7 +469,7 @@ async def plugin_admin_action_api(command_name: str, target_user: Optional[str] 
             result = await force_deals_action(target_friendly_name=target_user)
         else:
             raise HTTPException(status_code=400, detail="Invalid plugin admin command.")
-        
+
         update_last_activity()
         return CommandResponse(success=result["success"], message=result["message"])
     except Exception as e:
@@ -482,9 +482,9 @@ async def purge_cache(cache_type: str = "all"):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         if cache_type == "all":
-            tables = ['game_details_cache', 'user_games_cache', 'wishlist_cache', 
+            tables = ['game_details_cache', 'user_games_cache', 'wishlist_cache',
                      'family_library_cache', 'itad_price_cache', 'discord_users_cache']
             for table in tables:
                 cursor.execute(f"DELETE FROM {table}")
@@ -504,11 +504,11 @@ async def purge_cache(cache_type: str = "all"):
                 message = f"{cache_type.title()} cache purged successfully"
             else:
                 raise HTTPException(status_code=400, detail="Invalid cache type")
-        
+
         conn.commit()
         conn.close()
         update_last_activity()
-        
+
         return CommandResponse(success=True, message=message)
     except Exception as e:
         logger.error(f"Error purging cache: {e}")
@@ -520,18 +520,18 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
     # This is a simplified implementation
     # In a real implementation, you'd want to read from log files or a log database
     logs = []
-    
+
     try:
         # Try to read from log files if they exist
         log_dir = Path(PROJECT_ROOT) / "logs"
         if log_dir.exists():
             log_files = sorted(log_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
-            
+
             for log_file in log_files[:3]:  # Read from last 3 log files
                 try:
                     with open(log_file, 'r', encoding='utf-8') as f:
                         lines = f.readlines()[-limit//3:]  # Get recent lines from each file
-                        
+
                     for line in lines:
                         if line.strip():
                             # Parse log line (simplified)
@@ -541,7 +541,7 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
                                 log_level = log_data.get("levelname")
                                 if level and log_level.upper() != level.upper():
                                     continue
-                                
+
                                 logs.append(LogEntry(
                                     timestamp=log_data.get("asctime"),
                                     level=log_level,
@@ -554,15 +554,15 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
                                     timestamp_str = parts[0]
                                     log_level = parts[1]
                                     message = parts[2] if len(parts) == 3 else ' - '.join(parts[2:])
-                                    
+
                                     if level and log_level.upper() != level.upper():
                                         continue
-                                    
+
                                     try:
                                         timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                                     except:
                                         timestamp = datetime.utcnow()
-                                    
+
                                     logs.append(LogEntry(
                                         timestamp=timestamp,
                                         level=log_level,
@@ -573,7 +573,7 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
                     logger.error(f"Error reading log file {log_file}: {e}")
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
-    
+
     # Sort by timestamp and limit
     logs.sort(key=lambda x: x.timestamp, reverse=True)
     return logs[:limit]
@@ -622,7 +622,7 @@ async def startup_event():
     """Initialize web application"""
     setup_web_logging()
     logger.info("FamilyBot Web UI starting up...")
-    
+
     # Create static and template directories if they don't exist
     (static_dir / "css").mkdir(exist_ok=True)
     (static_dir / "js").mkdir(exist_ok=True)
