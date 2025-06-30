@@ -3,11 +3,11 @@
 
 import sys
 from pathlib import Path
+from bump_version import bump_version
 
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from bump_version import bump_version
 
 if __name__ == "__main__":
     if bump_version("patch"):
