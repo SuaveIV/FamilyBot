@@ -9,6 +9,8 @@ from datetime import datetime
 
 import requests
 from interactions import Extension, GuildText, IntervalTrigger, Task, listen
+from steam.steamid import SteamID
+from steam.webapi import WebAPI
 from interactions.ext.prefixed_commands import (PrefixedContext,
                                                 prefixed_command)
 
@@ -26,12 +28,11 @@ from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_utils import (find_in_2d_list, format_message,
                                         get_family_game_list_url)
 # Import enhanced logging configuration
-from familybot.lib.logging_config import (get_logger, log_api_error,
-                                          log_private_profile_detection,
-                                          log_rate_limit)
+from familybot.lib.logging_config import (get_logger,
+                                          log_private_profile_detection)
 from familybot.lib.types import DISCORD_MESSAGE_LIMIT, FamilyBotClient
 from familybot.lib.utils import (ProgressTracker, get_lowest_price,
-                                 truncate_message_list)
+                                 split_message, truncate_message_list)
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)
@@ -50,10 +51,13 @@ class steam_family(Extension):
 
     def __init__(self, bot: FamilyBotClient):
         self.bot: FamilyBotClient = bot  # Explicit type annotation for the bot attribute
+        self.steam_api = WebAPI(key=STEAMWORKS_API_KEY) if STEAMWORKS_API_KEY and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE" else None
         # Rate limiting tracking
         self._last_steam_api_call = 0.0
         self._last_steam_store_api_call = 0.0
         logger.info("Steam Family Plugin loaded")
+        if not self.steam_api:
+            logger.warning("SteamWorks API key not configured. Some features will be disabled.")
 
     async def _rate_limit_steam_api(self) -> None:
         """Enforce rate limiting for Steam API calls (non-storefront)."""
@@ -103,23 +107,6 @@ class steam_family(Extension):
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID} (after initial fetch attempt): {e}")
 
-    async def _handle_api_response(self, api_name: str, response: requests.Response) -> dict | None: # Fix type annotation syntax
-        """Helper to process API responses, handle errors, and return JSON data."""
-        try:
-            response.raise_for_status()
-            json_data = json.loads(response.text)
-            return json_data
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request error for {api_name}: {e}. URL: {response.request.url}")
-            await self._send_admin_dm(f"Req error {api_name}: {e}")
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error for {api_name}: {e}. Raw: {response.text[:200]}")
-            await self._send_admin_dm(f"JSON error {api_name}: {e}")
-        except Exception as e:
-            logger.critical(f"An unexpected error occurred processing {api_name} response: {e}", exc_info=True)
-            await self._send_admin_dm(f"Critical error {api_name}: {e}")
-        return None
-
     async def _load_family_members_from_db(self) -> dict:
         """
         Loads family member data (steam_id: friendly_name) from the database,
@@ -160,10 +147,14 @@ class steam_family(Extension):
                 steam_id = row["steam_id"]
                 friendly_name = row["friendly_name"]
                 # Basic validation for SteamID64: must be 17 digits and start with '7656119'
-                if isinstance(steam_id, str) and len(steam_id) == 17 and steam_id.startswith("7656119"):
-                    members[steam_id] = friendly_name
-                else:
-                    logger.warning(f"Database: Invalid SteamID '{steam_id}' found for user '{friendly_name}'. Skipping this entry.")
+                try:
+                    sid = SteamID(steam_id)
+                    if sid.is_valid():
+                        members[str(sid.as_64)] = friendly_name
+                    else:
+                        logger.warning(f"Database: Invalid SteamID '{steam_id}' found for user '{friendly_name}'. Skipping this entry.")
+                except Exception:
+                    logger.warning(f"Database: Invalid SteamID format '{steam_id}' for user '{friendly_name}'. Skipping this entry.")
             logger.debug(f"Loaded {len(members)} valid family members from database.")
         except sqlite3.Error as e:
             logger.error(f"Error reading family members from DB: {e}")
@@ -195,6 +186,63 @@ class steam_family(Extension):
     """
     [help]|coop| it returns all the family shared multiplayer games in the shared library with a given numbers of copies| !coop NUMBER_OF_COPIES | ***This command can be used in bot DM***
     """
+    @prefixed_command(name="profile")
+    async def profile_command(self, ctx: PrefixedContext, friendly_name: str):
+        """Displays a user's Steam profile information."""
+        steam_id = get_steam_id_from_friendly_name(friendly_name)
+        if not steam_id:
+            await ctx.send(f"Could not find a user with the name '{friendly_name}'.")
+            return
+
+        try:
+            player_summaries = self.steam_api.ISteamUser.GetPlayerSummaries(steamids=steam_id) # pylint: disable=no-member # type: ignore
+            if not player_summaries or not player_summaries.get('response', {}).get('players'):
+                await ctx.send("Could not retrieve profile information for this user.")
+                return
+
+            player = player_summaries['response']['players'][0]
+            persona_name = player.get('personaname', 'N/A')
+            profile_url = player.get('profileurl', '#')
+            avatar_full = player.get('avatarfull', '')
+
+            status = {
+                0: "Offline",
+                1: "Online",
+                2: "Busy",
+                3: "Away",
+                4: "Snooze",
+                5: "Looking to trade",
+                6: "Looking to play"
+            }.get(player.get('personastate', 0), "Unknown")
+
+            message = f"**{persona_name}**'s Profile\n"
+            message += f"Status: {status}\n"
+
+            if 'gameextrainfo' in player:
+                message += f"Currently Playing: {player['gameextrainfo']}\n"
+
+            try:
+                recently_played = self.steam_api.IPlayerService.GetRecentlyPlayedGames(steamid=steam_id, count=3)  # pylint: disable=no-member # type: ignore
+                if recently_played and 'response' in recently_played and recently_played['response'].get('total_count', 0) > 0 and recently_played['response'].get('games'):
+                    message += "\n**Recently Played:**\n"
+                    for game in recently_played['response']['games']:
+                        game_name = game.get('name', 'Unknown Game')
+                        playtime_2weeks = game.get('playtime_2weeks', 0)
+                        playtime_forever = game.get('playtime_forever', 0)
+                        message += f"- {game_name} ({playtime_2weeks/60:.1f} hrs last 2 weeks, {playtime_forever/60:.1f} hrs total)\n"
+            except Exception as e:
+                logger.warning(f"Could not fetch recently played games for {friendly_name}: {e}")
+
+            message += f"\nProfile URL: <{profile_url}>\n"
+            if avatar_full:
+                message += f"Avatar: {avatar_full}"
+
+            await ctx.send(message)
+
+        except Exception as e:
+            logger.error(f"Error fetching profile for {friendly_name}: {e}")
+            await ctx.send("An error occurred while fetching the profile.")
+
     @prefixed_command(name="coop")
     async def coop_command(self, ctx: PrefixedContext, number_str: str | None = None):
         start_time = time.time()  # Add this near the start of each command function
@@ -224,15 +272,18 @@ class steam_family(Extension):
                 game_list = cached_family_library
             else:
                 # If not cached, fetch from API
+                if not self.steam_api:
+                    await loading_message.edit(content="Steam API key not configured. Cannot fetch family games.")
+                    return
                 await self._rate_limit_steam_api() # Apply rate limit before API call
-                url_family_list = get_family_game_list_url()
-                answer = requests.get(url_family_list, timeout=15)
-                games_json = await self._handle_api_response("GetFamilySharedApps", answer)
-                if not games_json:
+                try:
+                    # Corrected method name based on Steam Web API documentation
+                    games_json = self.steam_api.IPlayerService.GetFamilySharedApps(steamid=FAMILY_STEAM_ID, include_appinfo=1, include_played_free_games=1)  # pylint: disable=no-member # type: ignore
+                    game_list = games_json.get("response", {}).get("apps", [])
+                except Exception as e:
+                    logger.error(f"Error fetching family shared games: {e}")
                     await loading_message.edit(content="Error retrieving family game list.")
                     return
-
-                game_list = games_json.get("response", {}).get("apps", [])
                 if not game_list:
                     logger.warning("No games found in family game list response.")
                     await loading_message.edit(content="No games found in the family library.")
@@ -262,7 +313,7 @@ class steam_family(Extension):
                     game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
                     logger.info(f"Fetching app details from API for AppID: {game_appid} for coop check")
                     app_info_response = requests.get(game_url, timeout=10)
-                    game_info_json = await self._handle_api_response("AppDetails", app_info_response)
+                    game_info_json = app_info_response.json()
                     if not game_info_json: continue
 
                     game_data = game_info_json.get(str(game_appid), {}).get("data")
@@ -304,9 +355,11 @@ class steam_family(Extension):
             if coop_game_names:
                 # Use the utility function to handle message truncation
                 header = '__Common shared multiplayer games__:\n'
-                footer_template = "\n... and {count} more games!"
-                final_message = truncate_message_list(coop_game_names, header, footer_template)
-                await loading_message.edit(content=final_message)
+                final_message = header + '\n'.join(coop_game_names)
+                message_chunks = split_message(final_message)
+                for chunk in message_chunks:
+                    await loading_message.channel.send(content=chunk)
+                await loading_message.delete()
             else:
                 await loading_message.edit(content=f"No common shared multiplayer games found with {number} copies.")
 
@@ -412,15 +465,10 @@ class steam_family(Extension):
 
                     try:
                         await self._rate_limit_steam_api()
-                        wishlist_response = requests.get(wishlist_url, timeout=15)
-                        if wishlist_response.text == "{\"success\":2}":
+                        wishlist_json = self.steam_api.IWishlistService.GetWishlist(steamid=user_steam_id)  # pylint: disable=no-member # type: ignore
+                        if not wishlist_json:
                             log_private_profile_detection(logger, user_name_for_log, user_steam_id, "wishlist")
                             continue
-
-                        wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)
-                        if not wishlist_json:
-                            continue
-
                         wishlist_items = wishlist_json.get("response", {}).get("items", [])
                         if not wishlist_items:
                             logger.info(f"Force deals: No items found in {user_name_for_log}'s wishlist.")
@@ -486,7 +534,7 @@ class steam_family(Extension):
                         await self._rate_limit_steam_store_api()
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         app_info_response = requests.get(game_url, timeout=10)
-                        game_info_json = await self._handle_api_response("AppDetails (Force Deals)", app_info_response)
+                        game_info_json = app_info_response.json()
                         if not game_info_json: continue
 
                         game_data = game_info_json.get(str(app_id), {}).get("data")
@@ -563,13 +611,15 @@ class steam_family(Extension):
                     message_parts.append(f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}")
                     if len(deal['interested_users']) > 3:
                         message_parts.append(f" +{len(deal['interested_users']) - 3} more")
-                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
+                    message_parts.append(f"\n🔗 <https://store.steampowered.com/app/{deal['app_id']}>\n\n")
 
                 final_message = "".join(message_parts)
+                message_chunks = split_message(final_message)
 
                 # Send to wishlist channel
                 try:
-                    await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, final_message)  # type: ignore
+                    for chunk in message_chunks:
+                        await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, chunk)  # type: ignore
                     await ctx.send(f"✅ **Force deals complete!** Posted {len(deals_found)} deals to wishlist channel.")
                     logger.info(f"Force deals: Posted {len(deals_found)} deals to wishlist channel")
                     await self.bot.send_log_dm("Force Deals") # type: ignore
@@ -630,7 +680,7 @@ class steam_family(Extension):
                         await self._rate_limit_steam_store_api()
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         app_info_response = requests.get(game_url, timeout=10)
-                        game_info_json = await self._handle_api_response("AppDetails (Force Deals Unlimited)", app_info_response)
+                        game_info_json = app_info_response.json()
                         if not game_info_json:
                             continue
                         game_data = game_info_json.get(str(app_id), {}).get("data")
@@ -693,10 +743,12 @@ class steam_family(Extension):
                     message_parts.append(f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}")
                     if len(deal['interested_users']) > 3:
                         message_parts.append(f" +{len(deal['interested_users']) - 3} more")
-                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
+                    message_parts.append(f"\n🔗 <https://store.steampowered.com/app/{deal['app_id']}>\n\n")
                 final_message = "".join(message_parts)
+                message_chunks = split_message(final_message)
                 try:
-                    await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, final_message)  # type: ignore
+                    for chunk in message_chunks:
+                        await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, chunk)  # type: ignore
                     await ctx.send(f"✅ **Force deals unlimited complete!** Posted {len(deals_found)} deals to wishlist channel.")
                     logger.info(f"Force deals unlimited: Posted {len(deals_found)} deals to wishlist channel")
                     await self.bot.send_log_dm("Force Deals Unlimited") # type: ignore
@@ -772,12 +824,7 @@ class steam_family(Extension):
                 try:
                     # Get user's owned games
                     await self._rate_limit_steam_api()
-                    owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}&include_appinfo=1&include_played_free_games=1"
-                    logger.info(f"Full library scan: Fetching owned games for {user_name_for_log}")
-
-                    owned_games_response = requests.get(owned_games_url, timeout=15)
-                    owned_games_json = await self._handle_api_response(f"GetOwnedGames ({user_name_for_log})", owned_games_response)
-
+                    owned_games_json = self.steam_api.IPlayerService.GetOwnedGames(steamid=user_steam_id, include_appinfo=1, include_played_free_games=1)  # pylint: disable=no-member # type: ignore
                     if not owned_games_json:
                         error_count += 1
                         continue
@@ -817,7 +864,7 @@ class steam_family(Extension):
                             logger.debug(f"Full library scan: Fetching details for AppID: {app_id}")
 
                             game_info_response = requests.get(game_url, timeout=10)
-                            game_info_json = await self._handle_api_response("AppDetails (Library Scan)", game_info_response)
+                            game_info_json = game_info_response.json()
 
                             if not game_info_json:
                                 continue
@@ -912,14 +959,10 @@ class steam_family(Extension):
 
                 try:
                     await self._rate_limit_steam_api()
-                    wishlist_response = requests.get(wishlist_url, timeout=15)
-                    if wishlist_response.text == "{\"success\":2}":
+                    wishlist_json = self.steam_api.IWishlistService.GetWishlist(steamid=user_steam_id)  # pylint: disable=no-member # type: ignore
+                    if not wishlist_json:
                         logger.info(f"Full scan: {user_name_for_log}'s wishlist is private or empty.")
                         continue
-
-                    wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)
-                    if not wishlist_json: continue
-
                     wishlist_items = wishlist_json.get("response", {}).get("items", [])
                     if not wishlist_items:
                         logger.info(f"Full scan: No items found in {user_name_for_log}'s wishlist.")
@@ -1002,7 +1045,7 @@ class steam_family(Extension):
                         logger.info(f"Full scan: Fetching app details for AppID: {app_id} ({processed_count}/{total_games})")
 
                         game_info_response = requests.get(game_url, timeout=10)
-                        game_info_json = await self._handle_api_response("AppDetails (Full Scan)", game_info_response)
+                        game_info_json = game_info_response.json()
                         if not game_info_json:
                             error_count += 1
                             continue
@@ -1120,16 +1163,10 @@ class steam_family(Extension):
 
                 try:
                     await self._rate_limit_steam_api()
-                    wishlist_response = requests.get(wishlist_url, timeout=15)
-                    if wishlist_response.text == "{\"success\":2}":
+                    wishlist_json = self.steam_api.IWishlistService.GetWishlist(steamid=user_steam_id)  # pylint: disable=no-member # type: ignore
+                    if not wishlist_json:
                         await loading_message.edit(content="❌ Your Steam wishlist is private. Please make it public to use this command.")
                         return
-
-                    wishlist_json = await self._handle_api_response(f"GetWishlist ({user_name_for_log})", wishlist_response)
-                    if not wishlist_json:
-                        await loading_message.edit(content="❌ Error fetching your wishlist. Please try again later.")
-                        return
-
                     wishlist_items = wishlist_json.get("response", {}).get("items", [])
                     if not wishlist_items:
                         await loading_message.edit(content="📭 Your wishlist is empty or contains no items.")
@@ -1179,7 +1216,7 @@ class steam_family(Extension):
                         await self._rate_limit_steam_store_api()
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                         app_info_response = requests.get(game_url, timeout=10)
-                        game_info_json = await self._handle_api_response("AppDetails (Deals)", app_info_response)
+                        game_info_json = app_info_response.json()
                         if not game_info_json:
                             continue
 
@@ -1243,7 +1280,7 @@ class steam_family(Extension):
             if deals_found:
                 message_parts = [f"🎯 **Current Deals on Your Wishlist** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"]
 
-                for deal in deals_found[:10]:  # Show top 10 deals
+                for deal in deals_found:  # Show all deals
                     message_parts.append(f"**{deal['name']}**\n")
                     message_parts.append(f"{deal['deal_reason']}\n")
                     message_parts.append(f"💰 {deal['current_price']}")
@@ -1251,13 +1288,13 @@ class steam_family(Extension):
                         message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal['lowest_price'] != "N/A":
                         message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
-                    message_parts.append(f"\n🔗 https://store.steampowered.com/app/{deal['app_id']}\n\n")
-
-                if len(deals_found) > 10:
-                    message_parts.append(f"... and {len(deals_found) - 10} more deals!")
+                    message_parts.append(f"\n🔗 <https://store.steampowered.com/app/{deal['app_id']}>\n\n")
 
                 final_message = "".join(message_parts)
-                await loading_message.edit(content=final_message)
+                message_chunks = split_message(final_message)
+                for chunk in message_chunks:
+                    await loading_message.channel.send(content=chunk)
+                await loading_message.delete()
                 logger.info(f"Deals: Found {len(deals_found)} deals for {user_name_for_log}")
             else:
                 await loading_message.edit(content=f"📊 **No significant deals found** among {games_checked} games checked.\n\n💡 Try the `!force_deals` command (admin only) for more lenient deal detection.")
