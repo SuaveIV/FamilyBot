@@ -37,9 +37,9 @@ from familybot.lib.logging_config import setup_script_logging # pylint: disable=
 # Setup enhanced logging for this script
 logger = setup_script_logging("populate_prices", "INFO")
 
-# Suppress verbose HTTP request logging from httpx
-
+# Suppress verbose HTTP request logging from other libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("steam").setLevel(logging.WARNING)
 
 
 class PricePopulator:
@@ -47,7 +47,7 @@ class PricePopulator:
     def __init__(self, rate_limit_mode: str = "normal"):
         """Initialize the populator with specified rate limiting."""
         self.rate_limits = {
-            "fast": {"steam_api": 1.2, "store_api": 1.5, "itad_api": 1.0},
+            "fast": {"steam_api": 0.5, "store_api": 1.0, "itad_api": 0.8},
             "normal": {"steam_api": 1.5, "store_api": 2.0, "itad_api": 1.2},
             "slow": {"steam_api": 2.0, "store_api": 2.5, "itad_api": 1.5},
             "conservative": {"steam_api": 3.0, "store_api": 4.0, "itad_api": 2.0}
@@ -60,6 +60,16 @@ class PricePopulator:
         self.base_backoff = 1.0
 
         self.client = httpx.Client(timeout=15.0) # Changed to synchronous client
+
+        # Initialize Steam WebAPI if available
+        self.steam_api = None
+        if STEAMWORKS_API_KEY and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE":
+            try:
+                self.steam_api = WebAPI(key=STEAMWORKS_API_KEY)
+                print("🔧 Steam WebAPI initialized successfully")
+            except (ValueError, TypeError, OSError, ImportError) as e:
+                logger.warning("Failed to initialize Steam WebAPI: %s", e)
+                self.steam_api = None
 
         print(f"🔧 Rate limiting mode: {rate_limit_mode}")
         print(f"   Steam API: {self.current_limits['steam_api']}s (delay per request)")
@@ -214,16 +224,17 @@ class PricePopulator:
     def fetch_steam_library_price(self, app_id: str) -> tuple[bool, str]:
         """Use Steam library WebAPI as fallback for price data."""
         try:
-            if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
-                logger.debug("Steam library fallback skipped for %s: No API key", app_id)
+            if not self.steam_api:
+                logger.debug("Steam library fallback skipped for %s: No API instance", app_id)
                 return False, 'no_api_key'
-
-            api = WebAPI(key=STEAMWORKS_API_KEY)
 
             # Try to get app info using Steam library
             try:
+                # Add rate limiting for Steam API calls
+                time.sleep(self.current_limits["steam_api"])
+
                 # Get app list and find our app
-                app_list = api.call('ISteamApps.GetAppList')
+                app_list = self.steam_api.call('ISteamApps.GetAppList')
                 if app_list and 'applist' in app_list:
                     for app in app_list['applist']['apps']:
                         if str(app.get('appid')) == app_id:
@@ -248,9 +259,6 @@ class PricePopulator:
             logger.debug("Steam library fallback: app %s not found in app list", app_id)
             return False, 'not_found'
 
-        except ImportError:
-            logger.debug("Steam library not available for fallback")
-            return False, 'library_unavailable'
         except (ValueError, TypeError, KeyError, OSError) as e:
             logger.debug("Steam library fallback failed for %s: %s", app_id, e)
             return False, 'library_error'
@@ -395,13 +403,14 @@ class PricePopulator:
     def get_steam_library_game_info(self, app_id: str) -> Optional[dict]:
         """Get enhanced game info from Steam library for ITAD matching."""
         try:
-            if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+            if not self.steam_api:
                 return None
 
-            api = WebAPI(key=STEAMWORKS_API_KEY)
+            # Add rate limiting for Steam API calls
+            time.sleep(self.current_limits["steam_api"])
 
             # Get app list and find our app
-            app_list = api.call('ISteamApps.GetAppList')
+            app_list = self.steam_api.call('ISteamApps.GetAppList')
             if app_list and 'applist' in app_list:
                 for app in app_list['applist']['apps']:
                     if str(app.get('appid')) == app_id:

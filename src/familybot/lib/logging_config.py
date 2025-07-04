@@ -81,14 +81,15 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # 1. Console handler (all levels)
-    # Use coloredlogs for prettier console output
-    coloredlogs.install(
-        level=log_level,
-        logger=logger,
+    # 1. Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(numeric_level)
+    console_formatter = coloredlogs.ColoredFormatter(
         fmt='%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
 
     # 2. Main log file (all levels) - rotating
     main_log_file = logs_dir / "familybot.log"
@@ -191,13 +192,15 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
         datefmt='%H:%M:%S'
     )
 
-    # 1. Console handler (INFO and above for scripts)
-    coloredlogs.install(
-        level=log_level,
-        logger=logger,
+    # 1. Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(numeric_level)
+    console_formatter = coloredlogs.ColoredFormatter(
         fmt='%(asctime)s - %(message)s',
         datefmt='%H:%M:%S'
     )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
 
     # 2. Script-specific log file
     script_log_file = logs_dir / f"{script_name}.log"

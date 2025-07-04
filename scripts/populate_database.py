@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Dict, Optional
 import httpx
 
+from steam.webapi import WebAPI
+
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
@@ -94,6 +96,16 @@ class DatabasePopulator:
 
         self.client = httpx.AsyncClient(timeout=15.0)
 
+        # Initialize Steam WebAPI if available
+        self.steam_api = None
+        if STEAMWORKS_API_KEY and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE":
+            try:
+                self.steam_api = WebAPI(key=STEAMWORKS_API_KEY)
+                print("🔧 Steam WebAPI initialized successfully")
+            except (ValueError, TypeError, OSError, ImportError) as e:
+                logger.warning("Failed to initialize Steam WebAPI: %s", e)
+                self.steam_api = None
+
         print(f"🔧 Rate limiting mode: {rate_limit_mode}")
         print(f"   Steam API: {self.current_limits['steam_api']}s (token bucket)")
         print(f"   Store API: {self.current_limits['store_api']}s (token bucket)")
@@ -171,12 +183,7 @@ class DatabasePopulator:
             if fallback_data:
                 return fallback_data
 
-            # Strategy 2: Try Steam Web API directly (original approach)
-            fallback_data = await self._try_web_api_fallback(app_id)
-            if fallback_data:
-                return fallback_data
-
-            # Strategy 3: Last resort - create minimal entry with app ID
+            # Strategy 2: Last resort - create minimal entry with app ID
             logger.debug("No fallback info found for app %s, using minimal entry", app_id)
             return {
                 'name': f"App {app_id}",
@@ -198,19 +205,16 @@ class DatabasePopulator:
             }
 
     async def _try_steam_library_fallback(self, app_id: str) -> Optional[dict]:
-        """Try using the steam library for fallback data."""
-        try:
-            # pylint: disable=import-outside-toplevel
-            from steam.webapi import WebAPI
-            if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
-                return None
+        """Try using the steam library for fallback data, running in a separate thread."""
+        if not self.steam_api:
+            return None
 
-            api = WebAPI(key=STEAMWORKS_API_KEY)
-
-            # Try to get app info using the steam library
+        def get_app_info():
             try:
+                if not self.steam_api:
+                    return None
                 # Get app list and search for our app using the correct interface
-                app_list = api.call('ISteamApps.GetAppList')
+                app_list = self.steam_api.call('ISteamApps.GetAppList')
                 if not (app_list and 'applist' in app_list and 'apps' in app_list['applist']):
                     return None
 
@@ -226,40 +230,9 @@ class DatabasePopulator:
                         }
             except (ValueError, TypeError, KeyError, OSError) as e:
                 logger.debug("Steam library app list lookup failed for %s: %s", app_id, e)
-        except ImportError:
-            logger.debug("Steam library not available for fallback lookup")
-        except (ValueError, TypeError, KeyError, OSError) as e:
-            logger.debug("Steam library fallback failed for %s: %s", app_id, e)
-        return None
-
-    async def _try_web_api_fallback(self, app_id: str) -> Optional[dict]:
-        """Try Steam Web API directly for fallback data."""
-        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
             return None
 
-        app_list_url = "https://api.steampowered.com/ISteamApps/GetAppList/v2/"
-
-        response = await self.make_request_with_retry(app_list_url, api_type="steam")
-        if response is None:
-            return None
-
-        app_list_data = self.handle_api_response(f"GetAppList (fallback for {app_id})", response)
-        if not app_list_data:
-            return None
-
-        # Search for the app in the app list
-        apps = app_list_data.get("applist", {}).get("apps", [])
-        for app in apps:
-            if str(app.get("appid")) == app_id and app.get("name"):
-                logger.debug("Found fallback name via Web API for app %s: %s", app_id, app['name'])
-                return {
-                    'name': app['name'],
-                    'type': 'game',
-                    'is_free': False,
-                    'categories': [],
-                    'price_overview': None
-                }
-        return None
+        return await asyncio.to_thread(get_app_info)
 
     def load_family_members(self) -> Dict[str, str]:
         """Load family members from database or config."""
@@ -295,6 +268,59 @@ class DatabasePopulator:
 
         return members
 
+    async def get_owned_games(self, steam_id: str) -> Optional[dict]:
+        """Get owned games for a user using the steam library."""
+        if not self.steam_api:
+            return None
+
+        def get_games():
+            try:
+                if not self.steam_api:
+                    return None
+                # The appids_filter parameter is required by the steam library,
+                # even if we want all games. Passing an empty list should work.
+                return self.steam_api.call(
+                    'IPlayerService.GetOwnedGames',
+                    steamid=steam_id,
+                    include_appinfo=1,
+                    include_played_free_games=1,
+                    appids_filter=[],
+                    include_free_sub=1,
+                    language='english',
+                    include_extended_appinfo=1
+                )
+            except (ValueError, TypeError, KeyError, OSError) as e:
+                logger.warning("Steam library GetOwnedGames call failed for %s: %s", steam_id, e)
+                return None
+
+        return await asyncio.to_thread(get_games)
+
+    async def get_wishlist(self, steam_id: str) -> Optional[dict]:
+        """Get wishlist for a user using the steam library."""
+        if not self.steam_api:
+            return None
+
+        def get_wishlist_data():
+            try:
+                if not self.steam_api:
+                    return None
+                return self.steam_api.call(
+                    'IWishlistService.GetWishlist',
+                    steamid=steam_id
+                )
+            except (ValueError, TypeError, KeyError, OSError) as e:
+                logger.warning("Steam library GetWishlist call failed for %s: %s", steam_id, e)
+                return None
+
+        wishlist_data = await asyncio.to_thread(get_wishlist_data)
+
+        # Handle private/empty wishlists
+        if wishlist_data and wishlist_data.get('success') == 2:
+            logger.warning("Wishlist for %s is private or empty.", steam_id)
+            return None
+
+        return wishlist_data
+
     async def populate_family_libraries(self, family_members: Dict[str, str], dry_run: bool = False) -> int:
         """Populate database with all family member game libraries."""
         print("\n🎮 Starting family library population...")
@@ -326,16 +352,10 @@ class DatabasePopulator:
             member_iterator_tqdm.set_postfix_str(f"Processing {name}")
 
             try:
-                owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&include_appinfo=1&include_played_free_games=1"
-
                 if dry_run:
                     continue
 
-                response = await self.make_request_with_retry(owned_games_url, api_type="steam")
-                if response is None:
-                    continue
-
-                games_data = self.handle_api_response(f"GetOwnedGames ({name})", response)
+                games_data = await self.get_owned_games(steam_id)
                 if not games_data:
                     continue
 
@@ -362,18 +382,11 @@ class DatabasePopulator:
             print(f"\n📊 Processing {name}...")
 
             try:
-                owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&include_appinfo=1&include_played_free_games=1"
-
                 if dry_run:
                     print(f"   🔍 Would fetch owned games for {name}")
                     continue
 
-                response = await self.make_request_with_retry(owned_games_url, api_type="steam")
-                if response is None:
-                    print(f"   ❌ Failed to get games for {name}")
-                    continue
-
-                games_data = self.handle_api_response(f"GetOwnedGames ({name})", response)
+                games_data = await self.get_owned_games(steam_id)
                 if not games_data:
                     print(f"   ❌ Failed to get games for {name}")
                     continue
@@ -466,7 +479,7 @@ class DatabasePopulator:
                     games_progress_iterator_tqdm.set_postfix_str(f"Cached: {user_cached}, Skipped: {user_skipped}")
                 return False
 
-        batch_size = 5
+        batch_size = 10
         for i in range(0, len(games_to_fetch), batch_size):
             batch = games_to_fetch[i:i + batch_size]
             tasks = [fetch_game_with_progress(app_id) for app_id in batch]
@@ -516,7 +529,7 @@ class DatabasePopulator:
                 return False
 
         # Process games in small batches with progress updates
-        batch_size = 5
+        batch_size = 10
         for i in range(0, len(games_to_fetch), batch_size):
             batch = games_to_fetch[i:i + batch_size]
             tasks = [fetch_game_simple(app_id) for app_id in batch]
@@ -561,19 +574,9 @@ class DatabasePopulator:
                     continue
 
                 # Fetch wishlist from API
-                wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}"
-
-                response = await self.make_request_with_retry(wishlist_url, api_type="steam")
-                if response is None:
-                    print(f"   ❌ Failed to get wishlist for {name}")
-                    continue
-
-                if response.text == '{"success":2}':
-                    print(f"   ⚠️  {name}'s wishlist is private or empty")
-                    continue
-
-                wishlist_data = self.handle_api_response(f"GetWishlist ({name})", response)
+                wishlist_data = await self.get_wishlist(steam_id)
                 if not wishlist_data:
+                    print(f"   ❌ Failed to get wishlist for {name}")
                     continue
 
                 wishlist_items = wishlist_data.get("response", {}).get("items", [])
