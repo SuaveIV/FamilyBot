@@ -22,7 +22,7 @@ from familybot.lib.database import (cleanup_expired_cache,
                                     get_cached_wishlist, get_db_connection,
                                     purge_family_library_cache,
                                     purge_wishlist_cache)
-from familybot.lib.logging_config import setup_web_logging, web_log_queue
+from familybot.lib.logging_config import setup_web_logging, get_web_log_queue
 from familybot.lib.plugin_admin_actions import (
     force_new_game_action, force_wishlist_action,
     purge_game_details_cache_action)
@@ -581,6 +581,7 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
 @app.websocket("/ws/logs")
 async def websocket_logs(websocket: WebSocket):
     await websocket.accept()
+    web_log_queue = get_web_log_queue()
     try:
         while True:
             if web_log_queue is not None:

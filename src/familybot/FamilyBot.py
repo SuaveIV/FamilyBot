@@ -170,7 +170,7 @@ async def start_web_server_main():
         web_app,
         host=WEB_UI_HOST,
         port=WEB_UI_PORT,
-        log_level="info",
+        log_config=None,
         access_log=False  # Disable access logs to reduce noise
     )
     server = uvicorn.Server(config)
@@ -535,4 +535,3 @@ def main():
     except Exception as e:
         logger.error(f"Unexpected error during startup: {e}", exc_info=True)
         sys.exit(1)
-

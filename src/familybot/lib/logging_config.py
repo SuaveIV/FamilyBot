@@ -8,14 +8,15 @@ security-conscious logging practices.
 
 import logging
 import logging.handlers
-import os
 import sys
-from datetime import datetime
+from asyncio import Queue
 from pathlib import Path
 from typing import Optional
+import re
 
 import coloredlogs
 from pythonjsonlogger import jsonlogger
+from .web_logging import WebSocketQueueHandler
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -32,7 +33,6 @@ def sanitize_log_message(message: str) -> str:
         Sanitized log message with sensitive data masked
     """
     # Mask potential API keys (look for long alphanumeric strings)
-    import re
 
     # Mask Steam API keys (32 character hex strings)
     message = re.sub(r'\b[A-F0-9]{32}\b', '[STEAM_API_KEY]', message, flags=re.IGNORECASE)
@@ -70,16 +70,6 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
 
-    # Create formatters
-    detailed_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    error_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - [%(funcName)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
 
     # 1. Console handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -152,7 +142,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     for handler in logger.handlers:
         handler.addFilter(SanitizeFilter())
 
-    logger.info(f"Bot logging initialized - Level: {log_level}, Logs dir: {logs_dir}")
+    logger.info("Bot logging initialized - Level: %s, Logs dir: %s", log_level, logs_dir)
     return logger
 
 
@@ -181,16 +171,6 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
 
-    # Create formatters
-    script_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    progress_formatter = logging.Formatter(
-        '%(asctime)s - %(message)s',
-        datefmt='%H:%M:%S'
-    )
 
     # 1. Console handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -240,7 +220,7 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
     for handler in logger.handlers:
         handler.addFilter(SanitizeFilter())
 
-    logger.info(f"Script logging initialized for {script_name} - Level: {log_level}")
+    logger.info("Script logging initialized for %s - Level: %s", script_name, log_level)
     return logger
 
 
@@ -267,7 +247,7 @@ def log_private_profile_detection(logger: logging.Logger, user_name: str, steam_
         steam_id: Steam ID of the user
         operation: Operation that failed (e.g., 'wishlist', 'library')
     """
-    logger.warning(f"[PRIVATE_PROFILE] {user_name} ({steam_id}): {operation} access blocked - profile is private")
+    logger.warning("[PRIVATE_PROFILE] %s (%s): %s access blocked - profile is private", user_name, steam_id, operation)
 
 
 def log_api_error(logger: logging.Logger, api_name: str, error: Exception, context: Optional[str] = None):
@@ -281,7 +261,7 @@ def log_api_error(logger: logging.Logger, api_name: str, error: Exception, conte
         context: Additional context (e.g., user ID, app ID)
     """
     context_str = f" [{context}]" if context else ""
-    logger.error(f"[API_ERROR] {api_name}{context_str}: {type(error).__name__}: {error}")
+    logger.error("[API_ERROR] %s%s: %s: %s", api_name, context_str, type(error).__name__, error)
 
 
 def log_rate_limit(logger: logging.Logger, api_name: str, backoff_time: float, reason: str = ""):
@@ -295,7 +275,7 @@ def log_rate_limit(logger: logging.Logger, api_name: str, backoff_time: float, r
         reason: Reason for rate limiting (optional)
     """
     reason_str = f" - {reason}" if reason else ""
-    logger.warning(f"[RATE_LIMIT] {api_name}: Backing off {backoff_time:.1f}s{reason_str}")
+    logger.warning("[RATE_LIMIT] %s: Backing off %.1fs%s", api_name, backoff_time, reason_str)
 
 
 def log_performance_metric(logger: logging.Logger, operation: str, duration: float, count: int = 1):
@@ -309,13 +289,22 @@ def log_performance_metric(logger: logging.Logger, operation: str, duration: flo
         count: Number of items processed
     """
     rate = count / duration if duration > 0 else 0
-    logger.info(f"[PERFORMANCE] {operation}: {duration:.2f}s for {count} items ({rate:.1f}/s)")
+    logger.info("[PERFORMANCE] %s: %.2fs for %d items (%.1f/s)", operation, duration, count, rate)
 
 
 # Create a default logger for immediate use
 default_logger = logging.getLogger("familybot.default")
 
-web_log_queue = None
+class _WebLogQueueHolder:
+    """A singleton-like class to hold the web log queue."""
+    def __init__(self):
+        self.queue: Optional[Queue] = None
+
+_web_log_queue_holder = _WebLogQueueHolder()
+
+def get_web_log_queue():
+    """Get the web log queue."""
+    return _web_log_queue_holder.queue
 
 def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
     """
@@ -327,22 +316,21 @@ def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
     Returns:
         Configured logger instance
     """
-    global web_log_queue
     # Convert log level string to logging constant
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
 
     # Create web logger
     logger = logging.getLogger("familybot.web")
     logger.setLevel(numeric_level)
+    logger.propagate = False
 
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
 
     # Create web handler
-    from .web_logging import WebSocketQueueHandler
     web_handler = WebSocketQueueHandler()
     web_handler.setLevel(numeric_level)
-    web_log_queue = web_handler.queue
+    _web_log_queue_holder.queue = web_handler.queue
 
     # Create formatter
     web_formatter = jsonlogger.JsonFormatter(
@@ -351,5 +339,5 @@ def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
     web_handler.setFormatter(web_formatter)
     logger.addHandler(web_handler)
 
-    logger.info(f"Web logging initialized - Level: {log_level}")
+    logger.info("Web logging initialized - Level: %s", log_level)
     return logger
