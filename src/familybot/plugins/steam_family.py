@@ -184,7 +184,7 @@ class steam_family(Extension):
         return users
 
     """
-    [help]|profile|Displays a user's Steam profile by friendly name (from the family members list), SteamID64, or vanity URL.|!profile <name/steamid/vanity_url>|***This command can be used in bot DM***
+    [help]|profile|Displays a user's Steam profile by friendly name (from the family members list), SteamID64, or vanity URL (e.g. gabelogannewell).|!profile <name/steamid/vanity_url>|***This command can be used in bot DM***
     """
     @prefixed_command(name="profile")
     async def profile_command(self, ctx: PrefixedContext, user_input: str):
@@ -204,7 +204,10 @@ class steam_family(Extension):
                     if not self.steam_api:
                         await ctx.send("Steam API key not configured. Cannot resolve vanity URLs.")
                         return
-                    resolve = self.steam_api.ISteamUser.ResolveVanityURL(vanityurl=user_input)  # pylint: disable=no-member # type: ignore
+                    vanity_name = user_input
+                    if "steamcommunity.com/id/" in vanity_name:
+                        vanity_name = vanity_name.split("steamcommunity.com/id/")[1].strip('/')
+                    resolve = self.steam_api.ISteamUser.ResolveVanityURL(vanityurl=vanity_name, url_type=1)  # pylint: disable=no-member # type: ignore
                     if resolve and resolve.get('response', {}).get('success') == 1:
                         steam_id = resolve['response']['steamid']
                         resolved_method = "vanity URL"
