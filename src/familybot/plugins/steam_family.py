@@ -184,27 +184,46 @@ class steam_family(Extension):
         return users
 
     """
-    [help]|coop| it returns all the family shared multiplayer games in the shared library with a given numbers of copies| !coop NUMBER_OF_COPIES | ***This command can be used in bot DM***
+    [help]|profile|Displays a user's Steam profile by friendly name (from the family members list), SteamID64, or vanity URL.|!profile <name/steamid/vanity_url>|***This command can be used in bot DM***
     """
     @prefixed_command(name="profile")
-    async def profile_command(self, ctx: PrefixedContext, friendly_name: str):
-        """Displays a user's Steam profile information."""
-        steam_id = get_steam_id_from_friendly_name(friendly_name)
-        if not steam_id:
-            await ctx.send(f"Could not find a user with the name '{friendly_name}'.")
-            return
-
+    async def profile_command(self, ctx: PrefixedContext, user_input: str):
+        """Displays a user's Steam profile information by friendly name, SteamID64, or vanity URL."""
+        steam_id = get_steam_id_from_friendly_name(user_input)
+        resolved_method = None
+        if steam_id:
+            resolved_method = "family member"
+        else:
+            # Try to resolve as SteamID64
+            if user_input.isdigit() and len(user_input) == 17 and user_input.startswith("7656119"):
+                steam_id = user_input
+                resolved_method = "SteamID64"
+            else:
+                # Try to resolve as vanity URL
+                try:
+                    if not self.steam_api:
+                        await ctx.send("Steam API key not configured. Cannot resolve vanity URLs.")
+                        return
+                    resolve = self.steam_api.ISteamUser.ResolveVanityURL(vanityurl=user_input)  # pylint: disable=no-member # type: ignore
+                    if resolve and resolve.get('response', {}).get('success') == 1:
+                        steam_id = resolve['response']['steamid']
+                        resolved_method = "vanity URL"
+                    else:
+                        await ctx.send(f"Could not find a user with the name, SteamID, or vanity URL '{user_input}'.")
+                        return
+                except Exception as e:
+                    logger.error(f"Error resolving vanity URL '{user_input}': {e}")
+                    await ctx.send(f"Error resolving vanity URL '{user_input}': {e}")
+                    return
         try:
             player_summaries = self.steam_api.ISteamUser.GetPlayerSummaries(steamids=steam_id) # pylint: disable=no-member # type: ignore
             if not player_summaries or not player_summaries.get('response', {}).get('players'):
                 await ctx.send("Could not retrieve profile information for this user.")
                 return
-
             player = player_summaries['response']['players'][0]
             persona_name = player.get('personaname', 'N/A')
             profile_url = player.get('profileurl', '#')
             avatar_full = player.get('avatarfull', '')
-
             status = {
                 0: "Offline",
                 1: "Online",
@@ -214,13 +233,12 @@ class steam_family(Extension):
                 5: "Looking to trade",
                 6: "Looking to play"
             }.get(player.get('personastate', 0), "Unknown")
-
             message = f"**{persona_name}**'s Profile\n"
             message += f"Status: {status}\n"
-
+            if resolved_method:
+                message += f"(Found by {resolved_method})\n"
             if 'gameextrainfo' in player:
                 message += f"Currently Playing: {player['gameextrainfo']}\n"
-
             try:
                 recently_played = self.steam_api.IPlayerService.GetRecentlyPlayedGames(steamid=steam_id, count=3)  # pylint: disable=no-member # type: ignore
                 if recently_played and 'response' in recently_played and recently_played['response'].get('total_count', 0) > 0 and recently_played['response'].get('games'):
@@ -231,16 +249,13 @@ class steam_family(Extension):
                         playtime_forever = game.get('playtime_forever', 0)
                         message += f"- {game_name} ({playtime_2weeks/60:.1f} hrs last 2 weeks, {playtime_forever/60:.1f} hrs total)\n"
             except Exception as e:
-                logger.warning(f"Could not fetch recently played games for {friendly_name}: {e}")
-
+                logger.warning(f"Could not fetch recently played games for {user_input}: {e}")
             message += f"\nProfile URL: <{profile_url}>\n"
             if avatar_full:
                 message += f"Avatar: {avatar_full}"
-
             await ctx.send(message)
-
         except Exception as e:
-            logger.error(f"Error fetching profile for {friendly_name}: {e}")
+            logger.error(f"Error fetching profile for {user_input}: {e}")
             await ctx.send("An error occurred while fetching the profile.")
 
     @prefixed_command(name="coop")
@@ -381,7 +396,9 @@ class steam_family(Extension):
                 force_new_game_action
             result = await force_new_game_action()
             await ctx.send(result['message'])
-            logger.info("Force new game notification initiated by admin.")
+            # Also post the result message to the wishlist channel
+            await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, result['message'])  # type: ignore
+            logger.info("Force new game notification posted to both DM and channel.")
             await self.bot.send_log_dm("Force Notification") # type: ignore
         else:
             await ctx.send("You do not have permission to use this command, or it must be used in DMs.")
@@ -620,13 +637,18 @@ class steam_family(Extension):
                 try:
                     for chunk in message_chunks:
                         await self.bot.send_to_channel(WISHLIST_CHANNEL_ID, chunk)  # type: ignore
-                    await ctx.send(f"✅ **Force deals complete!** Posted {len(deals_found)} deals to wishlist channel.")
-                    logger.info(f"Force deals: Posted {len(deals_found)} deals to wishlist channel")
+                    # Also send the same message as a DM to the admin
+                    admin_user = await self.bot.fetch_user(ADMIN_DISCORD_ID)
+                    if admin_user is not None:
+                        for chunk in message_chunks:
+                            await admin_user.send(chunk)
+                    await ctx.send(f"✅ **Force deals complete!** Posted {len(deals_found)} deals to wishlist channel and sent DM to admin.")
+                    logger.info(f"Force deals: Posted {len(deals_found)} deals to wishlist channel and sent DM to admin")
                     await self.bot.send_log_dm("Force Deals") # type: ignore
                 except Exception as e:
-                    logger.error(f"Force deals: Error posting to wishlist channel: {e}")
-                    await ctx.send(f"❌ **Error posting deals to channel:** {e}")
-                    await self._send_admin_dm(f"Force deals channel error: {e}")
+                    logger.error(f"Force deals: Error posting to wishlist channel or sending DM: {e}")
+                    await ctx.send(f"❌ **Error posting deals to channel or sending DM:** {e}")
+                    await self._send_admin_dm(f"Force deals channel or DM error: {e}")
             else:
                 await ctx.send(f"📊 **Force deals complete!** No significant deals found among {games_checked} games checked.")
                 logger.info(f"Force deals: No deals found among {games_checked} games")
@@ -901,7 +923,7 @@ class steam_family(Extension):
             summary_msg += f"💾 **New games cached:** {total_games_cached}\n"
             if error_count > 0:
                 summary_msg += f"❌ **Errors:** {error_count}\n"
-            summary_msg += f"🚀 **All future commands will benefit from cached game data!**"
+            summary_msg += f"🚀 **All future commands will benefit from cached game data!"
 
             await ctx.send(summary_msg)
             logger.info(f"Full library scan completed: {processed_members} members, {total_games_cached} games cached, {scan_duration.total_seconds():.1f}s duration")
