@@ -745,13 +745,12 @@ class steam_family(Extension):
 
             deals_found = []
             games_checked = 0
-            max_games_to_check = 100  # Higher limit for force command
-            total_games = min(len(global_wishlist), max_games_to_check)
+            total_games = len(global_wishlist)
             progress_tracker = ProgressTracker(total_games)
 
             await ctx.send(f"📊 **Checking {total_games} games for deals...**")
 
-            for index, item in enumerate(global_wishlist[:max_games_to_check]):
+            for index, item in enumerate(global_wishlist):
                 app_id = item[0]
                 interested_users = item[1]
                 games_checked += 1
