@@ -34,7 +34,7 @@ from familybot.web.api import set_bot_client
 from familybot.WebSocketServer import start_websocket_server_task
 
 if TYPE_CHECKING:
-    from interactions import User
+    pass
 
 # Setup comprehensive logging for the bot
 logger = setup_bot_logging("INFO")

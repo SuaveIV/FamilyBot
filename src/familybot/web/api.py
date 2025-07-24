@@ -2,15 +2,14 @@
 
 import asyncio
 import logging
-import os
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -19,17 +18,15 @@ from familybot.lib.admin_commands import DatabasePopulator
 from familybot.lib.database import (cleanup_expired_cache,
                                     get_cached_family_library,
                                     get_cached_game_details,
-                                    get_cached_wishlist, get_db_connection,
+                                    get_db_connection,
                                     purge_family_library_cache,
                                     purge_wishlist_cache)
 from familybot.lib.logging_config import setup_web_logging, get_web_log_queue
 from familybot.lib.plugin_admin_actions import (
     force_new_game_action, force_wishlist_action,
     purge_game_details_cache_action)
-from familybot.web.models import (BotStatus, CacheStats, CommandRequest,
-                                  CommandResponse, ConfigData, FamilyMember,
-                                  GameDetails, LogEntry, RecentActivity,
-                                  WishlistItem)
+from familybot.web.models import (BotStatus, CacheStats, CommandResponse, ConfigData, FamilyMember,
+                                  GameDetails, LogEntry, WishlistItem)
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +361,7 @@ async def get_config_data():
         from familybot.config import (ADMIN_DISCORD_ID, DISCORD_API_KEY,
                                       EPIC_CHANNEL_ID, FAMILY_STEAM_ID,
                                       HELP_CHANNEL_ID, IP_ADDRESS,
-                                      NEW_GAME_CHANNEL_ID, WISHLIST_CHANNEL_ID)
+                                      NEW_GAME_CHANNEL_ID)
 
         # Count family members
         conn = get_db_connection()

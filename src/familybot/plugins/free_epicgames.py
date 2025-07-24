@@ -2,8 +2,7 @@
 
 # Explicitly import what's needed from interactions
 import json
-import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
 from interactions import Extension, IntervalTrigger, Task, listen
@@ -12,7 +11,7 @@ from interactions.ext.prefixed_commands import (PrefixedContext,
 
 # Import from config
 from familybot.config import ADMIN_DISCORD_ID, EPIC_CHANNEL_ID
-from familybot.lib.logging_config import get_logger, log_api_error
+from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 
 # Setup enhanced logging for this specific module

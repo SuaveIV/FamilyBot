@@ -1,22 +1,18 @@
 import asyncio
 import json
-import logging
 import os
 import sqlite3
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import requests
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from familybot.config import (ADMIN_DISCORD_ID, FAMILY_STEAM_ID,
-                              FAMILY_USER_DICT, NEW_GAME_CHANNEL_ID,
-                              PROJECT_ROOT, STEAMWORKS_API_KEY,
-                              WISHLIST_CHANNEL_ID)
+from familybot.config import (FAMILY_USER_DICT, STEAMWORKS_API_KEY)
 from familybot.lib.database import (cache_family_library, cache_game_details,
                                     cache_wishlist, get_cached_family_library,
                                     get_cached_game_details,
@@ -24,11 +20,8 @@ from familybot.lib.database import (cache_family_library, cache_game_details,
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_utils import (find_in_2d_list, format_message,
                                         get_family_game_list_url)
-from familybot.lib.logging_config import (get_logger, log_api_error,
-                                          log_private_profile_detection,
-                                          log_rate_limit)
-from familybot.lib.utils import (ProgressTracker, get_lowest_price,
-                                 truncate_message_list)
+from familybot.lib.logging_config import (get_logger, log_private_profile_detection)
+from familybot.lib.utils import (get_lowest_price)
 
 logger = get_logger("plugin_admin_actions")
 
@@ -278,7 +271,7 @@ async def force_new_game_action() -> Dict[str, Any]:
                     owner_name = current_family_members.get(owner_steam_id, f"Unknown Owner ({owner_steam_id})")
 
                     # Build the base message
-                    game_name = game_data.get("name", f"Unknown Game")
+                    game_name = game_data.get("name", "Unknown Game")
                     message = f"Thank you to {owner_name} for **{game_name}**\nhttps://store.steampowered.com/app/{new_appid}"
 
                     # Add pricing information if available
@@ -621,7 +614,7 @@ async def force_deals_action(target_friendly_name: Optional[str] = None) -> Dict
                         pass
 
                 if is_good_deal:
-                    user_names = [current_family_members.get(uid, f"Unknown") for uid in interested_users]
+                    user_names = [current_family_members.get(uid, "Unknown") for uid in interested_users]
                     deal_info = {
                         'name': game_name,
                         'app_id': app_id,

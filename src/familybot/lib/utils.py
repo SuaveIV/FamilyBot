@@ -1,16 +1,14 @@
 # In src/familybot/lib/utils.py
 
 import json
-import logging
 import time
-from typing import List, Optional
+from typing import List
 
 import requests
 
 from familybot.config import ITAD_API_KEY  # Import ITAD_API_KEY from config
 from familybot.lib.database import cache_itad_price, get_cached_itad_price
-from familybot.lib.logging_config import get_logger, log_api_error
-from familybot.lib.types import DISCORD_MESSAGE_LIMIT
+from familybot.lib.logging_config import get_logger
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)

@@ -168,7 +168,7 @@ class TokenTester:
             now = datetime.now()
             time_remaining = exp_time - now
             
-            print(f"✅ Token decoded successfully")
+            print("✅ Token decoded successfully")
             print(f"   Expires at: {exp_time.strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"   Time remaining: {str(time_remaining).split('.')[0]}")
             

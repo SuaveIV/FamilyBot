@@ -1,7 +1,6 @@
 # File: scripts/setup_browser.py
 import asyncio
 import json
-import os
 from pathlib import Path
 
 from playwright.async_api import async_playwright

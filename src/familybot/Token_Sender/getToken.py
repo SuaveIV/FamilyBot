@@ -4,14 +4,15 @@
 import asyncio
 import base64
 import json
-import logging
 import os
 import signal  # For graceful shutdown
 import sys  # For graceful shutdown
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
+import binascii  # Added for base64 error handling
 
 import websockets
+from websockets.exceptions import ConnectionRefusedError, WebSocketException
 import yaml
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -23,7 +24,7 @@ from webdriver_manager.firefox import GeckoDriverManager
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import enhanced logging configuration
-from familybot.lib.logging_config import log_api_error, setup_script_logging
+from familybot.lib.logging_config import setup_script_logging
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("token_sender", "INFO")
@@ -97,9 +98,9 @@ async def send_message(message: str):
         async with websockets.connect(uri, open_timeout=5) as websocket: # Added open_timeout
             await websocket.send(message)
             logger.info(f"Sent token to WebSocket server: {message[:20]}...")
-    except websockets.exceptions.ConnectionRefusedError:
+    except ConnectionRefusedError:
         logger.error(f"WebSocket connection refused to {uri}. Is the server running? Retrying later...")
-    except websockets.exceptions.WebSocketException as e: # Catch other websocket related errors
+    except WebSocketException as e: # Catch other websocket related errors
         logger.error(f"WebSocket error sending message to {uri}: {e}")
     except asyncio.TimeoutError:
         logger.error(f"Timed out trying to connect to WebSocket server at {uri}.")
@@ -196,7 +197,7 @@ async def get_token():
 
                 # Sending token to WebSocket server
                 await send_message(extracted_key)
-            except (IndexError, json.JSONDecodeError, base64.binascii.Error) as e:
+            except (IndexError, json.JSONDecodeError, binascii.Error) as e:  # Fixed import path
                 logger.error(f"Error decoding or parsing new token: {e}. Raw extracted key: {extracted_key[:100]}")
             except IOError as e:
                 logger.error(f"Error writing new token/exp_time to file: {e}")

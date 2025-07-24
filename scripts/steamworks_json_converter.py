@@ -19,13 +19,10 @@ Usage:
 
 import argparse
 import json
-import os
 import sys
-import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-import requests
 
 
 def convert_owned_games(data: Dict[str, Any], steam_id: Optional[str] = None) -> Dict[str, Any]:

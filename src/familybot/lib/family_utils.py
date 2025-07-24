@@ -105,7 +105,7 @@ def format_message(wishlist: list, short=False) -> str:
                     message_parts.append(f"   The lowest price ever was {lowest_price}$ \n")
                 except Exception as e:
                     logger.warning(f"Could not get lowest price for {app_id}: {e}")
-                    message_parts.append(f"   Lowest price info unavailable. \n")
+                    message_parts.append("   Lowest price info unavailable. \n")
         else:
             final_formatted = price_overview.get("final_formatted", "N/A") if price_overview else "N/A"
             message_parts.append(f"  The game is at {final_formatted} \n")
@@ -119,7 +119,7 @@ def format_message(wishlist: list, short=False) -> str:
                     message_parts.append(f"   The lowest price ever was {lowest_price}$ \n")
                 except Exception as e:
                     logger.warning(f"Could not get lowest price for {app_id}: {e}")
-                    message_parts.append(f"   Lowest price info unavailable. \n")
+                    message_parts.append("   Lowest price info unavailable. \n")
 
     final_message = "".join(message_parts)
 

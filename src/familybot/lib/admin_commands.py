@@ -4,8 +4,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional
 
 import httpx
 
@@ -15,9 +14,8 @@ import httpx
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
-from familybot.lib.database import (cache_family_library, cache_game_details,
-                                    cache_wishlist, get_cached_family_library,
-                                    get_cached_game_details,
+from familybot.lib.database import (cache_game_details,
+                                    cache_wishlist, get_cached_game_details,
                                     get_cached_wishlist, get_db_connection)
 from familybot.lib.family_utils import find_in_2d_list
 from familybot.lib.logging_config import setup_script_logging

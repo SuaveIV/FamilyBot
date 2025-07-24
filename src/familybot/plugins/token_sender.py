@@ -1,12 +1,11 @@
 # In src/familybot/plugins/token_sender.py
 
-import asyncio
 import base64
 import binascii
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from interactions import Extension, IntervalTrigger, Task, listen
 from interactions.ext.prefixed_commands import (PrefixedContext,
@@ -306,7 +305,7 @@ class token_sender(Extension):
                     now = datetime.now()
                     time_remaining = exp_time - now
 
-                    status_msg = f"🔑 **Steam Token Status**\n"
+                    status_msg = "🔑 **Steam Token Status**\n"
                     status_msg += f"📅 Expires: {exp_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     status_msg += f"⏰ Time remaining: {str(time_remaining).split('.')[0]}\n"
                     status_msg += f"🔢 Token preview: {token[:20]}...\n"
@@ -318,7 +317,7 @@ class token_sender(Extension):
                     else:
                         status_msg += "✅ **Token is valid**"
                 else:
-                    status_msg = f"🔑 **Steam Token Status**\n"
+                    status_msg = "🔑 **Steam Token Status**\n"
                     status_msg += f"🔢 Token preview: {token[:20]}...\n"
                     status_msg += "⚠️ No expiration info found"
 

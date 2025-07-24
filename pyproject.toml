@@ -43,3 +43,8 @@ familybot-lint = "scripts.lint:main"
 # This tells setuptools to look for your package(s) inside the 'src' directory.
 # Since your main package is now 'familybot' inside 'src/', this is correct.
 package-dir = {"" = "src"}
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.5",
+]

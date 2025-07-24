@@ -1,7 +1,6 @@
 # In src/familybot/plugins/common_game.py
 
 import json
-import logging
 import os
 import sqlite3  # Import sqlite3 for specific error handling
 from typing import cast
@@ -17,9 +16,8 @@ from familybot.lib.database import (cache_discord_user, cache_game_details,
                                     get_cached_discord_user,
                                     get_cached_game_details,
                                     get_cached_user_games, get_db_connection)
-from familybot.lib.logging_config import (get_logger, log_api_error,
-                                          log_private_profile_detection)
-from familybot.lib.types import (DISCORD_MESSAGE_LIMIT, FamilyBotClient,
+from familybot.lib.logging_config import (get_logger)
+from familybot.lib.types import (FamilyBotClient,
                                  FamilyBotClientProtocol)
 from familybot.lib.utils import (get_common_elements_in_lists,
                                  truncate_message_list)
@@ -219,7 +217,7 @@ class common_games(Extension):
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request error fetching games for Steam ID {steam_id}: {e}")
                 await self.bot.send_dm(ctx.author_id, f"Error fetching games for Steam ID {steam_id}. Steam API issue. Check logs.")
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 logger.error(f"JSON decode error for Steam ID {steam_id}. Response: {answer.text[:200]}")
                 await self.bot.send_dm(ctx.author_id, f"Error processing Steam API response for Steam ID {steam_id}. Check logs.")
             except KeyError as e:
@@ -287,7 +285,7 @@ class common_games(Extension):
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request error fetching app details for AppID {game_appid}: {e}")
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 logger.error(f"JSON decode error for AppID {game_appid}. Response: {app_info_response.text[:200]}")
             except Exception as e:
                 logger.error(f"Unexpected error processing game {game_appid}: {e}", exc_info=True)
