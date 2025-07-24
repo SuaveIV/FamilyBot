@@ -61,10 +61,13 @@ class steam_family(Extension):
             and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE"
             else None
         )
-        # Rate limiting tracking
+        # Enhanced rate limiting tracking with retry configuration
         self._last_steam_api_call = 0.0
         self._last_steam_store_api_call = 0.0
-        logger.info("Steam Family Plugin loaded")
+        self.max_retries = 3
+        self.base_backoff = 1.0
+
+        logger.info("Steam Family Plugin loaded with enhanced rate limiting")
         if not self.steam_api:
             logger.warning(
                 "SteamWorks API key not configured. Some features will be disabled."
@@ -111,6 +114,51 @@ class steam_family(Extension):
             await asyncio.sleep(sleep_time)
 
         self._last_steam_store_api_call = time.time()
+
+    async def _make_request_with_retry(
+        self, url: str, timeout: int = 10
+    ) -> requests.Response | None:
+        """Make HTTP request with retry logic for 429 errors and better error handling."""
+        import random
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                # Add jitter to prevent synchronized requests
+                if attempt > 0:
+                    jitter = random.uniform(0, 0.1)
+                    await asyncio.sleep(jitter)
+
+                # Make the request
+                response = requests.get(url, timeout=timeout)
+
+                # Check for rate limiting
+                if response.status_code == 429:
+                    if attempt < self.max_retries:
+                        backoff_time = self.base_backoff * (
+                            2**attempt
+                        ) + random.uniform(0, 1)
+                        logger.warning(
+                            f"Rate limited (429), retrying in {backoff_time:.1f}s (attempt {attempt + 1}/{self.max_retries + 1}) for {url}"
+                        )
+                        await asyncio.sleep(backoff_time)
+                        continue
+                    logger.error(f"Max retries exceeded for {url}")
+                    return None
+
+                return response
+
+            except (requests.RequestException, requests.Timeout) as e:
+                if attempt < self.max_retries:
+                    backoff_time = self.base_backoff * (2**attempt)
+                    logger.warning(
+                        f"Request failed: {e}, retrying in {backoff_time:.1f}s"
+                    )
+                    await asyncio.sleep(backoff_time)
+                    continue
+                logger.error(f"Request failed after {self.max_retries} retries: {e}")
+                return None
+
+        return None
 
     async def _send_admin_dm(self, message: str) -> None:
         """Helper to send error/warning messages to the bot admin via DM."""
@@ -722,10 +770,14 @@ class steam_family(Extension):
                     if cached_game:
                         game_data = cached_game
                     else:
-                        # If not cached, fetch from API
+                        # If not cached, fetch from API with enhanced retry logic
                         await self._rate_limit_steam_store_api()
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        app_info_response = requests.get(game_url, timeout=10)
+                        app_info_response = await self._make_request_with_retry(
+                            game_url
+                        )
+                        if app_info_response is None:
+                            continue
                         game_info_json = app_info_response.json()
                         if not game_info_json:
                             continue
@@ -1652,10 +1704,14 @@ class steam_family(Extension):
                     if cached_game:
                         game_data = cached_game
                     else:
-                        # If not cached, fetch from API
+                        # If not cached, fetch from API with enhanced retry logic
                         await self._rate_limit_steam_store_api()
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        app_info_response = requests.get(game_url, timeout=10)
+                        app_info_response = await self._make_request_with_retry(
+                            game_url
+                        )
+                        if app_info_response is None:
+                            continue
                         game_info_json = app_info_response.json()
                         if not game_info_json:
                             continue
