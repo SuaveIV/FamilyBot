@@ -125,7 +125,63 @@ The project uses the following main dependencies (defined in `pyproject.toml`):
 
 ### Setup
 
-To set up your development environment, navigate to the project's root directory (`FamilyBot/`) in your terminal (PowerShell 7+ recommended on Windows, or Bash on macOS/Linux) and run the appropriate script:
+FamilyBot offers two setup methods: the modern `just` command runner (recommended) and legacy platform-specific scripts.
+
+#### Modern Setup with `just` (Recommended)
+
+First, install the `just` command runner:
+
+**Windows:**
+
+```powershell
+# Using Scoop (recommended)
+scoop install just
+
+# Using Chocolatey
+choco install just
+
+# Using Cargo
+cargo install just
+```
+
+**macOS:**
+
+```bash
+# Using Homebrew
+brew install just
+```
+
+**Linux:**
+
+```bash
+# Using Cargo
+cargo install just
+```
+
+ Or check your distribution's package manager:
+
+```bash
+ Ubuntu/Debian: apt install just
+ Arch: pacman -S just
+ Fedora: dnf install just
+```
+
+Then set up FamilyBot:
+
+```bash
+# Complete setup (creates venv, installs dependencies, verifies installation)
+just setup
+
+# View all available commands
+just --list
+
+# Get help
+just help
+```
+
+#### Legacy Setup (Platform-Specific Scripts)
+
+If you prefer the traditional approach, navigate to the project's root directory (`FamilyBot/`) in your terminal and run the appropriate script:
 
 **For Windows (PowerShell 7):**
 
@@ -140,7 +196,7 @@ chmod +x ./reinstall_bot.sh # Make the script executable first
 ./reinstall_bot.sh
 ```
 
-This script will:
+Both methods will:
 
 - Create a new Python virtual environment (.venv).
 - Install all necessary Python libraries (including interactions.py, selenium, PyYAML, requests, websockets, webdriver_manager) into the virtual environment.
@@ -237,14 +293,92 @@ The `Token_Sender` bot has its own configuration. First, copy the template file 
 - **`shutdown`**: Set to `true` if you want your computer to shut down after the token is successfully sent (mostly for dedicated systems; set to `false` for development).
 - **`firefox_profile_path`**: The **complete path** to the Firefox profile you created in the previous step. Ensure you use **forward slashes (`/`)** or escaped backslashes (`\\`) in the path.
 
+## Quick Start with `just` (Recommended)
+
+If you have `just` installed, here's the fastest way to get FamilyBot running:
+
+```bash
+# Complete setup and run
+just setup
+just setup-browser  # First-time only: set up Steam login
+just run
+
+# View all available commands
+just --list
+
+# Common development tasks
+just lint            # Check code quality with ruff
+just format          # Format code with ruff
+just populate-db     # Set up database
+just purge-cache     # Clear cache when needed
+just logs            # View real-time logs
+just status          # Check bot status
+```
+
+### `just` Command Reference
+
+**Setup & Installation:**
+
+- `just setup` - Complete development environment setup
+- `just reinstall` - Clean reinstall (removes .venv and rebuilds)
+- `just verify-setup` - Verify installation is working
+
+**Running the Bot:**
+
+- `just run` - Start FamilyBot (recommended method)
+- `just setup-browser` - Set up Steam login (first-time only)
+- `just test-token` - Test token extraction functionality
+
+**Cache Management:**
+
+- `just purge-cache` - Clear game details cache
+- `just purge-wishlist` - Clear wishlist cache
+- `just purge-family-library` - Clear family library cache
+- `just purge-all-cache` - Clear all cache data
+
+**Database Operations:**
+
+- `just populate-db` - Populate database with game data
+- `just populate-prices` - Standard price population
+- `just populate-prices-fast` - Optimized price population (6-10x faster)
+- `just populate-prices-turbo` - Async price population (15-25x faster)
+- `just inspect-db` - Inspect database structure
+- `just backup-db` - Backup database
+
+**Code Quality:**
+
+- `just lint` - Run ruff linter
+- `just format` - Format code with ruff
+- `just check` - Run all quality checks
+- `just fix` - Auto-fix and format code
+
+**Development:**
+
+- `just logs` - View real-time logs
+- `just status` - Check bot configuration status
+- `just bump-patch` - Bump patch version
+- `just help` - Show detailed help
+
+**Migration:**
+
+- `just migrate-from-legacy` - Show migration guide from old scripts
+- `just install-just-help` - Show `just` installation instructions
+
 ## Running the Bot
 
 ### Token Sender Setup (First Time Only)
 
 Before running the bot for the first time, you need to set up the Steam login session for the token sender plugin:
 
+**Using `just` (Recommended):**
+
 ```bash
-# Set up browser profile with Steam login (run once)
+just setup-browser
+```
+
+**Using direct command:**
+
+```bash
 uv run python scripts/setup_browser.py
 ```
 
@@ -259,9 +393,20 @@ This will:
 
 The main entry point is `src/familybot/FamilyBot.py`. The token sender now runs as an integrated plugin, so you only need to start one process.
 
-From the `FamilyBot/` project root directory:
+**Using `just` (Recommended):**
 
-**Option 1: Using Script Aliases (Recommended):**
+```bash
+# Start the bot
+just run
+
+# Check bot status
+just status
+
+# View logs in real-time
+just logs
+```
+
+**Using Script Aliases:**
 
 ```bash
 # Run the bot (works on all platforms)
@@ -274,7 +419,7 @@ uv run familybot-setup
 uv run familybot-test
 ```
 
-**Option 2: Direct Python Execution:**
+**Direct Python Execution:**
 
 **For Windows (PowerShell 7):**
 
@@ -299,6 +444,14 @@ uv run python ./src/familybot/FamilyBot.py
 ### Legacy Launch Scripts (For Backward Compatibility)
 
 The old launch scripts are still available but now only start the main bot since the token sender is integrated:
+
+**Using `just`:**
+
+```bash
+just run-legacy
+```
+
+**Direct execution:**
 
 - **For Windows (PowerShell 7):**
 
@@ -383,6 +536,33 @@ The cache purge scripts allow you to clear various types of cached data, forcing
 - **`purge_all_cache.ps1/.sh`** - Purges ALL cache data, completely resetting the cached information. This should be used with caution, as it will require time to rebuild all the caches.
 
 ### Usage Examples
+
+**Using `just` (Recommended):**
+
+```bash
+# Complete setup workflow
+just setup
+just populate-db                    # Populate all data (run after initial setup)
+
+# Price population - choose based on your needs:
+just populate-prices                # Standard mode (reliable, slower)
+just populate-prices-fast           # Optimized mode (6-10x faster, recommended)
+just populate-prices-turbo          # Maximum performance mode (15-25x faster)
+
+# Cache management
+just purge-cache                    # Clear game details cache
+just purge-wishlist                 # Clear wishlist cache
+just purge-family-library           # Clear family library cache
+just purge-all-cache                # Clear all caches
+
+# Development workflow
+just lint                           # Check code quality
+just format                         # Format code
+just check                          # Run all quality checks
+just backup-db                      # Backup database
+```
+
+**Using Direct Commands:**
 
 ```bash
 # Populate all data (run after initial setup)
