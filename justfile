@@ -50,7 +50,9 @@ verify-setup:
 # Run the main bot (recommended method)
 run:
     @echo "🤖 Starting FamilyBot..."
-    uv run familybot
+    @echo "Press Ctrl+C to stop the bot gracefully"
+    -uv run familybot
+    @echo "🛑 FamilyBot stopped"
 
 # Set up browser profile for token sender (first-time setup)
 setup-browser:
