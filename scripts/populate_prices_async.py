@@ -294,8 +294,10 @@ class AsyncPricePopulator:
         print(f"\n🎯 Total unique wishlist games to process: {len(all_game_ids)}")
         return all_game_ids
 
-    async def fetch_steam_price_single(self, app_id: str) -> Tuple[str, bool, str]:
-        """Fetch Steam price for a single game with multiple strategies."""
+    async def fetch_steam_price_single(
+        self, app_id: str
+    ) -> Tuple[str, bool, dict, str]:
+        """Fetch Steam price for a single game with multiple strategies. Returns data instead of writing to DB."""
         async with self.semaphore:  # Control concurrency
             # Strategy 1: Steam Store API
             try:
@@ -309,10 +311,7 @@ class AsyncPricePopulator:
                         f"Steam Store ({app_id})", response
                     )
                     if game_info and game_info.get(str(app_id), {}).get("data"):
-                        cache_game_details(
-                            app_id, game_info[str(app_id)]["data"], permanent=True
-                        )
-                        return app_id, True, "store_api"
+                        return app_id, True, game_info[str(app_id)]["data"], "store_api"
             except Exception as e:
                 logger.debug("Steam Store API failed for %s: %s", app_id, e)
 
@@ -336,17 +335,14 @@ class AsyncPricePopulator:
                                     "categories": [],
                                     "price_overview": None,
                                 }
-                                cache_game_details_with_source(
-                                    app_id, game_data, "steam_library"
-                                )
-                                return app_id, True, "steam_library"
+                                return app_id, True, game_data, "steam_library"
                 except Exception as e:
                     logger.debug("Steam WebAPI failed for %s: %s", app_id, e)
 
-            return app_id, False, "failed"
+            return app_id, False, {}, "failed"
 
-    async def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str]:
-        """Fetch ITAD price for a single game with multiple strategies."""
+    async def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str, dict, str]:
+        """Fetch ITAD price for a single game with multiple strategies. Returns data instead of writing to DB."""
         async with self.semaphore:  # Control concurrency
             # Strategy 1: ITAD App ID lookup
             try:
@@ -384,17 +380,12 @@ class AsyncPricePopulator:
                                 and prices_data[0].get("historyLow")
                             ):
                                 history_low = prices_data[0]["historyLow"]["all"]
-                                cache_itad_price_enhanced(
-                                    app_id,
-                                    {
-                                        "lowest_price": str(history_low["amount"]),
-                                        "lowest_price_formatted": f"${history_low['amount']}",
-                                        "shop_name": "Historical Low (All Stores)",
-                                    },
-                                    lookup_method="appid",
-                                    permanent=True,
-                                )
-                                return app_id, "cached"
+                                price_data = {
+                                    "lowest_price": str(history_low["amount"]),
+                                    "lowest_price_formatted": f"${history_low['amount']}",
+                                    "shop_name": "Historical Low (All Stores)",
+                                }
+                                return app_id, "cached", price_data, "appid"
             except Exception as e:
                 logger.debug("ITAD App ID lookup failed for %s: %s", app_id, e)
 
@@ -440,29 +431,150 @@ class AsyncPricePopulator:
                                         history_low = prices_data[0]["historyLow"][
                                             "all"
                                         ]
-                                        cache_itad_price_enhanced(
+                                        price_data = {
+                                            "lowest_price": str(history_low["amount"]),
+                                            "lowest_price_formatted": f"${history_low['amount']}",
+                                            "shop_name": "Historical Low (All Stores)",
+                                        }
+                                        return (
                                             app_id,
-                                            {
-                                                "lowest_price": str(
-                                                    history_low["amount"]
-                                                ),
-                                                "lowest_price_formatted": f"${history_low['amount']}",
-                                                "shop_name": "Historical Low (All Stores)",
-                                            },
-                                            lookup_method="name_search",
-                                            steam_game_name=game_name,
-                                            permanent=True,
+                                            "cached",
+                                            price_data,
+                                            "name_search",
                                         )
-                                        return app_id, "cached"
             except Exception as e:
                 logger.debug("ITAD name search failed for %s: %s", app_id, e)
 
-            return app_id, "not_found"
+            return app_id, "not_found", {}, "failed"
+
+    def batch_write_steam_data(
+        self, steam_data: Dict[str, Dict], batch_size: int = 100
+    ) -> int:
+        """Write Steam data to database in safe batches with proper error handling."""
+        if not steam_data:
+            return 0
+
+        written_count = 0
+        items = list(steam_data.items())
+
+        print(f"   💾 Writing {len(items)} Steam records in batches of {batch_size}...")
+
+        for i in range(0, len(items), batch_size):
+            batch = items[i : i + batch_size]
+
+            conn = get_db_connection()
+            try:
+                conn.execute("BEGIN TRANSACTION")
+                for app_id, game_info in batch:
+                    game_data = game_info["data"]
+                    source = game_info["source"]
+
+                    if source == "steam_library":
+                        cache_game_details_with_source(app_id, game_data, source)
+                    else:
+                        cache_game_details(app_id, game_data, permanent=True)
+
+                    written_count += 1
+
+                conn.commit()
+                logger.debug(f"Successfully wrote batch of {len(batch)} Steam records")
+
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to write Steam batch: {e}")
+                # Try individual records to salvage what we can
+                for app_id, game_info in batch:
+                    try:
+                        game_data = game_info["data"]
+                        source = game_info["source"]
+
+                        if source == "steam_library":
+                            cache_game_details_with_source(app_id, game_data, source)
+                        else:
+                            cache_game_details(app_id, game_data, permanent=True)
+
+                        written_count += 1
+                    except Exception as individual_error:
+                        logger.error(
+                            f"Failed to write individual Steam record {app_id}: {individual_error}"
+                        )
+                        written_count -= 1  # Adjust count for failed individual writes
+
+            finally:
+                conn.close()
+
+        print(f"   ✅ Successfully wrote {written_count} Steam records to database")
+        return written_count
+
+    def batch_write_itad_data(
+        self, itad_data: Dict[str, Dict], batch_size: int = 100
+    ) -> int:
+        """Write ITAD data to database in safe batches with proper error handling."""
+        if not itad_data:
+            return 0
+
+        written_count = 0
+        items = list(itad_data.items())
+
+        print(f"   💾 Writing {len(items)} ITAD records in batches of {batch_size}...")
+
+        for i in range(0, len(items), batch_size):
+            batch = items[i : i + batch_size]
+
+            conn = get_db_connection()
+            try:
+                conn.execute("BEGIN TRANSACTION")
+                for app_id, price_info in batch:
+                    price_data = price_info["data"]
+                    lookup_method = price_info["method"]
+                    game_name = price_info.get("game_name")
+
+                    cache_itad_price_enhanced(
+                        app_id,
+                        price_data,
+                        lookup_method=lookup_method,
+                        steam_game_name=game_name,
+                        permanent=True,
+                    )
+                    written_count += 1
+
+                conn.commit()
+                logger.debug(f"Successfully wrote batch of {len(batch)} ITAD records")
+
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to write ITAD batch: {e}")
+                # Try individual records to salvage what we can
+                for app_id, price_info in batch:
+                    try:
+                        price_data = price_info["data"]
+                        lookup_method = price_info["method"]
+                        game_name = price_info.get("game_name")
+
+                        cache_itad_price_enhanced(
+                            app_id,
+                            price_data,
+                            lookup_method=lookup_method,
+                            steam_game_name=game_name,
+                            permanent=True,
+                        )
+                        written_count += 1
+                    except Exception as individual_error:
+                        logger.error(
+                            f"Failed to write individual ITAD record {app_id}: {individual_error}"
+                        )
+                        written_count -= 1  # Adjust count for failed individual writes
+
+            finally:
+                conn.close()
+
+        print(f"   ✅ Successfully wrote {written_count} ITAD records to database")
+        return written_count
 
     async def populate_steam_prices(
         self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
-        """Populate Steam prices with async processing."""
+        """Populate Steam prices with async processing using cache-then-write pattern."""
         print("\n💰 Starting async Steam price population...")
         if not game_ids:
             print("❌ No game IDs to process")
@@ -491,45 +603,49 @@ class AsyncPricePopulator:
             print("   ✅ All games already have Steam price data")
             return 0
 
-        steam_prices_cached = 0
-        steam_errors = 0
+        # Phase 1: Async data collection
+        print("   📡 Phase 1: Async API data collection...")
+        steam_data = {}
+        steam_errors = []
 
         # Create async tasks for all games
         tasks = [self.fetch_steam_price_single(app_id) for app_id in games_to_process]
 
-        # Process with progress bar if available
+        # Collect data with progress bar if available
         if ASYNC_TQDM_AVAILABLE:
-            # Use tqdm to wrap the tasks and process them
             for task in atqdm(
                 asyncio.as_completed(tasks),
                 total=len(tasks),
-                desc="💰 Steam Prices",
+                desc="💰 Steam API",
                 unit="game",
             ):
-                app_id, success, source = await task
+                app_id, success, game_data, source = await task
                 if success:
-                    steam_prices_cached += 1
+                    steam_data[app_id] = {"data": game_data, "source": source}
                 else:
-                    steam_errors += 1
+                    steam_errors.append((app_id, source))
         else:
-            # Process without progress bar
             completed = 0
             for coro in asyncio.as_completed(tasks):
-                app_id, success, source = await coro
+                app_id, success, game_data, source = await coro
                 if success:
-                    steam_prices_cached += 1
+                    steam_data[app_id] = {"data": game_data, "source": source}
                 else:
-                    steam_errors += 1
+                    steam_errors.append((app_id, source))
 
                 completed += 1
-                if completed % 50 == 0:  # Update every 50 games
+                if completed % 50 == 0:
                     print(
-                        f"   📈 Progress: {completed}/{len(games_to_process)} | Cached: {steam_prices_cached} | Errors: {steam_errors}"
+                        f"   📈 API Progress: {completed}/{len(games_to_process)} | Success: {len(steam_data)} | Errors: {len(steam_errors)}"
                     )
+
+        # Phase 2: Safe database writing
+        print("   💾 Phase 2: Safe database writing...")
+        steam_prices_cached = self.batch_write_steam_data(steam_data)
 
         print("\n💰 Async Steam price population complete!")
         print(f"   ✅ Prices cached: {steam_prices_cached}")
-        print(f"   ❌ Errors: {steam_errors}")
+        print(f"   ❌ Errors: {len(steam_errors)}")
         print(
             f"   ⚡ Async speed improvement: ~{self.max_concurrent}x faster than sequential"
         )
@@ -539,7 +655,7 @@ class AsyncPricePopulator:
     async def populate_itad_prices(
         self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
-        """Populate ITAD prices with async processing."""
+        """Populate ITAD prices with async processing using cache-then-write pattern."""
         print("\n📈 Starting async ITAD price population...")
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
             print("❌ ITAD API key not configured. Skipping ITAD price population.")
@@ -564,51 +680,79 @@ class AsyncPricePopulator:
             print("   ✅ All games already have ITAD price data")
             return 0
 
-        itad_prices_cached = 0
-        itad_not_found = 0
-        itad_errors = 0
+        # Phase 1: Async data collection
+        print("   📡 Phase 1: Async API data collection...")
+        itad_data = {}
+        itad_errors = []
+        itad_not_found = []
 
         # Create async tasks for all games
         tasks = [self.fetch_itad_price_single(app_id) for app_id in games_to_process]
 
-        # Process with progress bar if available
+        # Collect data with progress bar if available
         if ASYNC_TQDM_AVAILABLE:
-            # Use tqdm to wrap the tasks and process them
             for task in atqdm(
                 asyncio.as_completed(tasks),
                 total=len(tasks),
-                desc="📈 ITAD Prices",
+                desc="📈 ITAD API",
                 unit="game",
             ):
-                app_id, status = await task
+                app_id, status, price_data, lookup_method = await task
                 if status == "cached":
-                    itad_prices_cached += 1
+                    # Get game name for name_search method
+                    game_name = None
+                    if lookup_method == "name_search":
+                        cached_details = get_cached_game_details(app_id)
+                        game_name = (
+                            cached_details.get("name") if cached_details else None
+                        )
+
+                    itad_data[app_id] = {
+                        "data": price_data,
+                        "method": lookup_method,
+                        "game_name": game_name,
+                    }
                 elif status == "not_found":
-                    itad_not_found += 1
-                elif status == "error":
-                    itad_errors += 1
+                    itad_not_found.append(app_id)
+                else:  # error or other status
+                    itad_errors.append((app_id, status))
         else:
-            # Process without progress bar
             completed = 0
             for coro in asyncio.as_completed(tasks):
-                app_id, status = await coro
+                app_id, status, price_data, lookup_method = await coro
                 if status == "cached":
-                    itad_prices_cached += 1
+                    # Get game name for name_search method
+                    game_name = None
+                    if lookup_method == "name_search":
+                        cached_details = get_cached_game_details(app_id)
+                        game_name = (
+                            cached_details.get("name") if cached_details else None
+                        )
+
+                    itad_data[app_id] = {
+                        "data": price_data,
+                        "method": lookup_method,
+                        "game_name": game_name,
+                    }
                 elif status == "not_found":
-                    itad_not_found += 1
-                elif status == "error":
-                    itad_errors += 1
+                    itad_not_found.append(app_id)
+                else:  # error or other status
+                    itad_errors.append((app_id, status))
 
                 completed += 1
-                if completed % 50 == 0:  # Update every 50 games
+                if completed % 50 == 0:
                     print(
-                        f"   📈 Progress: {completed}/{len(games_to_process)} | Cached: {itad_prices_cached} | Not Found: {itad_not_found} | Errors: {itad_errors}"
+                        f"   📈 API Progress: {completed}/{len(games_to_process)} | Success: {len(itad_data)} | Not Found: {len(itad_not_found)} | Errors: {len(itad_errors)}"
                     )
+
+        # Phase 2: Safe database writing
+        print("   💾 Phase 2: Safe database writing...")
+        itad_prices_cached = self.batch_write_itad_data(itad_data)
 
         print("\n📈 Async ITAD price population complete!")
         print(f"   ✅ Prices cached: {itad_prices_cached}")
-        print(f"   ❓ Games not found on ITAD: {itad_not_found}")
-        print(f"   ❌ Errors: {itad_errors}")
+        print(f"   ❓ Games not found on ITAD: {len(itad_not_found)}")
+        print(f"   ❌ Errors: {len(itad_errors)}")
         print(
             f"   ⚡ Async speed improvement: ~{self.max_concurrent}x faster than sequential"
         )
