@@ -57,12 +57,12 @@ run:
 # Set up browser profile for token sender (first-time setup)
 setup-browser:
     @echo "🌐 Setting up browser profile for Steam login..."
-    uv run familybot-setup
+    uv run python scripts/setup_browser.py
 
 # Test token extraction functionality
 test-token:
     @echo "🔑 Testing token extraction..."
-    uv run familybot-test
+    uv run python scripts/test_token_plugin.py
 
 # Run bot with legacy script (backward compatibility)
 run-legacy:
