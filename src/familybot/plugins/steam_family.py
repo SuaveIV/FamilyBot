@@ -871,7 +871,12 @@ class steam_family(Extension):
                     if deal["discount_percent"] > 0:
                         message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal["lowest_price"] != "N/A":
-                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
+                        # Handle both formatted ($X.XX) and unformatted (X.XX) prices
+                        lowest_price = deal["lowest_price"]
+                        if lowest_price.startswith("$"):
+                            message_parts.append(f" | Lowest ever: {lowest_price}")
+                        else:
+                            message_parts.append(f" | Lowest ever: ${lowest_price}")
                     message_parts.append(
                         f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}"
                     )
@@ -1051,7 +1056,12 @@ class steam_family(Extension):
                     if deal["discount_percent"] > 0:
                         message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal["lowest_price"] != "N/A":
-                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
+                        # Handle both formatted ($X.XX) and unformatted (X.XX) prices
+                        lowest_price = deal["lowest_price"]
+                        if lowest_price.startswith("$"):
+                            message_parts.append(f" | Lowest ever: {lowest_price}")
+                        else:
+                            message_parts.append(f" | Lowest ever: ${lowest_price}")
                     message_parts.append(
                         f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}"
                     )
