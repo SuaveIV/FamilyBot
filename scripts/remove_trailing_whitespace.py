@@ -1,5 +1,6 @@
 import os
 
+
 def remove_trailing_whitespace():
     """
     Recursively search the src/familybot directory for Python files
@@ -18,6 +19,7 @@ def remove_trailing_whitespace():
                     f.writelines("\n".join(updated_lines) + "\n")
 
                 print(f"Removed trailing whitespace from: {file_path}")
+
 
 if __name__ == "__main__":
     remove_trailing_whitespace()

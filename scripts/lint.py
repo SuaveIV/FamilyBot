@@ -20,21 +20,15 @@ def main():
     project_root = Path(__file__).parent.parent
 
     # Define the directories to lint
-    lint_paths = [
-        "src/",
-        "scripts/"
-    ]
+    lint_paths = ["src/", "scripts/"]
 
     # Build the pylint command
-    cmd = [
-        "pylint",
-        "--rcfile=.pylintrc"
-    ] + lint_paths
+    cmd = ["pylint", "--rcfile=.pylintrc"] + lint_paths
 
     try:
         # Set environment variables to force UTF-8 encoding
         env = os.environ.copy()
-        env['PYTHONIOENCODING'] = 'utf-8'
+        env["PYTHONIOENCODING"] = "utf-8"
 
         # Run pylint and capture output with proper encoding
         result = subprocess.run(
@@ -43,9 +37,9 @@ def main():
             check=False,  # Don't raise exception on non-zero exit
             text=True,
             capture_output=True,
-            encoding='utf-8',
-            errors='replace',  # Replace problematic characters instead of failing
-            env=env
+            encoding="utf-8",
+            errors="replace",  # Replace problematic characters instead of failing
+            env=env,
         )
 
         # Print output to console
@@ -74,7 +68,7 @@ def main():
             log_file = logs_dir / f"pylint_errors_{timestamp}.log"
 
             # Write pylint output to log file
-            with open(log_file, 'w', encoding='utf-8') as f:
+            with open(log_file, "w", encoding="utf-8") as f:
                 f.write(f"Pylint run at {datetime.now().isoformat()}\n")
                 f.write(f"Exit code: {result.returncode}\n")
                 f.write(f"Command: {' '.join(cmd)}\n")
@@ -102,7 +96,9 @@ def main():
             print(f"\nPylint found errors - log saved to: {log_file}")
             sys.exit(1)
         else:
-            print(f"\nPylint completed with warnings/suggestions (exit code: {result.returncode})")
+            print(
+                f"\nPylint completed with warnings/suggestions (exit code: {result.returncode})"
+            )
             print(f"Log saved to: {log_file}")
             print("Consider addressing the issues above to improve code quality.")
 
@@ -117,6 +113,7 @@ def main():
     except (subprocess.SubprocessError, OSError) as e:
         print(f"Error running pylint: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     sys.exit(main())

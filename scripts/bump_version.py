@@ -13,7 +13,6 @@ import subprocess
 import argparse
 
 
-
 def bump_version(version_type="patch"):
     """
     Bump version in pyproject.toml
@@ -27,7 +26,7 @@ def bump_version(version_type="patch"):
         return False
 
     # Read current content
-    content = pyproject_path.read_text(encoding='utf-8')
+    content = pyproject_path.read_text(encoding="utf-8")
 
     # Find version line
     version_pattern = r'version = "(\d+)\.(\d+)\.(\d+)"'
@@ -57,13 +56,15 @@ def bump_version(version_type="patch"):
     new_content = re.sub(version_pattern, f'version = "{new_version}"', content)
 
     # Write back to file
-    pyproject_path.write_text(new_content, encoding='utf-8')
+    pyproject_path.write_text(new_content, encoding="utf-8")
 
     print(f"Version bumped: {old_version} -> {new_version}")
 
     # Stage the modified file for commit (when run as pre-commit hook)
     try:
-        subprocess.run(['git', 'add', 'pyproject.toml'], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "pyproject.toml"], check=True, capture_output=True
+        )
         print("[OK] pyproject.toml staged for commit")
     except subprocess.CalledProcessError:
         # Not a git repository or git not available - that's okay for manual runs
@@ -71,9 +72,9 @@ def bump_version(version_type="patch"):
 
     return True
 
+
 def main():
     """Main function for command line usage"""
-
 
     parser = argparse.ArgumentParser(description="Bump FamilyBot version")
     parser.add_argument(
@@ -81,7 +82,7 @@ def main():
         nargs="?",
         default="patch",
         choices=["major", "minor", "patch"],
-        help="Version component to bump (default: patch)"
+        help="Version component to bump (default: patch)",
     )
 
     args = parser.parse_args()
@@ -90,6 +91,7 @@ def main():
         sys.exit(0)
     else:
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

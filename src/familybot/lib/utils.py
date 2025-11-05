@@ -17,14 +17,22 @@ logger = get_logger(__name__)
 def get_lowest_price(steam_app_id: int) -> str:
     """Fetches the lowest historical price for a given Steam App ID from IsThereAnyDeal with permanent caching for historical prices."""
     if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
-        logger.error("ITAD_API_KEY is missing or a placeholder. Cannot fetch lowest price.")
+        logger.error(
+            "ITAD_API_KEY is missing or a placeholder. Cannot fetch lowest price."
+        )
         return "N/A"
 
     # Try to get cached price first (permanent cache preferred)
     cached_price = get_cached_itad_price(str(steam_app_id))
     if cached_price:
-        logger.debug(f"Using cached ITAD price for {steam_app_id}: {cached_price['lowest_price_formatted'] or cached_price['lowest_price']}")
-        return cached_price['lowest_price_formatted'] or cached_price['lowest_price'] or "N/A"
+        logger.debug(
+            f"Using cached ITAD price for {steam_app_id}: {cached_price['lowest_price_formatted'] or cached_price['lowest_price']}"
+        )
+        return (
+            cached_price["lowest_price_formatted"]
+            or cached_price["lowest_price"]
+            or "N/A"
+        )
 
     # If not cached, fetch from ITAD API
     try:
@@ -36,7 +44,9 @@ def get_lowest_price(steam_app_id: int) -> str:
 
         game_id = answer_lookup.get("game", {}).get("id")
         if not game_id:
-            logger.warning(f"No ITAD game_id found for Steam App ID {steam_app_id}. Response: {answer_lookup}")
+            logger.warning(
+                f"No ITAD game_id found for Steam App ID {steam_app_id}. Response: {answer_lookup}"
+            )
             return "N/A"
 
         url_storelow = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
@@ -45,34 +55,57 @@ def get_lowest_price(steam_app_id: int) -> str:
         storelow_response.raise_for_status()
         answer_storelow = json.loads(storelow_response.text)
 
-        if answer_storelow and answer_storelow[0].get("lows") and answer_storelow[0]["lows"]:
+        if (
+            answer_storelow
+            and answer_storelow[0].get("lows")
+            and answer_storelow[0]["lows"]
+        ):
             price_amount = answer_storelow[0]["lows"][0]["price"]["amount"]
-            shop_name = answer_storelow[0]["lows"][0].get("shop", {}).get("name", "Unknown Store")
+            shop_name = (
+                answer_storelow[0]["lows"][0]
+                .get("shop", {})
+                .get("name", "Unknown Store")
+            )
 
             # Cache the price data permanently (historical lowest price)
-            cache_itad_price(str(steam_app_id), {
-                'lowest_price': str(price_amount),
-                'lowest_price_formatted': f"${price_amount}",
-                'shop_name': shop_name
-            }, permanent=True)
+            cache_itad_price(
+                str(steam_app_id),
+                {
+                    "lowest_price": str(price_amount),
+                    "lowest_price_formatted": f"${price_amount}",
+                    "shop_name": shop_name,
+                },
+                permanent=True,
+            )
 
-            logger.debug(f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}")
+            logger.debug(
+                f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}"
+            )
             return str(price_amount)
         else:
-            logger.info(f"No historical lowest price found for Steam App ID {steam_app_id}.")
+            logger.info(
+                f"No historical lowest price found for Steam App ID {steam_app_id}."
+            )
             return "N/A"
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error fetching ITAD data for {steam_app_id}: {e}")
         return "N/A"
     except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error for ITAD data {steam_app_id}: {e}. Raw: {lookup_response.text[:200] if 'lookup_response' in locals() else ''} {storelow_response.text[:200] if 'storelow_response' in locals() else ''}")
+        logger.error(
+            f"JSON decode error for ITAD data {steam_app_id}: {e}. Raw: {lookup_response.text[:200] if 'lookup_response' in locals() else ''} {storelow_response.text[:200] if 'storelow_response' in locals() else ''}"
+        )
         return "N/A"
     except KeyError as e:
-        logger.error(f"Missing key in ITAD response for {steam_app_id}: {e}. Response: {answer_lookup or answer_storelow}")
+        logger.error(
+            f"Missing key in ITAD response for {steam_app_id}: {e}. Response: {answer_lookup or answer_storelow}"
+        )
         return "N/A"
     except Exception as e:
-        logger.critical(f"An unexpected error occurred in get_lowest_price for {steam_app_id}: {e}", exc_info=True)
+        logger.critical(
+            f"An unexpected error occurred in get_lowest_price for {steam_app_id}: {e}",
+            exc_info=True,
+        )
         return "N/A"
 
 
@@ -111,7 +144,9 @@ class ProgressTracker:
     MIN_ELAPSED_TIME_FOR_ESTIMATION = 1  # Seconds
     SECONDS_PER_MINUTE = 60
 
-    def __init__(self, total_items: int, progress_interval: int = DEFAULT_PROGRESS_INTERVAL) -> None:
+    def __init__(
+        self, total_items: int, progress_interval: int = DEFAULT_PROGRESS_INTERVAL
+    ) -> None:
         if total_items < 0:
             raise ValueError("total_items must be non-negative")
         if not 1 <= progress_interval <= 100:
@@ -128,7 +163,10 @@ class ProgressTracker:
             return False
 
         current_percent = min(100, int(processed_count * 100 / self.total_items))
-        return current_percent // self.progress_interval > self.last_reported_percent // self.progress_interval
+        return (
+            current_percent // self.progress_interval
+            > self.last_reported_percent // self.progress_interval
+        )
 
     def get_progress_message(self, processed_count: int, context_info: str = "") -> str:
         """Generate formatted progress message with time estimation."""
@@ -141,7 +179,9 @@ class ProgressTracker:
         elapsed_time = time.time() - self.start_time
 
         # Build base message
-        progress_msg = f"📊 **Progress: {current_percent}%** ({processed_count}/{self.total_items}"
+        progress_msg = (
+            f"📊 **Progress: {current_percent}%** ({processed_count}/{self.total_items}"
+        )
         if context_info:
             progress_msg += f" {context_info}"
         progress_msg += ")"
@@ -193,7 +233,7 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
     current_part = ""
 
     # Split by lines first to preserve formatting
-    lines = message.split('\n')
+    lines = message.split("\n")
 
     for line in lines:
         # If a single line is too long, we need to split it
@@ -204,7 +244,7 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
                 current_part = ""
 
             # Split the long line by words
-            words = line.split(' ')
+            words = line.split(" ")
             for word in words:
                 # If adding this word would exceed limit, start new part
                 if len(current_part) + len(word) + 1 > max_length:
@@ -213,7 +253,7 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
                         current_part = word + " "
                     else:
                         # Single word is too long, truncate it
-                        parts.append(word[:max_length-3] + "...")
+                        parts.append(word[: max_length - 3] + "...")
                         current_part = ""
                 else:
                     current_part += word + " "
@@ -234,8 +274,12 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
     return parts
 
 
-def truncate_message_list(items: List[str], header: str = "", footer_template: str = "\n... and {count} more items!",
-                         max_length: int = 1900) -> str:
+def truncate_message_list(
+    items: List[str],
+    header: str = "",
+    footer_template: str = "\n... and {count} more items!",
+    max_length: int = 1900,
+) -> str:
     """
     Truncates a list of items to fit within Discord's message limit.
 
@@ -252,7 +296,7 @@ def truncate_message_list(items: List[str], header: str = "", footer_template: s
         return header
 
     # Build full content first
-    full_content = header + '\n'.join(items)
+    full_content = header + "\n".join(items)
 
     # If it fits, return as-is
     if len(full_content) <= max_length:
@@ -263,7 +307,9 @@ def truncate_message_list(items: List[str], header: str = "", footer_template: s
     available_space = max_length - len(header) - len(sample_footer)
 
     if available_space <= 0:
-        logger.warning(f"Header and footer too long for message truncation. Header: {len(header)}, Footer: {len(sample_footer)}")
+        logger.warning(
+            f"Header and footer too long for message truncation. Header: {len(header)}, Footer: {len(sample_footer)}"
+        )
         return header[:max_length]
 
     # Add items until we run out of space
@@ -281,8 +327,10 @@ def truncate_message_list(items: List[str], header: str = "", footer_template: s
     if len(truncated_items) < len(items):
         remaining_count = len(items) - len(truncated_items)
         footer = footer_template.format(count=remaining_count)
-        result = header + '\n'.join(truncated_items) + footer
-        logger.info(f"Message truncated: showing {len(truncated_items)} items, hiding {remaining_count} items")
+        result = header + "\n".join(truncated_items) + footer
+        logger.info(
+            f"Message truncated: showing {len(truncated_items)} items, hiding {remaining_count} items"
+        )
         return result
     else:
-        return header + '\n'.join(truncated_items)
+        return header + "\n".join(truncated_items)

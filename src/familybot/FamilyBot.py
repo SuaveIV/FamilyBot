@@ -12,7 +12,9 @@ import sqlite3  # Standard library import should come before third-party imports
 import uvicorn
 from interactions import Client, GuildText, Intents, listen
 from interactions.ext import prefixed_commands
-from interactions.client.errors import LibraryException  # Corrected import for Discord API error handling
+from interactions.client.errors import (
+    LibraryException,
+)  # Corrected import for Discord API error handling
 
 from familybot.config import (
     ADMIN_DISCORD_ID,
@@ -47,6 +49,7 @@ prefixed_commands.setup(cast(Client, client), default_prefix="!")
 
 # List to keep track of background tasks for graceful shutdown
 _running_tasks = []
+
 
 # --- Plugin Loading ---
 def get_plugins(directory: str) -> list:
@@ -190,9 +193,7 @@ async def get_pinned_message(chan_id: int) -> list:
             )
             return []
     except LibraryException as e:
-        logger.error(
-            "Error fetching pinned messages from channel %s: %s", chan_id, e
-        )
+        logger.error("Error fetching pinned messages from channel %s: %s", chan_id, e)
         return []
 
 
@@ -286,13 +287,15 @@ async def shutdown_application_tasks():
     for task in _running_tasks:
         if not task.done():
             task.cancel()
-            logger.info("Task %s cancelled.", task.get_name() if task.get_name() else task)
+            logger.info(
+                "Task %s cancelled.", task.get_name() if task.get_name() else task
+            )
     try:
         await asyncio.gather(*_running_tasks, return_exceptions=True)
         logger.info("All background tasks confirmed cancelled.")
     except asyncio.CancelledError:
         logger.info("Some tasks were already cancelled during shutdown.")
-    except Exception as e: # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
         logger.error(
             "Error during background task cleanup on shutdown: %s", e, exc_info=True
         )
@@ -345,7 +348,9 @@ def purge_game_cache() -> None:
             conn.commit()
             conn.close()
 
-            print(f"✅ Cache purge complete! Deleted {cache_count} cached game entries.")
+            print(
+                f"✅ Cache purge complete! Deleted {cache_count} cached game entries."
+            )
             print("\n🔄 Next steps:")
             print(
                 "- Start the bot and run !full_wishlist_scan to rebuild cache with USD pricing"
@@ -360,7 +365,9 @@ def purge_game_cache() -> None:
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging cache: {e}")
-        logger.error("Unexpected error purging cache from command line: %s", e, exc_info=True)
+        logger.error(
+            "Unexpected error purging cache from command line: %s", e, exc_info=True
+        )
 
 
 def purge_wishlist_cache() -> None:
@@ -414,7 +421,9 @@ def purge_wishlist_cache() -> None:
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging wishlist cache: {e}")
         logger.error(
-            "Unexpected error purging wishlist cache from command line: %s", e, exc_info=True
+            "Unexpected error purging wishlist cache from command line: %s",
+            e,
+            exc_info=True,
         )
 
 
@@ -463,7 +472,9 @@ def purge_family_library_cache() -> None:
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging family library cache: {e}")
         logger.error(
-            "Unexpected error purging family library cache from command line: %s", e, exc_info=True
+            "Unexpected error purging family library cache from command line: %s",
+            e,
+            exc_info=True,
         )
 
 
@@ -533,7 +544,9 @@ def purge_all_cache() -> None:
         # This is justified because this is a command-line tool and we want to ensure any unexpected error is reported to the user
         # without crashing the script, as this is a top-level utility function.
         print(f"❌ Unexpected error purging all cache: {e}")
-        logger.error("Unexpected error purging all cache from command line: %s", e, exc_info=True)
+        logger.error(
+            "Unexpected error purging all cache from command line: %s", e, exc_info=True
+        )
 
 
 # --- Main Bot Execution ---

@@ -9,7 +9,6 @@ from bump_version import bump_version
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-
 if __name__ == "__main__":
     if bump_version("major"):
         print("Major version bumped successfully!")

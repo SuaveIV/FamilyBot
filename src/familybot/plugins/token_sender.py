@@ -8,19 +8,23 @@ import os
 from datetime import datetime
 
 from interactions import Extension, IntervalTrigger, Task, listen
-from interactions.ext.prefixed_commands import (PrefixedContext,
-                                                prefixed_command)
+from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
 # Import from config
-from familybot.config import (ADMIN_DISCORD_ID, BROWSER_PROFILE_PATH,
-                              PROJECT_ROOT, TOKEN_SAVE_PATH,
-                              UPDATE_BUFFER_HOURS)
+from familybot.config import (
+    ADMIN_DISCORD_ID,
+    BROWSER_PROFILE_PATH,
+    PROJECT_ROOT,
+    TOKEN_SAVE_PATH,
+    UPDATE_BUFFER_HOURS,
+)
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 
 # Import Playwright conditionally
 try:
     from playwright.async_api import async_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
@@ -29,6 +33,7 @@ except ImportError:
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)
+
 
 class token_sender(Extension):
     def __init__(self, bot: FamilyBotClient):
@@ -39,16 +44,24 @@ class token_sender(Extension):
 
         # Check if Playwright is available
         if not PLAYWRIGHT_AVAILABLE:
-            logger.error("Playwright is not available. Token sender plugin will not function properly.")
-            logger.error("Please install Playwright with: uv add playwright && uv run playwright install chromium")
+            logger.error(
+                "Playwright is not available. Token sender plugin will not function properly."
+            )
+            logger.error(
+                "Please install Playwright with: uv add playwright && uv run playwright install chromium"
+            )
 
         # Ensure the token save path directory exists
         self.actual_token_save_dir = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
         try:
             os.makedirs(self.actual_token_save_dir, exist_ok=True)
-            logger.info(f"Ensured token save directory exists: {self.actual_token_save_dir}")
+            logger.info(
+                f"Ensured token save directory exists: {self.actual_token_save_dir}"
+            )
         except Exception as e:
-            logger.critical(f"Failed to create token save directory {self.actual_token_save_dir}: {e}")
+            logger.critical(
+                f"Failed to create token save directory {self.actual_token_save_dir}: {e}"
+            )
 
     async def _send_admin_dm(self, message: str) -> None:
         """Helper to send error/warning messages to the bot admin via DM."""
@@ -70,12 +83,14 @@ class token_sender(Extension):
                 logger.info(f"Using browser profile: {BROWSER_PROFILE_PATH}")
 
                 # Check if storage state file exists for better session persistence
-                storage_state_path = os.path.join(BROWSER_PROFILE_PATH, "storage_state.json")
+                storage_state_path = os.path.join(
+                    BROWSER_PROFILE_PATH, "storage_state.json"
+                )
                 storage_state = None
 
                 if os.path.exists(storage_state_path):
                     try:
-                        with open(storage_state_path, 'r') as f:
+                        with open(storage_state_path, "r") as f:
                             storage_state = json.load(f)
                         logger.info("Loaded storage state for session persistence")
                     except Exception as e:
@@ -85,14 +100,14 @@ class token_sender(Extension):
                 browser = await p.chromium.launch_persistent_context(
                     user_data_dir=BROWSER_PROFILE_PATH,
                     headless=True,
-                    args=['--no-sandbox', '--disable-dev-shm-usage']
+                    args=["--no-sandbox", "--disable-dev-shm-usage"],
                 )
                 page = await browser.new_page()
 
                 # If we have storage state, apply it to the context
                 if storage_state:
                     try:
-                        await browser.add_cookies(storage_state.get('cookies', []))
+                        await browser.add_cookies(storage_state.get("cookies", []))
                         logger.info("Applied cookies from storage state")
                     except Exception as e:
                         logger.warning(f"Could not apply storage state cookies: {e}")
@@ -104,8 +119,10 @@ class token_sender(Extension):
 
             try:
                 # Navigate to Steam points summary page
-                await page.goto("https://store.steampowered.com/pointssummary/ajaxgetasyncconfig")
-                await page.wait_for_load_state('networkidle')
+                await page.goto(
+                    "https://store.steampowered.com/pointssummary/ajaxgetasyncconfig"
+                )
+                await page.wait_for_load_state("networkidle")
 
                 # Get page content
                 content = await page.content()
@@ -126,12 +143,16 @@ class token_sender(Extension):
 
                 start_index = content.find(start_token_marker)
                 if start_index == -1:
-                    raise ValueError("Could not find 'webapi_token' start marker in page source")
+                    raise ValueError(
+                        "Could not find 'webapi_token' start marker in page source"
+                    )
 
                 key_start = start_index + len(start_token_marker)
                 key_end = content.find(end_token_marker, key_start)
                 if key_end == -1:
-                    raise ValueError("Could not find 'webapi_token' end marker in page source")
+                    raise ValueError(
+                        "Could not find 'webapi_token' end marker in page source"
+                    )
 
                 extracted_key = content[key_start:key_end]
 
@@ -151,10 +172,12 @@ class token_sender(Extension):
             token_file_path = os.path.join(self.actual_token_save_dir, "token")
             saved_token = ""
             try:
-                with open(token_file_path, 'r') as token_file:
+                with open(token_file_path, "r") as token_file:
                     saved_token = token_file.readline().strip()
             except FileNotFoundError:
-                logger.info(f"Existing token file not found at {token_file_path}. Will create new.")
+                logger.info(
+                    f"Existing token file not found at {token_file_path}. Will create new."
+                )
 
             # Check if token has changed
             if saved_token == token:
@@ -164,18 +187,20 @@ class token_sender(Extension):
             logger.info("New token found! Processing and saving...")
 
             # Save new token
-            with open(token_file_path, 'w') as token_file:
+            with open(token_file_path, "w") as token_file:
                 token_file.write(token)
 
             # Decode token to get expiry time
             try:
-                coded_string = token.split('.')[1]
+                coded_string = token.split(".")[1]
                 # Pad and replace URL-safe chars for base64 decoding
-                padded_coded_string = coded_string.replace('-', '+').replace('_', '/')
-                padded_coded_string += '=' * (-len(padded_coded_string) % 4)
+                padded_coded_string = coded_string.replace("-", "+").replace("_", "/")
+                padded_coded_string += "=" * (-len(padded_coded_string) % 4)
 
-                key_info = json.loads(base64.b64decode(padded_coded_string).decode('utf-8'))
-                exp_timestamp = key_info['exp']
+                key_info = json.loads(
+                    base64.b64decode(padded_coded_string).decode("utf-8")
+                )
+                exp_timestamp = key_info["exp"]
 
                 # Save expiry time
                 exp_file_path = os.path.join(self.actual_token_save_dir, "token_exp")
@@ -183,7 +208,9 @@ class token_sender(Extension):
                     exp_time_file.write(str(exp_timestamp))
 
                 logger.info(f"Token expiration timestamp {exp_timestamp} saved.")
-                logger.info(f"Token expires at: {datetime.fromtimestamp(exp_timestamp).strftime('%Y-%m-%d %H:%M:%S')}")
+                logger.info(
+                    f"Token expires at: {datetime.fromtimestamp(exp_timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
+                )
 
                 # Token saved successfully - no additional token manager needed
                 # since this plugin handles token management directly
@@ -217,14 +244,20 @@ class token_sender(Extension):
                             exp_time = float(exp_time_str)
                             # Calculate if we should update (buffer hours before expiry)
                             buffer_seconds = UPDATE_BUFFER_HOURS * 3600
-                            update_time = datetime.fromtimestamp(exp_time - buffer_seconds)
+                            update_time = datetime.fromtimestamp(
+                                exp_time - buffer_seconds
+                            )
                             now = datetime.now()
 
                             if now >= update_time:
                                 should_run = True
-                                logger.info(f"Token update needed. Current: {now.strftime('%Y-%m-%d %H:%M:%S')}, Update time: {update_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                                logger.info(
+                                    f"Token update needed. Current: {now.strftime('%Y-%m-%d %H:%M:%S')}, Update time: {update_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                                )
                             else:
-                                logger.debug(f"Token update not needed yet. Next update: {update_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                                logger.debug(
+                                    f"Token update not needed yet. Next update: {update_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                                )
                         else:
                             should_run = True  # No expiry time, force update
                             logger.info("No token expiry time found, forcing update")
@@ -238,7 +271,9 @@ class token_sender(Extension):
             if should_run:
                 if not PLAYWRIGHT_AVAILABLE:
                     logger.error("Cannot update token: Playwright is not available")
-                    await self._send_admin_dm("Cannot update Steam token: Playwright is not installed")
+                    await self._send_admin_dm(
+                        "Cannot update Steam token: Playwright is not installed"
+                    )
                     self._force_next_run = False
                     return
 
@@ -260,26 +295,34 @@ class token_sender(Extension):
                     self._force_next_run = False
 
         except Exception as e:
-            logger.critical(f"Critical error in token_update_scheduler: {e}", exc_info=True)
+            logger.critical(
+                f"Critical error in token_update_scheduler: {e}", exc_info=True
+            )
             await self._send_admin_dm(f"Critical error in token scheduler: {e}")
 
     """
     [help]|force_token|Force Steam token update|!force_token|Admin only command to force token update
     """
+
     @prefixed_command(name="force_token")
     async def force_token_command(self, ctx: PrefixedContext):
         """Force Steam token update (admin only, DM only)."""
         if str(ctx.author_id) == str(ADMIN_DISCORD_ID) and ctx.guild is None:
             self._force_next_run = True
-            await ctx.send("🔄 Forcing Steam token update... This will trigger on the next scheduled check.")
+            await ctx.send(
+                "🔄 Forcing Steam token update... This will trigger on the next scheduled check."
+            )
             logger.info("Force token update initiated by admin.")
             await self._send_admin_dm("Force token update initiated.")
         else:
-            await ctx.send("❌ You do not have permission to use this command, or it must be used in DMs.")
+            await ctx.send(
+                "❌ You do not have permission to use this command, or it must be used in DMs."
+            )
 
     """
     [help]|token_status|Check Steam token status|!token_status|Admin only command to check token status
     """
+
     @prefixed_command(name="token_status")
     async def token_status_command(self, ctx: PrefixedContext):
         """Check Steam token status (admin only, DM only)."""
@@ -294,11 +337,11 @@ class token_sender(Extension):
                     return
 
                 # Read token info
-                with open(token_file_path, 'r') as f:
+                with open(token_file_path, "r") as f:
                     token = f.read().strip()
 
                 if os.path.exists(exp_file_path):
-                    with open(exp_file_path, 'r') as f:
+                    with open(exp_file_path, "r") as f:
                         exp_timestamp = float(f.read().strip())
 
                     exp_time = datetime.fromtimestamp(exp_timestamp)
@@ -306,8 +349,12 @@ class token_sender(Extension):
                     time_remaining = exp_time - now
 
                     status_msg = "🔑 **Steam Token Status**\n"
-                    status_msg += f"📅 Expires: {exp_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    status_msg += f"⏰ Time remaining: {str(time_remaining).split('.')[0]}\n"
+                    status_msg += (
+                        f"📅 Expires: {exp_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    )
+                    status_msg += (
+                        f"⏰ Time remaining: {str(time_remaining).split('.')[0]}\n"
+                    )
                     status_msg += f"🔢 Token preview: {token[:20]}...\n"
 
                     if time_remaining.total_seconds() < 0:
@@ -327,13 +374,16 @@ class token_sender(Extension):
                 logger.error(f"Error checking token status: {e}")
                 await ctx.send(f"❌ Error checking token status: {e}")
         else:
-            await ctx.send("❌ You do not have permission to use this command, or it must be used in DMs.")
+            await ctx.send(
+                "❌ You do not have permission to use this command, or it must be used in DMs."
+            )
 
     @listen()
     async def on_startup(self):
         """Start the token update scheduler when the bot starts."""
         self.token_update_scheduler.start()
         logger.info("--Token Sender Task Started")
+
 
 def setup(bot):
     """Setup function to register the plugin with the bot."""

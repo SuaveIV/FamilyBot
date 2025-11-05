@@ -127,6 +127,21 @@ The project uses the following main dependencies (defined in `pyproject.toml`):
 
 FamilyBot offers two setup methods: the modern `just` command runner (recommended) and legacy platform-specific scripts.
 
+#### Development Environment with `mise`
+
+This project uses `mise` to manage the Python version and ensure a consistent development environment. Before you begin, please install `mise` by following the official instructions:
+
+-   [mise documentation](https://mise.jdx.dev/getting-started.html)
+
+Once `mise` is installed, you can set up the project environment with the following commands:
+
+```bash
+# Install the Python version specified in .mise.toml
+mise install
+
+# Now you can proceed with the setup using `just`
+```
+
 #### Modern Setup with `just` (Recommended)
 
 First, install the `just` command runner:
@@ -169,6 +184,9 @@ cargo install just
 Then set up FamilyBot:
 
 ```bash
+# Install python version
+mise install
+
 # Complete setup (creates venv, installs dependencies, verifies installation)
 just setup
 
@@ -189,7 +207,7 @@ If you prefer the traditional approach, navigate to the project's root directory
 .\reinstall_bot.ps1
 ```
 
-**For macOS/Linux (Bash):**
+**For macOS/Linux (Bash):
 
 ```bash
 chmod +x ./reinstall_bot.sh # Make the script executable first
@@ -201,6 +219,7 @@ Both methods will:
 - Create a new Python virtual environment (.venv).
 - Install all necessary Python libraries (including interactions.py, selenium, PyYAML, requests, websockets, webdriver_manager) into the virtual environment.
 - Ensure the project's internal modules are correctly configured.
+
 
 ### Discord Bot Creation
 
@@ -295,9 +314,12 @@ The `Token_Sender` bot has its own configuration. First, copy the template file 
 
 ## Quick Start with `just` (Recommended)
 
-If you have `just` installed, here's the fastest way to get FamilyBot running:
+If you have `just` and `mise` installed, here's the fastest way to get FamilyBot running:
 
 ```bash
+# Install python version
+mise install
+
 # Complete setup and run
 just setup
 just setup-browser  # First-time only: set up Steam login
@@ -392,6 +414,8 @@ This will:
 ### Running the Main Bot
 
 The main entry point is `src/familybot/FamilyBot.py`. The token sender now runs as an integrated plugin, so you only need to start one process.
+
+**Note:** The recommended way to run the bot and other scripts is by using the `just` commands. The `justfile` is configured to use `mise` to ensure the correct Python version is used. The examples below show how to run the scripts directly, but using `just` is preferred.
 
 **Using `just` (Recommended):**
 

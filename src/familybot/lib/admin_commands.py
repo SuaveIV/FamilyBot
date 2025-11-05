@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import random
 import sys
@@ -11,12 +12,16 @@ import httpx
 # Add the src directory to the Python path
 # This is usually handled by the main application's entry point,
 # but included here for potential standalone testing or clarity.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
-from familybot.lib.database import (cache_game_details,
-                                    cache_wishlist, get_cached_game_details,
-                                    get_cached_wishlist, get_db_connection)
+from familybot.lib.database import (
+    cache_game_details,
+    cache_wishlist,
+    get_cached_game_details,
+    get_cached_wishlist,
+    get_db_connection,
+)
 from familybot.lib.family_utils import find_in_2d_list
 from familybot.lib.logging_config import setup_script_logging
 
@@ -24,8 +29,6 @@ from familybot.lib.logging_config import setup_script_logging
 logger = setup_script_logging("admin_commands", "INFO")
 
 # Suppress verbose HTTP request logging from httpx
-import logging
-
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
@@ -72,10 +75,12 @@ class DatabasePopulator:
         self.rate_limits = {
             "fast": {"steam_api": 1.0, "store_api": 1.2},
             "normal": {"steam_api": 1.2, "store_api": 1.5},
-            "slow": {"steam_api": 1.8, "store_api": 2.2}
+            "slow": {"steam_api": 1.8, "store_api": 2.2},
         }
 
-        self.current_limits = self.rate_limits.get(rate_limit_mode, self.rate_limits["normal"])
+        self.current_limits = self.rate_limits.get(
+            rate_limit_mode, self.rate_limits["normal"]
+        )
 
         # Create token bucket rate limiters
         self.steam_bucket = TokenBucket(1.0 / self.current_limits["steam_api"])
@@ -90,13 +95,17 @@ class DatabasePopulator:
         logger.info(f"Rate limiting mode: {rate_limit_mode}")
         logger.info(f"Steam API: {self.current_limits['steam_api']}s (token bucket)")
         logger.info(f"Store API: {self.current_limits['store_api']}s (token bucket)")
-        logger.info(f"Retry policy: {self.max_retries} retries with exponential backoff")
+        logger.info(
+            f"Retry policy: {self.max_retries} retries with exponential backoff"
+        )
 
     async def close(self):
         """Closes the httpx client session."""
         await self.client.aclose()
 
-    async def make_request_with_retry(self, url: str, api_type: str = "steam") -> Optional[httpx.Response]:
+    async def make_request_with_retry(
+        self, url: str, api_type: str = "steam"
+    ) -> Optional[httpx.Response]:
         """Make HTTP request with retry logic for 429 errors."""
         bucket = self.steam_bucket if api_type == "steam" else self.store_bucket
 
@@ -115,8 +124,12 @@ class DatabasePopulator:
                 # Check for rate limiting
                 if response.status_code == 429:
                     if attempt < self.max_retries:
-                        backoff_time = self.base_backoff * (2 ** attempt) + random.uniform(0, 1)
-                        logger.warning(f"Rate limited (429), retrying in {backoff_time:.1f}s (attempt {attempt + 1}/{self.max_retries + 1})")
+                        backoff_time = self.base_backoff * (
+                            2**attempt
+                        ) + random.uniform(0, 1)
+                        logger.warning(
+                            f"Rate limited (429), retrying in {backoff_time:.1f}s (attempt {attempt + 1}/{self.max_retries + 1})"
+                        )
                         await asyncio.sleep(backoff_time)
                         continue
                     else:
@@ -127,17 +140,23 @@ class DatabasePopulator:
 
             except Exception as e:
                 if attempt < self.max_retries:
-                    backoff_time = self.base_backoff * (2 ** attempt)
-                    logger.warning(f"Request failed: {e}, retrying in {backoff_time:.1f}s")
+                    backoff_time = self.base_backoff * (2**attempt)
+                    logger.warning(
+                        f"Request failed: {e}, retrying in {backoff_time:.1f}s"
+                    )
                     await asyncio.sleep(backoff_time)
                     continue
                 else:
-                    logger.error(f"Request failed after {self.max_retries} retries: {e}")
+                    logger.error(
+                        f"Request failed after {self.max_retries} retries: {e}"
+                    )
                     return None
 
         return None
 
-    def handle_api_response(self, api_name: str, response: httpx.Response) -> Optional[dict]:
+    def handle_api_response(
+        self, api_name: str, response: httpx.Response
+    ) -> Optional[dict]:
         """Handle API responses with error checking and enhanced logging."""
         try:
             response.raise_for_status()
@@ -173,7 +192,7 @@ class DatabasePopulator:
                 for steam_id, name in FAMILY_USER_DICT.items():
                     cursor.execute(
                         "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None)
+                        (steam_id, name, None),
                     )
                 conn.commit()
                 logger.info(f"Migrated {len(FAMILY_USER_DICT)} family members")
@@ -192,11 +211,16 @@ class DatabasePopulator:
 
         return members
 
-    async def populate_family_libraries(self, family_members: Dict[str, str], dry_run: bool = False) -> int:
+    async def populate_family_libraries(
+        self, family_members: Dict[str, str], dry_run: bool = False
+    ) -> int:
         """Populate database with all family member game libraries."""
         logger.info("Starting family library population...")
 
-        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+        if (
+            not STEAMWORKS_API_KEY
+            or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE"
+        ):
             logger.error("Steam API key not configured. Cannot fetch family libraries.")
             return 0
 
@@ -213,12 +237,16 @@ class DatabasePopulator:
                     logger.info(f"Would fetch owned games for {name}")
                     continue
 
-                response = await self.make_request_with_retry(owned_games_url, api_type="steam")
+                response = await self.make_request_with_retry(
+                    owned_games_url, api_type="steam"
+                )
                 if response is None:
                     logger.warning(f"Failed to get games for {name}")
                     continue
 
-                games_data = self.handle_api_response(f"GetOwnedGames ({name})", response)
+                games_data = self.handle_api_response(
+                    f"GetOwnedGames ({name})", response
+                )
 
                 if not games_data:
                     logger.warning(f"Failed to get games for {name}")
@@ -248,7 +276,9 @@ class DatabasePopulator:
                         games_to_fetch.append(app_id)
 
                 if games_to_fetch:
-                    logger.info(f"Processing {len(games_to_fetch)} new games for {name}...")
+                    logger.info(
+                        f"Processing {len(games_to_fetch)} new games for {name}..."
+                    )
 
                     async def fetch_game_simple(app_id: str) -> bool:
                         nonlocal user_cached, total_cached
@@ -256,11 +286,15 @@ class DatabasePopulator:
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
 
                         try:
-                            game_response = await self.make_request_with_retry(game_url, api_type="store")
+                            game_response = await self.make_request_with_retry(
+                                game_url, api_type="store"
+                            )
                             if game_response is None:
                                 return False
 
-                            game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
+                            game_info = self.handle_api_response(
+                                f"AppDetails ({app_id})", game_response
+                            )
 
                             if not game_info:
                                 return False
@@ -280,28 +314,39 @@ class DatabasePopulator:
 
                     batch_size = 5
                     for i in range(0, len(games_to_fetch), batch_size):
-                        batch = games_to_fetch[i:i + batch_size]
+                        batch = games_to_fetch[i : i + batch_size]
                         tasks = [fetch_game_simple(app_id) for app_id in batch]
                         await asyncio.gather(*tasks, return_exceptions=True)
 
                         processed = min(i + batch_size, len(games_to_fetch))
-                        logger.debug(f"Progress for {name}: {processed}/{len(games_to_fetch)} | Cached: {user_cached}")
+                        logger.debug(
+                            f"Progress for {name}: {processed}/{len(games_to_fetch)} | Cached: {user_cached}"
+                        )
 
-                logger.info(f"{name}'s library complete: {user_cached} cached, {user_skipped} skipped")
+                logger.info(
+                    f"{name}'s library complete: {user_cached} cached, {user_skipped} skipped"
+                )
 
             except Exception as e:
                 logger.error(f"Error processing {name}'s library: {e}")
                 continue
 
-        logger.info(f"Family library population complete! Total games processed: {total_processed}, New games cached: {total_cached}")
+        logger.info(
+            f"Family library population complete! Total games processed: {total_processed}, New games cached: {total_cached}"
+        )
 
         return total_cached
 
-    async def populate_wishlists(self, family_members: Dict[str, str], dry_run: bool = False) -> int:
+    async def populate_wishlists(
+        self, family_members: Dict[str, str], dry_run: bool = False
+    ) -> int:
         """Populate database with family member wishlists."""
         logger.info("Starting wishlist population...")
 
-        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+        if (
+            not STEAMWORKS_API_KEY
+            or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE"
+        ):
             logger.error("Steam API key not configured. Cannot fetch wishlists.")
             return 0
 
@@ -314,7 +359,9 @@ class DatabasePopulator:
             try:
                 cached_wishlist = get_cached_wishlist(steam_id)
                 if cached_wishlist:
-                    logger.info(f"Using cached wishlist for {name} ({len(cached_wishlist)} items)")
+                    logger.info(
+                        f"Using cached wishlist for {name} ({len(cached_wishlist)} items)"
+                    )
                     for app_id in cached_wishlist:
                         idx = find_in_2d_list(app_id, global_wishlist)
                         if idx is not None:
@@ -329,7 +376,9 @@ class DatabasePopulator:
 
                 wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}"
 
-                response = await self.make_request_with_retry(wishlist_url, api_type="steam")
+                response = await self.make_request_with_retry(
+                    wishlist_url, api_type="steam"
+                )
                 if response is None:
                     logger.warning(f"Failed to get wishlist for {name}")
                     continue
@@ -338,7 +387,9 @@ class DatabasePopulator:
                     logger.info(f"{name}'s wishlist is private or empty")
                     continue
 
-                wishlist_data = self.handle_api_response(f"GetWishlist ({name})", response)
+                wishlist_data = self.handle_api_response(
+                    f"GetWishlist ({name})", response
+                )
                 if not wishlist_data:
                     continue
 
@@ -389,7 +440,9 @@ class DatabasePopulator:
             try:
                 game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
 
-                response = await self.make_request_with_retry(game_url, api_type="store")
+                response = await self.make_request_with_retry(
+                    game_url, api_type="store"
+                )
                 if response is None:
                     continue
 
@@ -406,12 +459,16 @@ class DatabasePopulator:
                 total_cached += 1
 
                 if (i + 1) % 10 == 0:
-                    logger.debug(f"Progress: {i + 1}/{len(common_games)} games processed")
+                    logger.debug(
+                        f"Progress: {i + 1}/{len(common_games)} games processed"
+                    )
 
             except Exception as e:
                 logger.warning(f"Error processing game {app_id}: {e}")
                 continue
 
-        logger.info(f"Wishlist population complete! Common games cached: {total_cached}")
+        logger.info(
+            f"Wishlist population complete! Common games cached: {total_cached}"
+        )
 
         return total_cached

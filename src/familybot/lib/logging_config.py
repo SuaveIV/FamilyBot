@@ -35,13 +35,20 @@ def sanitize_log_message(message: str) -> str:
     # Mask potential API keys (look for long alphanumeric strings)
 
     # Mask Steam API keys (32 character hex strings)
-    message = re.sub(r'\b[A-F0-9]{32}\b', '[STEAM_API_KEY]', message, flags=re.IGNORECASE)
+    message = re.sub(
+        r"\b[A-F0-9]{32}\b", "[STEAM_API_KEY]", message, flags=re.IGNORECASE
+    )
 
     # Mask Discord tokens (longer base64-like strings)
-    message = re.sub(r'\b[A-Za-z0-9+/]{50,}\b', '[DISCORD_TOKEN]', message)
+    message = re.sub(r"\b[A-Za-z0-9+/]{50,}\b", "[DISCORD_TOKEN]", message)
 
     # Mask potential passwords or secrets
-    message = re.sub(r'(password|secret|key|token)[\s=:]+[^\s]+', r'\1=[MASKED]', message, flags=re.IGNORECASE)
+    message = re.sub(
+        r"(password|secret|key|token)[\s=:]+[^\s]+",
+        r"\1=[MASKED]",
+        message,
+        flags=re.IGNORECASE,
+    )
 
     return message
 
@@ -70,13 +77,12 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
 
-
     # 1. Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(numeric_level)
     console_formatter = coloredlogs.ColoredFormatter(
-        fmt='%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        fmt="%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
@@ -85,49 +91,62 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     main_log_file = logs_dir / "familybot.log"
     main_file_handler = logging.handlers.RotatingFileHandler(
         main_log_file,
-        maxBytes=10*1024*1024,  # 10MB
+        maxBytes=10 * 1024 * 1024,  # 10MB
         backupCount=5,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     main_file_handler.setLevel(numeric_level)
-    main_file_handler.setFormatter(jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
-    ))
+    main_file_handler.setFormatter(
+        jsonlogger.JsonFormatter(
+            "%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s"
+        )
+    )
     logger.addHandler(main_file_handler)
 
     # 3. Error log file (WARNING and above) - rotating
     error_log_file = logs_dir / "familybot_errors.log"
     error_file_handler = logging.handlers.RotatingFileHandler(
         error_log_file,
-        maxBytes=5*1024*1024,  # 5MB
+        maxBytes=5 * 1024 * 1024,  # 5MB
         backupCount=10,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     error_file_handler.setLevel(logging.WARNING)
-    error_file_handler.setFormatter(jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
-    ))
+    error_file_handler.setFormatter(
+        jsonlogger.JsonFormatter(
+            "%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s"
+        )
+    )
     logger.addHandler(error_file_handler)
 
     # 4. Steam API specific log file
     steam_log_file = logs_dir / "steam_api.log"
     steam_file_handler = logging.handlers.RotatingFileHandler(
         steam_log_file,
-        maxBytes=5*1024*1024,  # 5MB
+        maxBytes=5 * 1024 * 1024,  # 5MB
         backupCount=5,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     steam_file_handler.setLevel(logging.INFO)
-    steam_file_handler.setFormatter(jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
-    ))
+    steam_file_handler.setFormatter(
+        jsonlogger.JsonFormatter(
+            "%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s"
+        )
+    )
 
     # Create a filter for Steam API related logs
     class SteamAPIFilter(logging.Filter):
         def filter(self, record):
-            return any(keyword in record.getMessage().lower() for keyword in [
-                'steam', 'api', 'rate limit', 'private profile', 'success:2'
-            ])
+            return any(
+                keyword in record.getMessage().lower()
+                for keyword in [
+                    "steam",
+                    "api",
+                    "rate limit",
+                    "private profile",
+                    "success:2",
+                ]
+            )
 
     steam_file_handler.addFilter(SteamAPIFilter())
     logger.addHandler(steam_file_handler)
@@ -142,7 +161,9 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
     for handler in logger.handlers:
         handler.addFilter(SanitizeFilter())
 
-    logger.info("Bot logging initialized - Level: %s, Logs dir: %s", log_level, logs_dir)
+    logger.info(
+        "Bot logging initialized - Level: %s, Logs dir: %s", log_level, logs_dir
+    )
     return logger
 
 
@@ -171,13 +192,11 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
 
-
     # 1. Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(numeric_level)
     console_formatter = coloredlogs.ColoredFormatter(
-        fmt='%(asctime)s - %(message)s',
-        datefmt='%H:%M:%S'
+        fmt="%(asctime)s - %(message)s", datefmt="%H:%M:%S"
     )
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
@@ -186,28 +205,32 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
     script_log_file = logs_dir / f"{script_name}.log"
     script_file_handler = logging.handlers.RotatingFileHandler(
         script_log_file,
-        maxBytes=5*1024*1024,  # 5MB
+        maxBytes=5 * 1024 * 1024,  # 5MB
         backupCount=3,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     script_file_handler.setLevel(numeric_level)
-    script_file_handler.setFormatter(jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
-    ))
+    script_file_handler.setFormatter(
+        jsonlogger.JsonFormatter(
+            "%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s"
+        )
+    )
     logger.addHandler(script_file_handler)
 
     # 3. Combined script errors log
     script_errors_file = logs_dir / "script_errors.log"
     script_error_handler = logging.handlers.RotatingFileHandler(
         script_errors_file,
-        maxBytes=5*1024*1024,  # 5MB
+        maxBytes=5 * 1024 * 1024,  # 5MB
         backupCount=5,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     script_error_handler.setLevel(logging.WARNING)
-    script_error_handler.setFormatter(jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
-    ))
+    script_error_handler.setFormatter(
+        jsonlogger.JsonFormatter(
+            "%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s"
+        )
+    )
     logger.addHandler(script_error_handler)
 
     # Add sanitization filter
@@ -237,7 +260,9 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def log_private_profile_detection(logger: logging.Logger, user_name: str, steam_id: str, operation: str):
+def log_private_profile_detection(
+    logger: logging.Logger, user_name: str, steam_id: str, operation: str
+):
     """
     Log private profile detection with consistent formatting.
 
@@ -247,10 +272,20 @@ def log_private_profile_detection(logger: logging.Logger, user_name: str, steam_
         steam_id: Steam ID of the user
         operation: Operation that failed (e.g., 'wishlist', 'library')
     """
-    logger.warning("[PRIVATE_PROFILE] %s (%s): %s access blocked - profile is private", user_name, steam_id, operation)
+    logger.warning(
+        "[PRIVATE_PROFILE] %s (%s): %s access blocked - profile is private",
+        user_name,
+        steam_id,
+        operation,
+    )
 
 
-def log_api_error(logger: logging.Logger, api_name: str, error: Exception, context: Optional[str] = None):
+def log_api_error(
+    logger: logging.Logger,
+    api_name: str,
+    error: Exception,
+    context: Optional[str] = None,
+):
     """
     Log API errors with consistent formatting and context.
 
@@ -261,10 +296,14 @@ def log_api_error(logger: logging.Logger, api_name: str, error: Exception, conte
         context: Additional context (e.g., user ID, app ID)
     """
     context_str = f" [{context}]" if context else ""
-    logger.error("[API_ERROR] %s%s: %s: %s", api_name, context_str, type(error).__name__, error)
+    logger.error(
+        "[API_ERROR] %s%s: %s: %s", api_name, context_str, type(error).__name__, error
+    )
 
 
-def log_rate_limit(logger: logging.Logger, api_name: str, backoff_time: float, reason: str = ""):
+def log_rate_limit(
+    logger: logging.Logger, api_name: str, backoff_time: float, reason: str = ""
+):
     """
     Log rate limiting events.
 
@@ -275,10 +314,14 @@ def log_rate_limit(logger: logging.Logger, api_name: str, backoff_time: float, r
         reason: Reason for rate limiting (optional)
     """
     reason_str = f" - {reason}" if reason else ""
-    logger.warning("[RATE_LIMIT] %s: Backing off %.1fs%s", api_name, backoff_time, reason_str)
+    logger.warning(
+        "[RATE_LIMIT] %s: Backing off %.1fs%s", api_name, backoff_time, reason_str
+    )
 
 
-def log_performance_metric(logger: logging.Logger, operation: str, duration: float, count: int = 1):
+def log_performance_metric(
+    logger: logging.Logger, operation: str, duration: float, count: int = 1
+):
     """
     Log performance metrics for operations.
 
@@ -289,22 +332,33 @@ def log_performance_metric(logger: logging.Logger, operation: str, duration: flo
         count: Number of items processed
     """
     rate = count / duration if duration > 0 else 0
-    logger.info("[PERFORMANCE] %s: %.2fs for %d items (%.1f/s)", operation, duration, count, rate)
+    logger.info(
+        "[PERFORMANCE] %s: %.2fs for %d items (%.1f/s)",
+        operation,
+        duration,
+        count,
+        rate,
+    )
 
 
 # Create a default logger for immediate use
 default_logger = logging.getLogger("familybot.default")
 
+
 class _WebLogQueueHolder:
     """A singleton-like class to hold the web log queue."""
+
     def __init__(self):
         self.queue: Optional[Queue] = None
 
+
 _web_log_queue_holder = _WebLogQueueHolder()
+
 
 def get_web_log_queue():
     """Get the web log queue."""
     return _web_log_queue_holder.queue
+
 
 def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
     """
@@ -334,7 +388,7 @@ def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
 
     # Create formatter
     web_formatter = jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s'
+        "%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(pathname)s"
     )
     web_handler.setFormatter(web_formatter)
     logger.addHandler(web_handler)

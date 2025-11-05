@@ -1,20 +1,26 @@
 # In src/familybot/lib/types.py
 
-from typing import (List,  # Import necessary types
-                    Protocol)
+from typing import (
+    List,  # Import necessary types
+    Protocol,
+)
 
 # Import core interactions types that might be part of the protocol's methods' signatures
-from interactions import (BaseChannel, Message, User)
+from interactions import BaseChannel, Message, User
 
 # Discord API Constants
-DISCORD_MESSAGE_LIMIT = 1950  # Maximum characters allowed in a Discord message (with safety buffer)
-DISCORD_EMBED_LIMIT = 6000   # Maximum characters allowed in a Discord embed
+DISCORD_MESSAGE_LIMIT = (
+    1950  # Maximum characters allowed in a Discord message (with safety buffer)
+)
+DISCORD_EMBED_LIMIT = 6000  # Maximum characters allowed in a Discord embed
+
 
 class FamilyBotClientProtocol(Protocol):
     """
     A protocol defining the additional methods that are dynamically added to the bot client,
     and also includes core interactions.Client methods used across the application for comprehensive type checking.
     """
+
     # Core interactions.Client methods used
     def load_extension(self, name: str) -> None: ...
     async def fetch_channel(self, channel_id: int) -> BaseChannel: ...
@@ -28,6 +34,7 @@ class FamilyBotClientProtocol(Protocol):
     async def send_dm(self, discord_id: int, message: str) -> None: ...
     async def edit_msg(self, chan_id: int, msg_id: int, message: str) -> None: ...
     async def get_pinned_message(self, chan_id: int) -> List[Message]: ...
+
 
 # Type alias that represents the bot client, hinting its structure for type checkers.
 FamilyBotClient = FamilyBotClientProtocol
