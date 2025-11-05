@@ -44,7 +44,9 @@ familybot-lint = "scripts.lint:main"
 # Since your main package is now 'familybot' inside 'src/', this is correct.
 package-dir = {"" = "src"}
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "ruff>=0.12.5",
+    "mypy",
+    "pip-audit",
 ]

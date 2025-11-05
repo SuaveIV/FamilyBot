@@ -18,15 +18,13 @@ setup:
 # Create virtual environment using uv
 create-venv:
     @echo "📦 Creating virtual environment with uv..."
-    uv venv
+    mise exec -- uv venv --clear
     @echo "✅ Virtual environment created at .venv/"
 
 # Install all dependencies in editable mode
 install-deps:
-    @echo "📥 Installing dependencies..."
-    uv pip install -e .
-    @echo "📥 Installing development dependencies..."
-    uv pip install --group dev
+    @echo "📥 Installing all dependencies (including dev)..."
+    mise exec -- uv pip install -e '.[dev]'
     @echo "✅ Dependencies installed"
 
 # Clean reinstall: remove everything and start fresh
@@ -36,33 +34,39 @@ reinstall:
     just setup
     @echo "✅ Clean reinstall complete!"
 
+# Generate a new lockfile from pyproject.toml
+lock:
+    @echo "🔒 Generating lockfile from pyproject.toml..."
+    mise exec -- uv pip compile pyproject.toml --extra dev -o requirements.txt
+    @echo "✅ requirements.txt lockfile updated."
+
 # Verify installation is working
 verify-setup:
     @echo "🔍 Verifying installation..."
     @echo "Python version:"
-    uv run python --version
+    mise exec -- uv run python --version
     @echo "FamilyBot version:"
-    uv run python -c "import familybot; print('FamilyBot package loaded successfully')" || echo "⚠️  FamilyBot package not found"
+    mise exec -- uv run python -c "import familybot; print('FamilyBot package loaded successfully')" || echo "⚠️  FamilyBot package not found"
     @echo "✅ Verification complete"
 
 # === RUNNING THE BOT ===
 
 # Run the main bot (recommended method)
-run:
+run: create-venv install-deps
     @echo "🤖 Starting FamilyBot..."
     @echo "Press Ctrl+C to stop the bot gracefully"
-    -uv run familybot
+    -mise exec -- uv run familybot
     @echo "🛑 FamilyBot stopped"
 
 # Set up browser profile for token sender (first-time setup)
 setup-browser:
     @echo "🌐 Setting up browser profile for Steam login..."
-    uv run python scripts/setup_browser.py
+    mise exec -- uv run python scripts/setup_browser.py
 
 # Test token extraction functionality
 test-token:
     @echo "🔑 Testing token extraction..."
-    uv run python scripts/test_token_plugin.py
+    mise exec -- uv run python scripts/test_token_plugin.py
 
 # Run bot with legacy script (backward compatibility)
 run-legacy:
@@ -74,25 +78,25 @@ run-legacy:
 # Purge game details cache
 purge-cache:
     @echo "🧹 Purging game details cache..."
-    uv run python src/familybot/FamilyBot.py --purge-cache
+    mise exec -- uv run python src/familybot/FamilyBot.py --purge-cache
     @echo "✅ Game details cache purged"
 
 # Purge wishlist cache
 purge-wishlist:
     @echo "🧹 Purging wishlist cache..."
-    uv run python src/familybot/FamilyBot.py --purge-wishlist
+    mise exec -- uv run python src/familybot/FamilyBot.py --purge-wishlist
     @echo "✅ Wishlist cache purged"
 
 # Purge family library cache
 purge-family-library:
     @echo "🧹 Purging family library cache..."
-    uv run python src/familybot/FamilyBot.py --purge-family-library
+    mise exec -- uv run python src/familybot/FamilyBot.py --purge-family-library
     @echo "✅ Family library cache purged"
 
 # Purge all cache data
 purge-all-cache:
     @echo "🧹 Purging ALL cache data..."
-    uv run python src/familybot/FamilyBot.py --purge-all
+    mise exec -- uv run python src/familybot/FamilyBot.py --purge-all
     @echo "✅ All cache data purged"
 
 # === DATABASE OPERATIONS ===
@@ -100,36 +104,36 @@ purge-all-cache:
 # Populate database with game data and family information
 populate-db:
     @echo "📊 Populating database..."
-    uv run familybot-populate
+    mise exec -- uv run python scripts/populate_database.py
     @echo "✅ Database populated"
 
 # Populate price data (standard mode)
 populate-prices:
     @echo "💰 Populating price data (standard mode)..."
-    uv run python scripts/populate_prices.py
+    mise exec -- uv run python scripts/populate_prices.py
     @echo "✅ Price data populated"
 
 # Populate price data (optimized mode - 6-10x faster)
 populate-prices-fast:
     @echo "💰 Populating price data (optimized mode)..."
-    uv run python scripts/populate_prices_optimized.py
+    mise exec -- uv run python scripts/populate_prices_optimized.py
     @echo "✅ Price data populated (optimized)"
 
 # Populate price data (async mode - 15-25x faster)
 populate-prices-turbo:
     @echo "💰 Populating price data (async turbo mode)..."
-    uv run python scripts/populate_prices_async.py
+    mise exec -- uv run python scripts/populate_prices_async.py
     @echo "✅ Price data populated (turbo)"
 
 # Inspect database structure and contents
 inspect-db:
     @echo "🔍 Inspecting database..."
-    uv run familybot-inspect-db
+    mise exec -- uv run familybot-inspect-db
 
 # Backup database
 backup-db:
     @echo "💾 Backing up database..."
-    uv run python scripts/backup_database.py
+    mise exec -- uv run python scripts/backup_database.py
     @echo "✅ Database backed up"
 
 # === LINTING AND FORMATTING ===
@@ -137,25 +141,35 @@ backup-db:
 # Run ruff linter
 lint:
     @echo "🔍 Running ruff linter..."
-    uv run ruff check src/ scripts/
+    mise exec -- uv run ruff check src/ scripts/
 
 # Run ruff linter with auto-fix
 lint-fix:
     @echo "🔧 Running ruff linter with auto-fix..."
-    uv run ruff check --fix src/ scripts/
+    mise exec -- uv run ruff check --fix src/ scripts/
 
 # Format code with ruff
 format:
     @echo "✨ Formatting code with ruff..."
-    uv run ruff format src/ scripts/
+    mise exec -- uv run ruff format src/ scripts/
 
 # Check code formatting without making changes
 format-check:
     @echo "🔍 Checking code formatting..."
-    uv run ruff format --check src/ scripts/
+    mise exec -- uv run ruff format --check src/ scripts/
+
+# Run mypy type checker
+type-check:
+    @echo "🧐 Running mypy type checker..."
+    mise exec -- uv run mypy src/ scripts/
+
+# Run security audit for dependencies
+audit:
+    @echo "🛡️ Running pip-audit for security vulnerabilities..."
+    mise exec -- uv run pip-audit -r requirements.txt
 
 # Run all code quality checks
-check: lint format-check
+check: lint format-check type-check audit
     @echo "✅ All code quality checks passed!"
 
 # Fix and format all code issues
@@ -165,14 +179,14 @@ fix: lint-fix format
 # Legacy lint command (for backward compatibility)
 lint-legacy:
     @echo "🔍 Running legacy lint script..."
-    uv run familybot-lint
+    mise exec -- uv run familybot-lint
 
 # === DEVELOPMENT TASKS ===
 
 # Set up pre-commit hooks
 setup-precommit:
     @echo "🪝 Setting up pre-commit hooks..."
-    uv run familybot-setup-precommit
+    mise exec -- uv run familybot-setup-precommit
     @echo "✅ Pre-commit hooks installed"
 
 # Run pre-commit style checks
@@ -182,17 +196,17 @@ pre-commit: check
 # Bump version (patch)
 bump-patch:
     @echo "📈 Bumping patch version..."
-    uv run python scripts/bump_patch.py
+    mise exec -- uv run python scripts/bump_patch.py
 
 # Bump version (minor)
 bump-minor:
     @echo "📈 Bumping minor version..."
-    uv run python scripts/bump_minor.py
+    mise exec -- uv run python scripts/bump_minor.py
 
 # Bump version (major)
 bump-major:
     @echo "📈 Bumping major version..."
-    uv run python scripts/bump_major.py
+    mise exec -- uv run python scripts/bump_major.py
 
 # === UTILITY TASKS ===
 
