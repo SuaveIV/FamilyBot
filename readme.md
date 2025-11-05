@@ -33,12 +33,11 @@ FamilyBot/
 │   │   ├── models.py        # Pydantic data models
 │   │   ├── static/          # CSS, JavaScript, and assets
 │   │   └── templates/       # HTML templates
-│   └── Token_Sender/        # Legacy token management (deprecated)
-│       ├── getToken.py      # Token extraction script
-│       └── config-template.yaml # Token sender configuration
 ├── scripts/                 # Utility scripts
 │   ├── populate_database.py # Database population
 │   ├── populate_prices.py   # Price data population
+│   ├── populate_prices_optimized.py # Optimized price data population
+│   ├── populate_prices_async.py # Async price data population
 │   └── README.md           # Scripts documentation
 ├── doc/                    # Documentation and images
 │   ├── WEB_UI_README.md    # Web UI documentation
@@ -59,7 +58,6 @@ FamilyBot consists of several interconnected components:
 - **Discord Bot**: Handles all Discord interactions using the interactions.py library
 - **Plugin System**: Automatically loads plugins from the `plugins/` directory, enabling modular and extensible functionality
 - **Database Management**: SQLite database for caching game data, wishlists, and user information
-- **WebSocket Server**: Receives tokens from the Token_Sender component for secure communication
 - **Command-line Interface**: Supports cache management, database population, and other maintenance operations
 
 ### Token Sender Plugin (`plugins/token_sender.py`)
@@ -69,11 +67,6 @@ FamilyBot consists of several interconnected components:
 - **Enhanced Session Management**: Utilizes explicit storage state saving to ensure reliable and persistent Steam login sessions
 - **Admin Commands**: Provides `!force_token` and `!token_status` commands for monitoring and controlling the token extraction process
 - **Easy Setup**: Automated browser profile creation with the `scripts/setup_browser.py` script
-
-### Legacy Token Sender (`Token_Sender/getToken.py`)
-
-- **Deprecated**: Original standalone Selenium-based implementation, preserved for reference purposes only
-- **Migration Complete**: The new Token Sender plugin provides all the necessary functionality with significant improvements and enhancements
 
 ### Plugin Architecture
 
@@ -112,9 +105,7 @@ The project uses the following main dependencies (defined in `pyproject.toml`):
 
 - **discord-py-interactions**: Modern Discord bot framework
 - **requests**: HTTP library for API calls
-- **selenium**: Web automation for token extraction
-- **webdriver-manager**: Automatic WebDriver management
-- **websockets**: WebSocket communication between components
+- **playwright**: for automated token extraction
 - **PyYAML**: Configuration file parsing
 - **tqdm**: Progress bars for long-running operations
 - **httpx**: Async HTTP client for improved performance
@@ -122,6 +113,8 @@ The project uses the following main dependencies (defined in `pyproject.toml`):
 - **uvicorn**: ASGI server for FastAPI
 - **jinja2**: Template engine for HTML rendering
 - **pydantic**: Data validation and serialization
+- **audioop-lts**: Required for voice support in Discord interactions
+- **pylint**: Code linter for maintaining code quality
 
 ### Setup
 
@@ -199,7 +192,7 @@ just help
 
 #### Legacy Setup (Platform-Specific Scripts)
 
-If you prefer the traditional approach, navigate to the project's root directory (`FamilyBot/`) in your terminal and run the appropriate script:
+If you prefer the traditional approach, you can use the platform-specific scripts. However, it is **highly recommended** to use the `just` command runner for a more streamlined experience.
 
 **For Windows (PowerShell 7):**
 
@@ -207,19 +200,12 @@ If you prefer the traditional approach, navigate to the project's root directory
 .\reinstall_bot.ps1
 ```
 
-**For macOS/Linux (Bash):
+**For macOS/Linux (Bash):**
 
 ```bash
 chmod +x ./reinstall_bot.sh # Make the script executable first
 ./reinstall_bot.sh
 ```
-
-Both methods will:
-
-- Create a new Python virtual environment (.venv).
-- Install all necessary Python libraries (including interactions.py, selenium, PyYAML, requests, websockets, webdriver_manager) into the virtual environment.
-- Ensure the project's internal modules are correctly configured.
-
 
 ### Discord Bot Creation
 
@@ -243,8 +229,6 @@ Both methods will:
 
 ## Configuration
 
-The bot uses two separate configuration files for its different components.
-
 ### Main Bot Configuration (`config.yml`)
 
 The main bot uses `config.yml` for its settings. First, fill in the required data in the `config-template.yml` file located in your **project's root directory** (`FamilyBot/`) and then **rename it to `config.yml`**.
@@ -263,9 +247,7 @@ The bot interacts with several Steam APIs. There are two distinct types of Steam
 1. **Steamworks Web API Key:** Used for accessing most public Steam Web API endpoints (e.g., `IPlayerService/GetOwnedGames`, `IWishlistService/GetWishlist`, `IFamilyGroupsService/GetSharedLibraryApps`). This is a developer-specific key.
     - **To Obtain:** Go to [https://steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey). Register a domain (you can use `localhost` for development) and generate your key. This key goes into the `steamworks_api_key` field in your `config.yml`.
 
-2. **Steam Web API Token (`webapi_token`):** This is a client-side token, usually obtained from your browser session, and is specifically used by the `Token_Sender` bot for actions that might mimic browser interaction (e.g., if you had features related to Steam Points Shop or specific client-side Steam features).
-
-    - **To Get `webapi_token`:** Go to [https://store.steampowered.com/pointssummary/ajaxgetasyncconfig](https://store.steampowered.com/pointssummary/ajaxgetasyncconfig). Log in to Steam in another tab, then refresh the token tab. Copy the `webapi_token` value (in quotes). This token is *automatically collected* by the `Token_Sender` bot using Selenium and sent to the main bot via WebSocket. You don't need to manually put this into `config.yml`.
+2. **Steam Web API Token (`webapi_token`):** This is a client-side token, usually obtained from your browser session, and is specifically used by the `token_sender` plugin for actions that might mimic browser interaction. This token is *automatically collected* by the `token_sender` plugin. You don't need to manually put this into `config.yml`.
 
 #### Steam Family ID
 
@@ -285,32 +267,6 @@ To get your Steam Family ID:
 2. Once logged in, go to [https://isthereanydeal.com/apps/my/](https://isthereanydeal.com/apps/my/) and create a new application.
 3. Copy the API key displayed there.
     ![ITAD API KEY](doc/ITAD_API_KEY.png)
-
-### Token Sender Configuration (`config.yaml`)
-
-The `Token_Sender` bot is a separate Python script (`getToken.py`) located in the `src/familybot/Token_Sender/` subdirectory. It requires:
-
-- **Firefox** (installed on your system).
-- **Python 3.13+** (managed by your bot's virtual environment).
-
-#### Configure Firefox for Selenium
-
-Since the `webapi_token` can only be reliably obtained from a browser logged into Steam, `Token_Sender` uses Selenium.
-
-1. You need to create a dedicated Firefox profile. In Firefox's address bar, type **`about:profiles`** and press Enter.
-2. Click on **"Create a New Profile"**.
-    ![Create Firefox Profile](doc/Create_Firefox_Profile.png)
-3. **Note the path of this new profile**, as you will need it for the `Token_Sender`'s configuration.
-4. Start this new profile in a new browser window and log in to [Steam](https://store.steampowered.com/).
-
-#### Token Sender Configuration File
-
-The `Token_Sender` bot has its own configuration. First, copy the template file `src/familybot/Token_Sender/config-template.yaml` to `src/familybot/Token_Sender/config.yaml`. Then, fill in the required data in `src/familybot/Token_Sender/config.yaml`:
-
-- **`server_ip`**: The IP address of the main FamilyBot's WebSocket server. Use the same IP address you set for `websocket_server_ip` in the main bot's `config.yml` (e.g., `127.0.0.1` for local).
-- **`token_save_path`**: The directory where the `webapi_token` and its expiration timestamp will be saved. We recommend using a relative path like `"tokens/"` (which will create a `FamilyBot/tokens/` folder).
-- **`shutdown`**: Set to `true` if you want your computer to shut down after the token is successfully sent (mostly for dedicated systems; set to `false` for development).
-- **`firefox_profile_path`**: The **complete path** to the Firefox profile you created in the previous step. Ensure you use **forward slashes (`/`)** or escaped backslashes (`\\`) in the path.
 
 ## Quick Start with `just` (Recommended)
 
@@ -415,7 +371,7 @@ This will:
 
 The main entry point is `src/familybot/FamilyBot.py`. The token sender now runs as an integrated plugin, so you only need to start one process.
 
-**Note:** The recommended way to run the bot and other scripts is by using the `just` commands. The `justfile` is configured to use `mise` to ensure the correct Python version is used. The examples below show how to run the scripts directly, but using `just` is preferred.
+**Note:** The recommended way to run the bot and other scripts is by using the `just` commands. The `justfile` is configured to use `mise` to ensure the correct Python version is used.
 
 **Using `just` (Recommended):**
 
@@ -443,84 +399,13 @@ uv run familybot-setup
 uv run familybot-test
 ```
 
-**Direct Python Execution:**
+### Stopping the Bot
 
-**For Windows (PowerShell 7):**
-
-```powershell
-# Activate virtual environment
-. .\.venv\Scripts\Activate.ps1
-
-# Run the bot
-uv run python .\src\familybot\FamilyBot.py
-```
-
-**For macOS/Linux (Bash):**
-
-```bash
-# Activate virtual environment
-source ./.venv/bin/activate
-
-# Run the bot
-uv run python ./src/familybot/FamilyBot.py
-```
-
-### Legacy Launch Scripts (For Backward Compatibility)
-
-The old launch scripts are still available but now only start the main bot since the token sender is integrated:
-
-**Using `just`:**
-
-```bash
-just run-legacy
-```
-
-**Direct execution:**
-
-- **For Windows (PowerShell 7):**
-
-    ```powershell
-    .\run_bots.ps1
-    ```
-
-- **For macOS/Linux (Bash):**
-
-    ```bash
-    chmod +x ./run_bots.sh # Make the script executable first
-    ./run_bots.sh
-    ```
-
-### Command-line Arguments
-
-The main bot (`FamilyBot.py`) supports several command-line arguments for maintenance operations:
-
-```bash
-# Cache management operations
-uv run python .\src\familybot\FamilyBot.py --purge-cache          # Purge game details cache
-uv run python .\src\familybot\FamilyBot.py --purge-wishlist      # Purge wishlist cache
-uv run python .\src\familybot\FamilyBot.py --purge-family-library # Purge family library cache
-uv run python .\src\familybot\FamilyBot.py --purge-all           # Purge all cache data
-
-# Note: --full-library-scan and --full-wishlist-scan require the bot to be running
-# Use Discord commands !full_library_scan and !full_wishlist_scan instead
-```
-
----
-
-**Important Notes:**
-
-- You will need **two separate terminal windows** if you run them manually (one for `FamilyBot.py` and one for `getToken.py`).
-- Remember to activate the virtual environment (`. .\.venv\Scripts\Activate.ps1` or `source ./.venv/bin/activate`) in **each terminal window** where you plan to run a bot manually.
-
----
-
-### Stopping the Bots
-
-To stop the bots, go to their respective terminal windows and press `Ctrl+C`. Both bots have graceful shutdown handling implemented.
+To stop the bot, go to its terminal window and press `Ctrl+C`. The bot has graceful shutdown handling implemented.
 
 ## Utility Scripts
 
-The `scripts/` directory contains a suite of powerful utility scripts for managing the FamilyBot's database, cache, and overall performance:
+The `scripts/` directory contains a suite of powerful utility scripts for managing the FamilyBot's database, cache, and overall performance. For detailed documentation, see [scripts/README.md](scripts/README.md) and [scripts/PRICE_OPTIMIZATION_README.md](scripts/PRICE_OPTIMIZATION_README.md).
 
 ### Database Population Scripts
 
@@ -528,36 +413,20 @@ The `scripts/` directory contains a suite of powerful utility scripts for managi
 
 #### Price Population Scripts (Performance Optimized)
 
-FamilyBot now includes **three performance tiers** for price data population, each optimized for different use cases:
+FamilyBot now includes **three performance tiers** for price data population, each optimized for different use cases. See the [scripts/README.md](scripts/README.md) for a detailed performance comparison.
 
-- **`populate_prices.py`** - **Original** sequential processing (1x speed baseline). Reliable but slower for large datasets.
-- **`populate_prices_optimized.py`** - **Threading-based optimization** with connection pooling (6-10x faster). Uses concurrent requests with intelligent rate limiting and connection reuse to minimize data usage.
-- **`populate_prices_async.py`** - **True async/await processing** (15-25x faster). Maximum performance with aggressive connection pooling and async I/O for the fastest possible price population.
-
-All scripts pre-populate both Steam Store prices and ITAD historical price data for **family wishlist games only**. This is **essential for maximizing performance during Steam Summer/Winter Sales** when you want to achieve the fastest possible deal detection speeds.
-
-**Performance Comparison:**
-
-| Script | Processing Mode | Concurrency | Expected Speed | Data Usage Reduction |
-|--------|----------------|-------------|----------------|---------------------|
-| **Original** | Sequential | 1 request | ~1,200 games/hour | Baseline |
-| **Optimized** | Threading | 10-20 concurrent | ~8,000-12,000 games/hour | 15-25% reduction |
-| **Async** | True Async | 50-100 concurrent | ~20,000-30,000 games/hour | 25-35% reduction |
-
-**Connection Reuse Benefits:**
-
-- **Optimized**: 50 max connections, 20 keepalive connections, 30s expiry
-- **Async**: 200 max connections, 100 keepalive connections, 60s expiry
-- **Reduced Data Usage**: Persistent connections eliminate redundant TCP handshakes and DNS lookups
+- **`populate_prices.py`** - **Original** sequential processing (1x speed baseline).
+- **`populate_prices_optimized.py`** - **Threading-based optimization** with connection pooling (6-10x faster).
+- **`populate_prices_async.py`** - **True async/await processing** (15-25x faster).
 
 ### Cache Management Scripts
 
-The cache purge scripts allow you to clear various types of cached data, forcing fresh data retrieval and enabling troubleshooting:
+The cache purge scripts allow you to clear various types of cached data, forcing fresh data retrieval and enabling troubleshooting.
 
-- **`purge_cache.ps1/.sh`** - Purges the game details cache, clearing all cached Steam game information (names, prices, categories, etc.) and forcing fresh USD pricing on the next API calls. This is useful when you want to refresh pricing data or fix any currency-related issues.
-- **`purge_wishlist.ps1/.sh`** - Purges the wishlist cache, clearing all cached family member wishlist data and forcing a fresh wishlist data refresh. This is helpful when family members have updated their Steam wishlists.
-- **`purge_family_library.ps1/.sh`** - Purges the family library cache, clearing the cached family shared library data and forcing a fresh library data check. This is useful when new games have been added to the family sharing.
-- **`purge_all_cache.ps1/.sh`** - Purges ALL cache data, completely resetting the cached information. This should be used with caution, as it will require time to rebuild all the caches.
+- **`purge_cache.ps1/.sh`** - Purges the game details cache.
+- **`purge_wishlist.ps1/.sh`** - Purges the wishlist cache.
+- **`purge_family_library.ps1/.sh`** - Purges the family library cache.
+- **`purge_all_cache.ps1/.sh`** - Purges ALL cache data.
 
 ### Usage Examples
 
@@ -578,53 +447,7 @@ just purge-cache                    # Clear game details cache
 just purge-wishlist                 # Clear wishlist cache
 just purge-family-library           # Clear family library cache
 just purge-all-cache                # Clear all caches
-
-# Development workflow
-just lint                           # Check code quality
-just format                         # Format code
-just check                          # Run all quality checks
-just backup-db                      # Backup database
 ```
-
-**Using Direct Commands:**
-
-```bash
-# Populate all data (run after initial setup)
-uv run python scripts/populate_database.py
-
-# Price population - choose based on your needs:
-
-# Standard mode (reliable, slower)
-uv run python scripts/populate_prices.py
-
-# Optimized mode (6-10x faster, recommended for most users)
-uv run python scripts/populate_prices_optimized.py
-
-# Maximum performance mode (15-25x faster, for large collections)
-uv run python scripts/populate_prices_async.py
-
-# During Steam sales (refresh current prices with maximum speed)
-uv run python scripts/populate_prices_async.py --refresh-current --concurrent 75
-
-# High-performance mode with custom settings
-uv run python scripts/populate_prices_optimized.py --concurrent 20 --rate-limit aggressive
-
-# Conservative mode for limited bandwidth
-uv run python scripts/populate_prices_async.py --concurrent 25 --rate-limit conservative
-
-# Clear all caches and rebuild
-.\scripts\purge_all_cache.ps1
-uv run python scripts/populate_database.py
-```
-
-**Recommended Usage:**
-
-- **First-time setup**: Use `populate_prices_optimized.py` for a good balance of speed and reliability
-- **Large game collections (500+ games)**: Use `populate_prices_async.py` for maximum performance
-- **Steam sales**: Use `populate_prices_async.py --refresh-current` for fastest price updates
-- **Limited bandwidth**: Use any script with `--rate-limit conservative` flag
-
-For detailed documentation, see [scripts/README.md](scripts/README.md) and [scripts/PRICE_OPTIMIZATION_README.md](scripts/PRICE_OPTIMIZATION_README.md).
 
 ## Logging System
 
@@ -654,49 +477,6 @@ logs/
 - **Private Profile Detection**: Special logging for Steam private profile issues
 - **Performance Tracking**: Built-in timing and success rate monitoring
 - **Error Categorization**: API errors, database errors, and private profiles clearly separated
-
-### Private Profile Monitoring
-
-The logging system provides detailed tracking of private profile issues:
-
-```log
-[PRIVATE_PROFILE] username (steam_id): operation blocked - profile is private
-```
-
-### Viewing Logs
-
-**Windows (PowerShell):**
-
-```powershell
-# View real-time logs
-Get-Content logs\familybot.log -Wait
-Get-Content logs\familybot_errors.log -Wait
-
-# Search for specific issues
-Select-String "ERROR" logs\familybot.log
-Select-String "PRIVATE_PROFILE" logs\familybot.log
-```
-
-**macOS/Linux (Bash):**
-
-```bash
-# View real-time logs
-tail -f logs/familybot.log
-tail -f logs/familybot_errors.log
-
-# Search for specific issues
-grep "ERROR" logs/familybot.log
-grep "PRIVATE_PROFILE" logs/familybot.log
-```
-
-### Log Management
-
-Logs are automatically managed:
-
-- Files rotate when size limits are reached
-- Old logs are archived automatically
-- All log files are git-ignored for security
-- Sensitive data is automatically sanitized
 
 ## Features
 
@@ -765,7 +545,7 @@ For detailed Web UI documentation, see [doc/WEB_UI_README.md](doc/WEB_UI_README.
 ### Common Issues
 
 1. **Bot won't start**: Check that your `config.yml` is properly configured and all required fields are filled.
-2. **Token issues**: Ensure the Token_Sender is running and Firefox profile is properly configured.
+2. **Token issues**: Ensure the `token_sender` plugin is configured correctly.
 3. **Database errors**: Try running the database population scripts or purging cache.
 4. **Permission errors**: Ensure the bot has Administrator permissions in your Discord server.
 
@@ -774,4 +554,3 @@ For detailed Web UI documentation, see [doc/WEB_UI_README.md](doc/WEB_UI_README.
 - Check the logs in the `logs/` directory for detailed error information
 - Review the configuration files for missing or incorrect values
 - Ensure all dependencies are properly installed using the reinstall script
-- Verify that Firefox is installed and accessible for the Token_Sender component
