@@ -23,9 +23,9 @@ create-venv:
 
 # Install all dependencies in editable mode
 install-deps:
-    @echo "📥 Installing all dependencies (including dev)..."
-    mise exec -- uv pip install -e '.[dev]'
-    @echo "✅ Dependencies installed"
+    @echo "📥 Installing dependencies from lockfile and project in editable mode..."
+    mise exec -- uv pip install -r requirements.txt -e .
+    @echo "✅ Dependencies installed."
 
 # Clean reinstall: remove everything and start fresh
 reinstall:

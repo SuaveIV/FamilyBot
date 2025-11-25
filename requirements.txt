@@ -8,6 +8,8 @@ aiohttp==3.13.2
     #   discord-py-interactions
 aiosignal==1.4.0
     # via aiohttp
+annotated-doc==0.0.4
+    # via fastapi
 annotated-types==0.7.0
     # via pydantic
 anyio==4.11.0
@@ -69,7 +71,7 @@ distlib==0.4.0
     # via virtualenv
 emoji==2.15.0
     # via discord-py-interactions
-fastapi==0.115.6
+fastapi==0.122.0
     # via familybot (pyproject.toml)
 filelock==3.20.0
     # via
@@ -103,7 +105,7 @@ idna==3.11
     #   yarl
 isort==5.13.2
     # via pylint
-jinja2==3.1.4
+jinja2==3.1.6
     # via familybot (pyproject.toml)
 license-expression==30.4.4
     # via cyclonedx-python-lib
@@ -191,7 +193,7 @@ python-dotenv==1.2.1
     # via webdriver-manager
 python-json-logger==2.0.7
     # via familybot (pyproject.toml)
-python-multipart==0.0.12
+python-multipart==0.0.18
     # via familybot (pyproject.toml)
 pytz==2025.2
     # via croniter
@@ -199,7 +201,7 @@ pyyaml==6.0.2
     # via
     #   familybot (pyproject.toml)
     #   pre-commit
-requests==2.32.3
+requests==2.32.4
     # via
     #   familybot (pyproject.toml)
     #   cachecontrol
@@ -224,7 +226,7 @@ sortedcontainers==2.4.0
     # via
     #   cyclonedx-python-lib
     #   trio
-starlette==0.41.3
+starlette==0.49.1
     # via fastapi
 steam==1.4.4
     # via familybot (pyproject.toml)
