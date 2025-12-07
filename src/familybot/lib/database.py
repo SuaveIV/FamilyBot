@@ -384,12 +384,19 @@ def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
 
 
 def cache_game_details(
-    appid: str, game_data: dict, permanent: bool = True, cache_hours: int | None = None
+    appid: str,
+    game_data: dict,
+    permanent: bool = True,
+    cache_hours: int | None = None,
+    conn: Optional[sqlite3.Connection] = None,
 ):
     """Cache game details permanently by default, or for specified hours if permanent=False."""
-    conn = None
-    try:
+    close_conn = False
+    if conn is None:
         conn = get_db_connection()
+        close_conn = True
+
+    try:
         cursor = conn.cursor()
         import json
         from datetime import datetime, timedelta
@@ -430,7 +437,8 @@ def cache_game_details(
                 1 if permanent else 0,
             ),
         )
-        conn.commit()
+        if close_conn:
+            conn.commit()
         cache_type = "permanently" if permanent else f"for {cache_hours} hours"
         logger.debug(
             f"Cached game details for {appid} {cache_type} (MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})"
@@ -438,7 +446,7 @@ def cache_game_details(
     except Exception as e:
         logger.error(f"Error caching game details for {appid}: {e}")
     finally:
-        if conn:
+        if close_conn and conn:
             conn.close()
 
 
@@ -646,11 +654,15 @@ def cache_itad_price_enhanced(
     steam_game_name: Optional[str] = None,
     permanent: bool = True,
     cache_hours: int = 6,
+    conn: Optional[sqlite3.Connection] = None,
 ):
     """Enhanced ITAD price caching with lookup method tracking for Phase 2."""
-    conn = None
-    try:
+    close_conn = False
+    if conn is None:
         conn = get_db_connection()
+        close_conn = True
+
+    try:
         cursor = conn.cursor()
         from datetime import datetime, timedelta
 
@@ -681,7 +693,8 @@ def cache_itad_price_enhanced(
                 permanent_val,
             ),
         )
-        conn.commit()
+        if close_conn:
+            conn.commit()
         cache_type = "permanently" if permanent else f"for {cache_hours} hours"
         logger.debug(
             f"Cached ITAD price for {appid} {cache_type} (method: {lookup_method}, name: {steam_game_name})"
@@ -689,7 +702,7 @@ def cache_itad_price_enhanced(
     except Exception as e:
         logger.error(f"Error caching enhanced ITAD price for {appid}: {e}")
     finally:
-        if conn:
+        if close_conn and conn:
             conn.close()
 
 
@@ -910,26 +923,32 @@ def get_steam_id_from_discord_id(discord_id: str) -> Optional[str]:
             conn.close()
 
 
-def cache_game_details_with_source(app_id: str, game_data: dict, source: str):
+def cache_game_details_with_source(
+    app_id: str, game_data: dict, source: str, conn: Optional[sqlite3.Connection] = None
+):
     """Enhanced cache_game_details with source tracking."""
     # Call existing cache_game_details but with source parameter
-    cache_game_details(app_id, game_data, permanent=True)
+    cache_game_details(app_id, game_data, permanent=True, conn=conn)
 
     # Update the price_source field
-    conn = None
-    try:
+    close_conn = False
+    if conn is None:
         conn = get_db_connection()
+        close_conn = True
+
+    try:
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE game_details_cache SET price_source = ? WHERE appid = ?",
             (source, app_id),
         )
-        conn.commit()
+        if close_conn:
+            conn.commit()
         logger.debug(f"Updated price source for {app_id}: {source}")
     except Exception as e:
         logger.error(f"Failed to update price source for {app_id}: {e}")
     finally:
-        if conn:
+        if close_conn and conn:
             conn.close()
 
 

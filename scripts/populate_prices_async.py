@@ -361,7 +361,7 @@ class AsyncPricePopulator:
 
                     if game_id:
                         # Get price data
-                        prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+                        prices_url = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
                         prices_response = await self.make_request_with_retry(
                             prices_url,
                             method="POST",
@@ -377,15 +377,19 @@ class AsyncPricePopulator:
                             if (
                                 prices_data
                                 and len(prices_data) > 0
-                                and prices_data[0].get("historyLow")
+                                and "price" in prices_data[0]
                             ):
-                                history_low = prices_data[0]["historyLow"]["all"]
-                                price_data = {
-                                    "lowest_price": str(history_low["amount"]),
-                                    "lowest_price_formatted": f"${history_low['amount']}",
-                                    "shop_name": "Historical Low (All Stores)",
-                                }
-                                return app_id, "cached", price_data, "appid"
+                                price_info = prices_data[0]["price"]
+                                price_amount = price_info.get("amount")
+                                shop_name = prices_data[0].get("shop", {}).get("name", "Unknown Store")
+                                
+                                if price_amount is not None:
+                                    price_data = {
+                                        "lowest_price": str(price_amount),
+                                        "lowest_price_formatted": f"${price_amount}",
+                                        "shop_name": shop_name,
+                                    }
+                                    return app_id, "cached", price_data, "appid"
             except Exception as e:
                 logger.debug("ITAD App ID lookup failed for %s: %s", app_id, e)
 
@@ -410,7 +414,7 @@ class AsyncPricePopulator:
                             game_id = search_data[0].get("id")
                             if game_id:
                                 # Get price data
-                                prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+                                prices_url = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
                                 prices_response = await self.make_request_with_retry(
                                     prices_url,
                                     method="POST",
@@ -426,22 +430,24 @@ class AsyncPricePopulator:
                                     if (
                                         prices_data
                                         and len(prices_data) > 0
-                                        and prices_data[0].get("historyLow")
+                                        and "price" in prices_data[0]
                                     ):
-                                        history_low = prices_data[0]["historyLow"][
-                                            "all"
-                                        ]
-                                        price_data = {
-                                            "lowest_price": str(history_low["amount"]),
-                                            "lowest_price_formatted": f"${history_low['amount']}",
-                                            "shop_name": "Historical Low (All Stores)",
-                                        }
-                                        return (
-                                            app_id,
-                                            "cached",
-                                            price_data,
-                                            "name_search",
-                                        )
+                                        price_info = prices_data[0]["price"]
+                                        price_amount = price_info.get("amount")
+                                        shop_name = prices_data[0].get("shop", {}).get("name", "Unknown Store")
+
+                                        if price_amount is not None:
+                                            price_data = {
+                                                "lowest_price": str(price_amount),
+                                                "lowest_price_formatted": f"${price_amount}",
+                                                "shop_name": shop_name,
+                                            }
+                                            return (
+                                                app_id,
+                                                "cached",
+                                                price_data,
+                                                "name_search",
+                                            )
             except Exception as e:
                 logger.debug("ITAD name search failed for %s: %s", app_id, e)
 
@@ -470,9 +476,9 @@ class AsyncPricePopulator:
                     source = game_info["source"]
 
                     if source == "steam_library":
-                        cache_game_details_with_source(app_id, game_data, source)
+                        cache_game_details_with_source(app_id, game_data, source, conn=conn)
                     else:
-                        cache_game_details(app_id, game_data, permanent=True)
+                        cache_game_details(app_id, game_data, permanent=True, conn=conn)
 
                     written_count += 1
 
@@ -535,6 +541,7 @@ class AsyncPricePopulator:
                         lookup_method=lookup_method,
                         steam_game_name=game_name,
                         permanent=True,
+                        conn=conn,
                     )
                     written_count += 1
 
