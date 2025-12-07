@@ -40,6 +40,12 @@ lock:
     mise exec -- uv pip compile pyproject.toml --extra dev -o requirements.txt
     @echo "✅ requirements.txt lockfile updated."
 
+# Upgrade all dependencies in the lockfile to the latest safe versions
+update-deps:
+    @echo "⬆️  Upgrading dependencies to their latest compatible versions (respecting ~=)..."
+    mise exec -- uv pip compile pyproject.toml --extra dev --upgrade -o requirements.txt
+    @echo "✅ Lockfile updated. Run 'just install-deps' to apply the changes."
+
 # Verify installation is working
 verify-setup:
     @echo "🔍 Verifying installation..."
@@ -52,10 +58,10 @@ verify-setup:
 # === RUNNING THE BOT ===
 
 # Run the main bot (recommended method)
-run: create-venv install-deps
+run: verify-setup
     @echo "🤖 Starting FamilyBot..."
     @echo "Press Ctrl+C to stop the bot gracefully"
-    -mise exec -- uv run familybot
+    mise exec -- uv run familybot
     @echo "🛑 FamilyBot stopped"
 
 # Set up browser profile for token sender (first-time setup)
@@ -197,6 +203,11 @@ pre-commit: check
 release version_type='patch':
     @echo "🚀 Creating a {{version_type}} release..."
     mise exec -- uv run python scripts/release.py {{version_type}}
+
+# Check for outdated Python dependencies
+check-updates:
+    @echo " Running smart update checker..."
+    mise exec -- uv run python scripts/check_updates.py
 
 # === UTILITY TASKS ===
 
