@@ -2,7 +2,7 @@
 
 [project]
 name = "familybot"
-version = "1.11.0"
+version = "1.12.0"
 description = "Family Bot is a discord bot mainly made to get the new games that are added to the Steam Family library."
 readme = "README.md"
 requires-python = ">=3.13"
