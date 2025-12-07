@@ -33,7 +33,6 @@ from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import split_message
 from familybot.web.api import app as web_app
 from familybot.web.api import set_bot_client
-from familybot.WebSocketServer import start_websocket_server_task
 
 if TYPE_CHECKING:
     pass
@@ -251,11 +250,6 @@ async def run_application():
             f"CRITICAL ERROR: Unexpected error during DB init or family sync: {e}"
         )
         sys.exit(1)
-
-    # Start the WebSocket server as an asyncio task
-    ws_server_task = asyncio.create_task(start_websocket_server_task())
-    _running_tasks.append(ws_server_task)
-    logger.info("WebSocket server task scheduled.")
 
     try:
         if WEB_UI_ENABLED:
