@@ -33,7 +33,9 @@ def run_command(command, check=True, capture=False):
         )
         return result
     except FileNotFoundError:
-        print(f"ERROR: Command '{command[0]}' not found. Is it installed and in your PATH?")
+        print(
+            f"ERROR: Command '{command[0]}' not found. Is it installed and in your PATH?"
+        )
         sys.exit(1)
     except subprocess.CalledProcessError as e:
         print(f"ERROR running command: {' '.join(command)}")
@@ -49,7 +51,9 @@ def pre_flight_checks():
     run_command(["gh", "auth", "status"])
 
     # Check if we are on the main branch
-    git_branch_result = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture=True)
+    git_branch_result = run_command(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], capture=True
+    )
     current_branch = git_branch_result.stdout.strip()
     if current_branch != MAIN_BRANCH:
         print(f"ERROR: You must be on the '{MAIN_BRANCH}' branch to create a release.")
@@ -58,7 +62,9 @@ def pre_flight_checks():
     # Check if the working directory is clean
     git_status_result = run_command(["git", "status", "--porcelain"], capture=True)
     if git_status_result.stdout:
-        print("ERROR: Your working directory is not clean. Please commit or stash your changes.")
+        print(
+            "ERROR: Your working directory is not clean. Please commit or stash your changes."
+        )
         sys.exit(1)
 
     # Check if the local branch is in sync with the remote
@@ -66,7 +72,9 @@ def pre_flight_checks():
     run_command(["git", "fetch"])
     git_sync_result = run_command(["git", "status", "-uno"], capture=True)
     if "Your branch is behind" in git_sync_result.stdout:
-        print("ERROR: Your local branch is behind the remote. Please pull the latest changes.")
+        print(
+            "ERROR: Your local branch is behind the remote. Please pull the latest changes."
+        )
         sys.exit(1)
 
     print("OK: Pre-flight checks passed.")
@@ -101,7 +109,9 @@ def bump_version(current_version, version_type):
 def update_pyproject_file(old_version, new_version):
     """Updates the version in the pyproject.toml file."""
     content = PYPROJECT_PATH.read_text(encoding="utf-8")
-    new_content = content.replace(f'version = "{old_version}"', f'version = "{new_version}"')
+    new_content = content.replace(
+        f'version = "{old_version}"', f'version = "{new_version}"'
+    )
     PYPROJECT_PATH.write_text(new_content, encoding="utf-8")
     print(f"Updated pyproject.toml: {old_version} -> {new_version}")
 

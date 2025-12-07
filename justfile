@@ -205,14 +205,20 @@ release version_type='patch':
     mise exec -- uv run python scripts/release.py '{{ version_type }}'
 
 # Bumps and creates a new patch release (e.g., 1.0.0 -> 1.0.1)
-bump-patch: ; just release 'patch'
+bump-patch:
+    @just release 'patch'
 
 # Bumps and creates a new minor release (e.g., 1.0.0 -> 1.1.0)
-bump-minor: ; just release 'minor'
+bump-minor:
+    @just release 'minor'
+
+# Bumps and creates a new major release (e.g., 1.0.0 -> 2.0.0)
+bump-major:
+    @just release 'major'
 
 # Check for outdated Python dependencies
 check-updates:
-    @echo " Running smart update checker..."
+    @echo "🔍 Running smart update checker..."
     mise exec -- uv run python scripts/check_updates.py
 
 # === UTILITY TASKS ===
