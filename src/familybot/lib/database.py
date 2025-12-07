@@ -1051,3 +1051,100 @@ def migrate_database_phase2():
     finally:
         if conn:
             conn.close()
+
+# --- Migration Flag for Family Members ---
+_family_members_migrated_this_run = False
+
+def load_family_members_from_db() -> dict:
+    """
+    Loads family member data (steam_id: friendly_name) from the database,
+    performing a one-time migration from config.yml if necessary.
+    """
+    global _family_members_migrated_this_run
+    from familybot.config import FAMILY_USER_DICT
+    from steam.steamid import SteamID
+
+    members = {}
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if not _family_members_migrated_this_run:
+            cursor.execute("SELECT COUNT(*) FROM family_members")
+            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
+                logger.info(
+                    "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
+                )
+                config_members_to_insert = []
+                for steam_id, name in FAMILY_USER_DICT.items():
+                    config_members_to_insert.append((steam_id, name, None))
+
+                try:
+                    if config_members_to_insert:
+                        cursor.executemany(
+                            "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                            config_members_to_insert,
+                        )
+                        conn.commit()
+                        logger.info(
+                            f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
+                        )
+                        _family_members_migrated_this_run = True
+                    else:
+                        logger.info(
+                            "Database: No family members found in config.yml for migration."
+                        )
+                        _family_members_migrated_this_run = True
+                except sqlite3.Error as e:
+                    logger.error(
+                        f"Database: Error during family_members migration from config.yml: {e}"
+                    )
+            else:
+                logger.debug(
+                    "Database: 'family_members' table already has data or config.yml is empty. Skipping config.yml migration."
+                )
+                _family_members_migrated_this_run = True
+
+        cursor.execute("SELECT steam_id, friendly_name FROM family_members")
+        for row in cursor.fetchall():
+            steam_id = row["steam_id"]
+            friendly_name = row["friendly_name"]
+            # Basic validation for SteamID64: must be 17 digits and start with '7656119'
+            try:
+                sid = SteamID(steam_id)
+                if sid.is_valid():
+                    members[str(sid.as_64)] = friendly_name
+                else:
+                    logger.warning(
+                        f"Database: Invalid SteamID '{steam_id}' found for user '{friendly_name}'. Skipping this entry."
+                    )
+            except Exception:
+                logger.warning(
+                    f"Database: Invalid SteamID format '{steam_id}' for user '{friendly_name}'. Skipping this entry."
+                )
+        logger.debug(f"Loaded {len(members)} valid family members from database.")
+    except sqlite3.Error as e:
+        logger.error(f"Error reading family members from DB: {e}")
+    finally:
+        if conn:
+            conn.close()
+    return members
+
+def load_all_registered_users_from_db() -> dict:
+    """Loads all registered users (discord_id: steam_id) from the database."""
+    users = {}
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT discord_id, steam_id FROM users")
+        for row in cursor.fetchall():
+            users[row["discord_id"]] = row["steam_id"]
+        logger.debug(f"Loaded {len(users)} registered users from database.")
+    except sqlite3.Error as e:
+        logger.error(f"Error reading all registered users from DB: {e}")
+    finally:
+        if conn:
+            conn.close()
+    return users
