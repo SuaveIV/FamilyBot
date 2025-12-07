@@ -124,6 +124,11 @@ def main():
         choices=["major", "minor", "patch"],
         help="The type of version bump to perform.",
     )
+    parser.add_argument(
+        "--notes-file",
+        type=str,
+        help="Path to a file containing custom release notes.",
+    )
     args = parser.parse_args()
 
     pre_flight_checks()
@@ -150,7 +155,13 @@ def main():
 
     # Create the GitHub Release
     print("Creating GitHub Release...")
-    run_command(["gh", "release", "create", tag_name, "--generate-notes"])
+    gh_release_command = ["gh", "release", "create", tag_name]
+    if args.notes_file:
+        gh_release_command.extend(["--notes-file", args.notes_file])
+    else:
+        gh_release_command.append("--generate-notes")
+    
+    run_command(gh_release_command)
 
     print(f"OK: Successfully created and published release {tag_name}!")
 
