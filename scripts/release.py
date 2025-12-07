@@ -22,7 +22,7 @@ MAIN_BRANCH = "main"
 
 def run_command(command, check=True, capture=False):
     """Helper to run a shell command and handle errors."""
-    print(f"▶️  Running: {' '.join(command)}")
+    print(f"--> Running: {' '.join(command)}")
     try:
         result = subprocess.run(
             command,
@@ -33,17 +33,17 @@ def run_command(command, check=True, capture=False):
         )
         return result
     except FileNotFoundError:
-        print(f"❌ Error: Command '{command[0]}' not found. Is it installed and in your PATH?")
+        print(f"ERROR: Command '{command[0]}' not found. Is it installed and in your PATH?")
         sys.exit(1)
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error running command: {' '.join(command)}")
+        print(f"ERROR running command: {' '.join(command)}")
         print(e.stderr)
         sys.exit(1)
 
 
 def pre_flight_checks():
     """Perform checks to ensure the repository is in a clean state for release."""
-    print("✈️  Performing pre-flight checks...")
+    print("Performing pre-flight checks...")
 
     # Check if gh CLI is installed and authenticated
     run_command(["gh", "auth", "status"])
@@ -52,24 +52,24 @@ def pre_flight_checks():
     git_branch_result = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture=True)
     current_branch = git_branch_result.stdout.strip()
     if current_branch != MAIN_BRANCH:
-        print(f"❌ Error: You must be on the '{MAIN_BRANCH}' branch to create a release.")
+        print(f"ERROR: You must be on the '{MAIN_BRANCH}' branch to create a release.")
         sys.exit(1)
 
     # Check if the working directory is clean
     git_status_result = run_command(["git", "status", "--porcelain"], capture=True)
     if git_status_result.stdout:
-        print("❌ Error: Your working directory is not clean. Please commit or stash your changes.")
+        print("ERROR: Your working directory is not clean. Please commit or stash your changes.")
         sys.exit(1)
 
     # Check if the local branch is in sync with the remote
-    print("🔄 Fetching remote to check sync status...")
+    print("Fetching remote to check sync status...")
     run_command(["git", "fetch"])
     git_sync_result = run_command(["git", "status", "-uno"], capture=True)
     if "Your branch is behind" in git_sync_result.stdout:
-        print("❌ Error: Your local branch is behind the remote. Please pull the latest changes.")
+        print("ERROR: Your local branch is behind the remote. Please pull the latest changes.")
         sys.exit(1)
 
-    print("✅ Pre-flight checks passed.")
+    print("OK: Pre-flight checks passed.")
 
 
 def get_current_version():
@@ -78,7 +78,7 @@ def get_current_version():
     version_pattern = r'version = "(\d+\.\d+\.\d+)"'
     match = re.search(version_pattern, content)
     if not match:
-        print("❌ Error: Could not find version in pyproject.toml")
+        print("ERROR: Could not find version in pyproject.toml")
         sys.exit(1)
     return match.group(1)
 
@@ -103,7 +103,7 @@ def update_pyproject_file(old_version, new_version):
     content = PYPROJECT_PATH.read_text(encoding="utf-8")
     new_content = content.replace(f'version = "{old_version}"', f'version = "{new_version}"')
     PYPROJECT_PATH.write_text(new_content, encoding="utf-8")
-    print(f"📝 Version bumped in pyproject.toml: {old_version} -> {new_version}")
+    print(f"Updated pyproject.toml: {old_version} -> {new_version}")
 
 
 def main():
@@ -122,7 +122,7 @@ def main():
     new_version = bump_version(old_version, args.type)
     tag_name = f"v{new_version}"
 
-    print(f"🚀 Preparing new release: {tag_name}")
+    print(f"Preparing new release: {tag_name}")
 
     update_pyproject_file(old_version, new_version)
 
@@ -135,14 +135,14 @@ def main():
     run_command(["git", "tag", "-a", tag_name, "-m", f"Release {tag_name}"])
 
     # Push the commit and tag
-    print("📡 Pushing commit and tag to remote...")
+    print("Pushing commit and tag to remote...")
     run_command(["git", "push", "origin", MAIN_BRANCH, "--follow-tags"])
 
     # Create the GitHub Release
-    print("🎉 Creating GitHub Release...")
+    print("Creating GitHub Release...")
     run_command(["gh", "release", "create", tag_name, "--generate-notes"])
 
-    print(f"✅ Successfully created and published release {tag_name}!")
+    print(f"OK: Successfully created and published release {tag_name}!")
 
 
 if __name__ == "__main__":
