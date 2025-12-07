@@ -199,10 +199,16 @@ setup-precommit:
 pre-commit: check
     @echo "✅ Pre-commit checks completed"
 
-# Create a new release (patch, minor, or major)
-release version_type='patch':
-    @echo "🚀 Creating a {{version_type}} release..."
-    mise exec -- uv run python scripts/release.py {{version_type}}
+# Create a new release. Use bump-patch, bump-minor, or bump-major.
+release version_type:
+    @echo "🚀 Creating a '{{version_type}}' release..."
+    mise exec -- uv run python scripts/release.py '{{version_type}}'
+
+# Bumps and creates a new patch release (e.g., 1.0.0 -> 1.0.1)
+bump-patch: release 'patch'
+
+# Bumps and creates a new minor release (e.g., 1.0.0 -> 1.1.0)
+bump-minor: release 'minor'
 
 # Check for outdated Python dependencies
 check-updates:
