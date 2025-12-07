@@ -951,10 +951,17 @@ def cleanup_expired_cache():
 
         total_deleted = 0
         for table in tables:
-            cursor.execute(f"""
-                DELETE FROM {table}
-                WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
-            """)
+            # Check if table has 'permanent' column
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            query = f"DELETE FROM {table} WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"
+
+            if "permanent" in columns:
+                # Protect permanent entries from deletion regardless of expires_at
+                query += " AND (permanent != 1 OR permanent IS NULL)"
+
+            cursor.execute(query)
             deleted = cursor.rowcount
             total_deleted += deleted
             if deleted > 0:
