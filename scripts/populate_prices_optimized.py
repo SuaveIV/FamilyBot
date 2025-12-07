@@ -409,7 +409,7 @@ class OptimizedPricePopulator:
 
                 if game_id:
                     # Get price data
-                    prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+                    prices_url = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
                     prices_response = self.make_request_with_retry(
                         prices_url, method="POST", json_data=[game_id], api_type="itad"
                     )
@@ -422,20 +422,24 @@ class OptimizedPricePopulator:
                         if (
                             prices_data
                             and len(prices_data) > 0
-                            and prices_data[0].get("historyLow")
+                            and "price" in prices_data[0]
                         ):
-                            history_low = prices_data[0]["historyLow"]["all"]
-                            cache_itad_price_enhanced(
-                                app_id,
-                                {
-                                    "lowest_price": str(history_low["amount"]),
-                                    "lowest_price_formatted": f"${history_low['amount']}",
-                                    "shop_name": "Historical Low (All Stores)",
-                                },
-                                lookup_method="appid",
-                                permanent=True,
-                            )
-                            return app_id, "cached"
+                            price_info = prices_data[0]["price"]
+                            price_amount = price_info.get("amount")
+                            shop_name = prices_data[0].get("shop", {}).get("name", "Unknown Store")
+
+                            if price_amount is not None:
+                                cache_itad_price_enhanced(
+                                    app_id,
+                                    {
+                                        "lowest_price": str(price_amount),
+                                        "lowest_price_formatted": f"${price_amount}",
+                                        "shop_name": shop_name,
+                                    },
+                                    lookup_method="appid",
+                                    permanent=True,
+                                )
+                                return app_id, "cached"
         except Exception as e:
             logger.debug("ITAD App ID lookup failed for %s: %s", app_id, e)
 
@@ -460,7 +464,7 @@ class OptimizedPricePopulator:
                         game_id = search_data[0].get("id")
                         if game_id:
                             # Get price data
-                            prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+                            prices_url = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
                             prices_response = self.make_request_with_retry(
                                 prices_url,
                                 method="POST",
@@ -476,21 +480,25 @@ class OptimizedPricePopulator:
                                 if (
                                     prices_data
                                     and len(prices_data) > 0
-                                    and prices_data[0].get("historyLow")
+                                    and "price" in prices_data[0]
                                 ):
-                                    history_low = prices_data[0]["historyLow"]["all"]
-                                    cache_itad_price_enhanced(
-                                        app_id,
-                                        {
-                                            "lowest_price": str(history_low["amount"]),
-                                            "lowest_price_formatted": f"${history_low['amount']}",
-                                            "shop_name": "Historical Low (All Stores)",
-                                        },
-                                        lookup_method="name_search",
-                                        steam_game_name=game_name,
-                                        permanent=True,
-                                    )
-                                    return app_id, "cached"
+                                    price_info = prices_data[0]["price"]
+                                    price_amount = price_info.get("amount")
+                                    shop_name = prices_data[0].get("shop", {}).get("name", "Unknown Store")
+
+                                    if price_amount is not None:
+                                        cache_itad_price_enhanced(
+                                            app_id,
+                                            {
+                                                "lowest_price": str(price_amount),
+                                                "lowest_price_formatted": f"${price_amount}",
+                                                "shop_name": shop_name,
+                                            },
+                                            lookup_method="name_search",
+                                            steam_game_name=game_name,
+                                            permanent=True,
+                                        )
+                                        return app_id, "cached"
         except Exception as e:
             logger.debug("ITAD name search failed for %s: %s", app_id, e)
 

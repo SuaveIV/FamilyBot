@@ -49,56 +49,59 @@ def get_lowest_price(steam_app_id: int) -> str:
             )
             return "N/A"
 
-        url_storelow = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
+        # Use the historical low endpoint (lowest/v2) instead of current store low (storelow/v2)
+        url_lowest = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
         data = [game_id]
-        storelow_response = requests.post(url_storelow, json=data, timeout=5)
-        storelow_response.raise_for_status()
-        answer_storelow = json.loads(storelow_response.text)
+        lowest_response = requests.post(url_lowest, json=data, timeout=5)
+        lowest_response.raise_for_status()
+        answer_lowest = json.loads(lowest_response.text)
 
         if (
-            answer_storelow
-            and answer_storelow[0].get("lows")
-            and answer_storelow[0]["lows"]
+            answer_lowest
+            and len(answer_lowest) > 0
+            and "price" in answer_lowest[0]
         ):
-            price_amount = answer_storelow[0]["lows"][0]["price"]["amount"]
-            shop_name = (
-                answer_storelow[0]["lows"][0]
-                .get("shop", {})
-                .get("name", "Unknown Store")
-            )
+            price_data = answer_lowest[0]["price"]
+            price_amount = price_data.get("amount")
+            
+            # Note: lowest/v2 might not return 'shop' info in the same structure or at all if it's an aggregate.
+            # We will attempt to extract shop if available or default to 'Unknown'.
+            # Based on typical ITAD v2 responses, historical low often includes shop info.
+            shop_name = answer_lowest[0].get("shop", {}).get("name", "Unknown Store")
 
-            # Cache the price data permanently (historical lowest price)
-            cache_itad_price(
-                str(steam_app_id),
-                {
-                    "lowest_price": str(price_amount),
-                    "lowest_price_formatted": f"${price_amount}",
-                    "shop_name": shop_name,
-                },
-                permanent=True,
-            )
+            if price_amount is not None:
+                # Cache the price data permanently (historical lowest price)
+                cache_itad_price(
+                    str(steam_app_id),
+                    {
+                        "lowest_price": str(price_amount),
+                        "lowest_price_formatted": f"${price_amount}",
+                        "shop_name": shop_name,
+                    },
+                    permanent=True,
+                )
 
-            logger.debug(
-                f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}"
-            )
-            return str(price_amount)
-        else:
-            logger.info(
-                f"No historical lowest price found for Steam App ID {steam_app_id}."
-            )
-            return "N/A"
+                logger.debug(
+                    f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}"
+                )
+                return str(price_amount)
+        
+        logger.info(
+            f"No historical lowest price found for Steam App ID {steam_app_id}."
+        )
+        return "N/A"
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error fetching ITAD data for {steam_app_id}: {e}")
         return "N/A"
     except json.JSONDecodeError as e:
         logger.error(
-            f"JSON decode error for ITAD data {steam_app_id}: {e}. Raw: {lookup_response.text[:200] if 'lookup_response' in locals() else ''} {storelow_response.text[:200] if 'storelow_response' in locals() else ''}"
+            f"JSON decode error for ITAD data {steam_app_id}: {e}."
         )
         return "N/A"
     except KeyError as e:
         logger.error(
-            f"Missing key in ITAD response for {steam_app_id}: {e}. Response: {answer_lookup or answer_storelow}"
+            f"Missing key in ITAD response for {steam_app_id}: {e}."
         )
         return "N/A"
     except Exception as e:

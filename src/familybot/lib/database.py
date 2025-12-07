@@ -384,12 +384,19 @@ def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
 
 
 def cache_game_details(
-    appid: str, game_data: dict, permanent: bool = True, cache_hours: int | None = None
+    appid: str,
+    game_data: dict,
+    permanent: bool = True,
+    cache_hours: int | None = None,
+    conn: Optional[sqlite3.Connection] = None,
 ):
     """Cache game details permanently by default, or for specified hours if permanent=False."""
-    conn = None
-    try:
+    close_conn = False
+    if conn is None:
         conn = get_db_connection()
+        close_conn = True
+
+    try:
         cursor = conn.cursor()
         import json
         from datetime import datetime, timedelta
@@ -430,7 +437,8 @@ def cache_game_details(
                 1 if permanent else 0,
             ),
         )
-        conn.commit()
+        if close_conn:
+            conn.commit()
         cache_type = "permanently" if permanent else f"for {cache_hours} hours"
         logger.debug(
             f"Cached game details for {appid} {cache_type} (MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})"
@@ -438,7 +446,7 @@ def cache_game_details(
     except Exception as e:
         logger.error(f"Error caching game details for {appid}: {e}")
     finally:
-        if conn:
+        if close_conn and conn:
             conn.close()
 
 
@@ -646,11 +654,15 @@ def cache_itad_price_enhanced(
     steam_game_name: Optional[str] = None,
     permanent: bool = True,
     cache_hours: int = 6,
+    conn: Optional[sqlite3.Connection] = None,
 ):
     """Enhanced ITAD price caching with lookup method tracking for Phase 2."""
-    conn = None
-    try:
+    close_conn = False
+    if conn is None:
         conn = get_db_connection()
+        close_conn = True
+
+    try:
         cursor = conn.cursor()
         from datetime import datetime, timedelta
 
@@ -681,7 +693,8 @@ def cache_itad_price_enhanced(
                 permanent_val,
             ),
         )
-        conn.commit()
+        if close_conn:
+            conn.commit()
         cache_type = "permanently" if permanent else f"for {cache_hours} hours"
         logger.debug(
             f"Cached ITAD price for {appid} {cache_type} (method: {lookup_method}, name: {steam_game_name})"
@@ -689,7 +702,7 @@ def cache_itad_price_enhanced(
     except Exception as e:
         logger.error(f"Error caching enhanced ITAD price for {appid}: {e}")
     finally:
-        if conn:
+        if close_conn and conn:
             conn.close()
 
 
@@ -718,7 +731,7 @@ def get_cached_wishlist(steam_id: str):
             conn.close()
 
 
-def cache_wishlist(steam_id: str, appids: list, cache_hours: int = 168):
+def cache_wishlist(steam_id: str, appids: list, cache_hours: int = 24):
     """Cache user's wishlist for specified hours (wishlists change moderately)."""
     conn = None
     try:
@@ -910,26 +923,32 @@ def get_steam_id_from_discord_id(discord_id: str) -> Optional[str]:
             conn.close()
 
 
-def cache_game_details_with_source(app_id: str, game_data: dict, source: str):
+def cache_game_details_with_source(
+    app_id: str, game_data: dict, source: str, conn: Optional[sqlite3.Connection] = None
+):
     """Enhanced cache_game_details with source tracking."""
     # Call existing cache_game_details but with source parameter
-    cache_game_details(app_id, game_data, permanent=True)
+    cache_game_details(app_id, game_data, permanent=True, conn=conn)
 
     # Update the price_source field
-    conn = None
-    try:
+    close_conn = False
+    if conn is None:
         conn = get_db_connection()
+        close_conn = True
+
+    try:
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE game_details_cache SET price_source = ? WHERE appid = ?",
             (source, app_id),
         )
-        conn.commit()
+        if close_conn:
+            conn.commit()
         logger.debug(f"Updated price source for {app_id}: {source}")
     except Exception as e:
         logger.error(f"Failed to update price source for {app_id}: {e}")
     finally:
-        if conn:
+        if close_conn and conn:
             conn.close()
 
 
@@ -951,10 +970,17 @@ def cleanup_expired_cache():
 
         total_deleted = 0
         for table in tables:
-            cursor.execute(f"""
-                DELETE FROM {table}
-                WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
-            """)
+            # Check if table has 'permanent' column
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            query = f"DELETE FROM {table} WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"
+
+            if "permanent" in columns:
+                # Protect permanent entries from deletion regardless of expires_at
+                query += " AND (permanent != 1 OR permanent IS NULL)"
+
+            cursor.execute(query)
             deleted = cursor.rowcount
             total_deleted += deleted
             if deleted > 0:
@@ -1051,3 +1077,100 @@ def migrate_database_phase2():
     finally:
         if conn:
             conn.close()
+
+# --- Migration Flag for Family Members ---
+_family_members_migrated_this_run = False
+
+def load_family_members_from_db() -> dict:
+    """
+    Loads family member data (steam_id: friendly_name) from the database,
+    performing a one-time migration from config.yml if necessary.
+    """
+    global _family_members_migrated_this_run
+    from familybot.config import FAMILY_USER_DICT
+    from steam.steamid import SteamID
+
+    members = {}
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if not _family_members_migrated_this_run:
+            cursor.execute("SELECT COUNT(*) FROM family_members")
+            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
+                logger.info(
+                    "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
+                )
+                config_members_to_insert = []
+                for steam_id, name in FAMILY_USER_DICT.items():
+                    config_members_to_insert.append((steam_id, name, None))
+
+                try:
+                    if config_members_to_insert:
+                        cursor.executemany(
+                            "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                            config_members_to_insert,
+                        )
+                        conn.commit()
+                        logger.info(
+                            f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
+                        )
+                        _family_members_migrated_this_run = True
+                    else:
+                        logger.info(
+                            "Database: No family members found in config.yml for migration."
+                        )
+                        _family_members_migrated_this_run = True
+                except sqlite3.Error as e:
+                    logger.error(
+                        f"Database: Error during family_members migration from config.yml: {e}"
+                    )
+            else:
+                logger.debug(
+                    "Database: 'family_members' table already has data or config.yml is empty. Skipping config.yml migration."
+                )
+                _family_members_migrated_this_run = True
+
+        cursor.execute("SELECT steam_id, friendly_name FROM family_members")
+        for row in cursor.fetchall():
+            steam_id = row["steam_id"]
+            friendly_name = row["friendly_name"]
+            # Basic validation for SteamID64: must be 17 digits and start with '7656119'
+            try:
+                sid = SteamID(steam_id)
+                if sid.is_valid():
+                    members[str(sid.as_64)] = friendly_name
+                else:
+                    logger.warning(
+                        f"Database: Invalid SteamID '{steam_id}' found for user '{friendly_name}'. Skipping this entry."
+                    )
+            except Exception:
+                logger.warning(
+                    f"Database: Invalid SteamID format '{steam_id}' for user '{friendly_name}'. Skipping this entry."
+                )
+        logger.debug(f"Loaded {len(members)} valid family members from database.")
+    except sqlite3.Error as e:
+        logger.error(f"Error reading family members from DB: {e}")
+    finally:
+        if conn:
+            conn.close()
+    return members
+
+def load_all_registered_users_from_db() -> dict:
+    """Loads all registered users (discord_id: steam_id) from the database."""
+    users = {}
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT discord_id, steam_id FROM users")
+        for row in cursor.fetchall():
+            users[row["discord_id"]] = row["steam_id"]
+        logger.debug(f"Loaded {len(users)} registered users from database.")
+    except sqlite3.Error as e:
+        logger.error(f"Error reading all registered users from DB: {e}")
+    finally:
+        if conn:
+            conn.close()
+    return users
