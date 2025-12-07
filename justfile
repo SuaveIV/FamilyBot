@@ -193,20 +193,10 @@ setup-precommit:
 pre-commit: check
     @echo "✅ Pre-commit checks completed"
 
-# Bump version (patch)
-bump-patch:
-    @echo "📈 Bumping patch version..."
-    mise exec -- uv run python scripts/bump_patch.py
-
-# Bump version (minor)
-bump-minor:
-    @echo "📈 Bumping minor version..."
-    mise exec -- uv run python scripts/bump_minor.py
-
-# Bump version (major)
-bump-major:
-    @echo "📈 Bumping major version..."
-    mise exec -- uv run python scripts/bump_major.py
+# Create a new release (patch, minor, or major)
+release version_type='patch':
+    @echo "🚀 Creating a {{version_type}} release..."
+    mise exec -- uv run python scripts/release.py {{version_type}}
 
 # === UTILITY TASKS ===
 
