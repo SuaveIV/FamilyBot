@@ -15,7 +15,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("TestFreeGames")
 
 async def mock_send_to_channel(channel_id, message):
-    print(f"\n[MOCK SEND] Channel: {channel_id}\nMessage:\n{message}\n")
+    try:
+        # Safe print for Windows consoles
+        safe_message = message.encode('utf-8', errors='ignore').decode('utf-8')
+        print(f"\n[MOCK SEND] Channel: {channel_id}\nMessage:\n{safe_message}\n")
+    except Exception:
+        # Fallback if encoding fails completely
+        print(f"\n[MOCK SEND] Channel: {channel_id}\nMessage: <content hidden due to encoding error>\n")
 
 async def main():
     logger.info("Starting Free Games Plugin Test...")

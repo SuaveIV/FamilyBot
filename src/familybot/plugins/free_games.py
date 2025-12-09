@@ -140,8 +140,6 @@ class FreeGames(Extension):
 
                 # --- Filtering Logic (re-applied to Bluesky content) ---
                 title_lower = full_text.lower()
-                # Bluesky posts don't have a direct 'domain' field like Reddit's .json, 
-                # so we derive it from the extracted URL for filtering.
                 parsed_url = urlparse(extracted_url)
                 domain = parsed_url.netloc.lower()
                 
@@ -165,9 +163,11 @@ class FreeGames(Extension):
                     continue
 
                 # --- Specific Logic for "Directly Free" Steam Games ---
-                # Exclude key giveaways on other sites, strictly allow store.steampowered.com
-                if is_steam and "store.steampowered.com" not in domain:
-                    continue
+                # Exclude key giveaways on other sites, strictly allow store.steampowered.com OR reddit links (which we assume link to the store)
+                if is_steam:
+                    allowed_steam_domains = ["store.steampowered.com", "redd.it", "reddit.com", "www.reddit.com"]
+                    if not any(d in domain for d in allowed_steam_domains):
+                        continue
 
                 self._seen_bsky_posts.add(post_uri) # Use post_uri for deduplication
 
