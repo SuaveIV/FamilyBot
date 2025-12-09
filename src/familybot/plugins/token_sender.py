@@ -100,9 +100,23 @@ class token_sender(Extension):
                 browser = await p.chromium.launch_persistent_context(
                     user_data_dir=BROWSER_PROFILE_PATH,
                     headless=True,
-                    args=["--no-sandbox", "--disable-dev-shm-usage"],
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-extensions",
+                        "--disable-gpu",
+                        "--blink-settings=imagesEnabled=false",
+                    ],
                 )
                 page = await browser.new_page()
+
+                # Block unnecessary resources to speed up loading
+                await page.route(
+                    "**/*",
+                    lambda route: route.abort()
+                    if route.request.resource_type in ["image", "stylesheet", "font", "media"]
+                    else route.continue_(),
+                )
 
                 # If we have storage state, apply it to the context
                 if storage_state:

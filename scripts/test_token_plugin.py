@@ -32,6 +32,8 @@ except ImportError as e:
 import base64
 import binascii
 import json
+import tempfile  # Import tempfile
+import shutil  # Import shutil
 from datetime import datetime
 
 
@@ -43,6 +45,15 @@ class TokenTester:
             if BROWSER_PROFILE_PATH
             else None
         )
+        # Create a temporary directory for test token storage
+        self.test_token_save_dir = tempfile.mkdtemp()
+        print(f"Created temporary directory for test tokens: {self.test_token_save_dir}")
+
+    def __del__(self):
+        # Clean up the temporary directory when the object is deleted
+        if os.path.exists(self.test_token_save_dir):
+            shutil.rmtree(self.test_token_save_dir)
+            print(f"Cleaned up temporary directory: {self.test_token_save_dir}")
 
     async def test_browser_profile(self):
         """Test if the browser profile exists and is accessible."""
@@ -89,9 +100,23 @@ class TokenTester:
                     browser = await p.chromium.launch_persistent_context(
                         user_data_dir=self.browser_profile_path,
                         headless=True,
-                        args=["--no-sandbox", "--disable-dev-shm-usage"],
+                        args=[
+                            "--no-sandbox",
+                            "--disable-dev-shm-usage",
+                            "--disable-extensions",
+                            "--disable-gpu",
+                            "--blink-settings=imagesEnabled=false",
+                        ],
                     )
                     page = await browser.new_page()
+
+                    # Block unnecessary resources to speed up loading
+                    await page.route(
+                        "**/*",
+                        lambda route: route.abort()
+                        if route.request.resource_type in ["image", "stylesheet", "font", "media"]
+                        else route.continue_(),
+                    )
 
                     # If we have storage state, apply it to the context
                     if storage_state:
@@ -202,16 +227,16 @@ class TokenTester:
         print("\n🔍 Testing token storage...")
 
         try:
-            # Ensure directory exists
-            os.makedirs(self.actual_token_save_dir, exist_ok=True)
+            # Ensure temporary directory exists (already created in __init__)
+            # os.makedirs(self.test_token_save_dir, exist_ok=True) # Not needed as mkdtemp creates it
 
             # Save token
-            token_file_path = os.path.join(self.actual_token_save_dir, "token")
+            token_file_path = os.path.join(self.test_token_save_dir, "token")
             with open(token_file_path, "w") as token_file:
                 token_file.write(token)
 
             # Save expiry time
-            exp_file_path = os.path.join(self.actual_token_save_dir, "token_exp")
+            exp_file_path = os.path.join(self.test_token_save_dir, "token_exp")
             with open(exp_file_path, "w") as exp_time_file:
                 exp_time_file.write(str(exp_timestamp))
 
@@ -257,6 +282,25 @@ class TokenTester:
 
         # Test 4: Save token
         storage_ok = self.test_token_storage(token, exp_timestamp)
+
+        # Optional: Compare with live token
+        try:
+            live_token_path = os.path.join(self.actual_token_save_dir, "token")
+            if os.path.exists(live_token_path):
+                with open(live_token_path, "r") as f:
+                    live_token = f.read().strip()
+                
+                print("\n🔍 Comparing with live bot token...")
+                if live_token == token:
+                    print("✅ Live token matches the newly fetched token.")
+                else:
+                    print("⚠️  Live token differs from the newly fetched token.")
+                    print("   (This is normal if the live token is older but still valid,")
+                    print("    or if the live token has expired and needs a refresh.)")
+            else:
+                print("\nℹ️  No live token found to compare with.")
+        except Exception as e:
+            print(f"\n⚠️  Could not compare with live token: {e}")
 
         print("\n" + "=" * 50)
         if profile_ok and token and exp_timestamp and storage_ok:

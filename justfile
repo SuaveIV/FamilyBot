@@ -74,6 +74,11 @@ test-token:
     @echo "🔑 Testing token extraction..."
     mise exec -- uv run python scripts/test_token_plugin.py
 
+# Force immediate token update
+force-token:
+    @echo "🔄 Forcing token update..."
+    mise exec -- uv run python scripts/force_token_update.py
+
 # Run bot with legacy script (backward compatibility)
 run-legacy:
     @echo "🤖 Starting FamilyBot using legacy script..."
@@ -114,21 +119,21 @@ populate-db:
     @echo "✅ Database populated"
 
 # Populate price data (standard mode)
-populate-prices:
+populate-prices *args:
     @echo "💰 Populating price data (standard mode)..."
-    mise exec -- uv run python scripts/populate_prices.py
+    mise exec -- uv run python scripts/populate_prices.py {{args}}
     @echo "✅ Price data populated"
 
 # Populate price data (optimized mode - 6-10x faster)
-populate-prices-fast:
+populate-prices-fast *args:
     @echo "💰 Populating price data (optimized mode)..."
-    mise exec -- uv run python scripts/populate_prices_optimized.py
+    mise exec -- uv run python scripts/populate_prices_optimized.py {{args}}
     @echo "✅ Price data populated (optimized)"
 
 # Populate price data (async mode - 15-25x faster)
-populate-prices-turbo:
+populate-prices-turbo *args:
     @echo "💰 Populating price data (async turbo mode)..."
-    mise exec -- uv run python scripts/populate_prices_async.py
+    mise exec -- uv run python scripts/populate_prices_async.py {{args}}
     @echo "✅ Price data populated (turbo)"
 
 # Inspect database structure and contents

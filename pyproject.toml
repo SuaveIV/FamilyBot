@@ -32,6 +32,7 @@ dependencies = [ # Use ~= for safe upgrades, == for pinned versions
 familybot = "familybot.FamilyBot:main"
 familybot-setup = "scripts.setup_browser:main"
 familybot-test = "scripts.test_token_plugin:main"
+familybot-force-token = "scripts.force_token_update:main"
 familybot-populate = "scripts.populate_database:main"
 familybot-inspect-db = "inspect_db:inspect_database"
 familybot-setup-precommit = "scripts.setup_precommit:main"
