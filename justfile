@@ -79,6 +79,11 @@ force-token:
     @echo "🔄 Forcing token update..."
     mise exec -- uv run python scripts/force_token_update.py
 
+# Test free games plugin
+test-free-games:
+    @echo "🎮 Testing free games plugin..."
+    mise exec -- uv run python scripts/test_free_games.py
+
 # Run bot with legacy script (backward compatibility)
 run-legacy:
     @echo "🤖 Starting FamilyBot using legacy script..."

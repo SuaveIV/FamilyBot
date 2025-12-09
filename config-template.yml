@@ -5,9 +5,9 @@ discord:
   api_key: ""  # REQUIRED: Your Discord Bot Token. Get this from discord.com/developers/applications -> Bot -> Reset Token.
   admin_id: 00000000000000000  # REQUIRED: Your Discord User ID (SteamID64) to receive admin DMs for errors/notifications.
 
-# --- Free Epic Games Plugin Configuration ---
+# --- Free Games Plugin Configuration (Epic, Steam, GOG, Reddit, etc.) ---
 free_epicgames:
-  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where free Epic Games announcements will be sent.
+  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where free game announcements will be sent. This channel will now also include free game announcements from Reddit (e.g., Steam, GOG, Itch.io).
 
 # --- Steam Family Plugin Configuration ---
 steam_family:
