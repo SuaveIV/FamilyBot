@@ -7,7 +7,6 @@ Useful for manual updates or cron jobs.
 
 import asyncio
 import base64
-import binascii
 import json
 import logging
 import os
@@ -54,16 +53,6 @@ async def get_token_with_playwright() -> str:
         return ""
 
     async with async_playwright() as p:
-        # Check for storage state
-        storage_state_path = os.path.join(profile_path, "storage_state.json")
-        storage_state = None
-        if os.path.exists(storage_state_path):
-            try:
-                with open(storage_state_path, "r") as f:
-                    storage_state = json.load(f)
-            except Exception as e:
-                logger.warning(f"Could not load storage state: {e}")
-
         # Launch with optimized arguments (same as plugin)
         logger.info("Launching headless browser...")
         browser = await p.chromium.launch_persistent_context(

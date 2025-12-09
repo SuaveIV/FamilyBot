@@ -196,6 +196,15 @@ async def get_pinned_message(chan_id: int) -> list:
         return []
 
 
+# Assign utility functions directly to the client instance
+# to ensure they are available to plugins.
+client.send_to_channel = send_to_channel  # type: ignore
+client.send_log_dm = send_log_dm  # type: ignore
+client.send_dm = send_dm  # type: ignore
+client.edit_msg = edit_msg  # type: ignore
+client.get_pinned_message = get_pinned_message  # type: ignore
+
+
 # --- Main application startup and shutdown logic ---
 async def start_discord_bot():
     """Starts the Discord bot client."""
@@ -617,14 +626,6 @@ if __name__ == "__main__":
         # General catch is justified here to ensure any unexpected errors during startup are logged and the process exits cleanly.
         logger.error("Unexpected error during startup: %s", e, exc_info=True)
         sys.exit(1)
-
-# Assign utility functions directly to the client instance after run_application
-# to ensure the client is properly cast before assignment.
-client.send_to_channel = send_to_channel  # type: ignore
-client.send_log_dm = send_log_dm  # type: ignore
-client.send_dm = send_dm  # type: ignore
-client.edit_msg = edit_msg  # type: ignore
-client.get_pinned_message = get_pinned_message  # type: ignore
 
 
 def main():
