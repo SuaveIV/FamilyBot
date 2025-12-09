@@ -74,3 +74,6 @@ bot_data.db-journal
 
 # Browser profile for token_sender plugin (contains login session data)
 FamilyBotBrowserProfile/
+
+# Gemini specific files
+.gemini/
