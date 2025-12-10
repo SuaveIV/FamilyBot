@@ -51,6 +51,24 @@ async def main():
     # plugin._first_bsky_run is already False after Run 1.
     
     await plugin.check_bsky_free_games()
+
+    logger.info("--- Run 3: Manual Trigger (No New Games) ---")
+    # Mock Context for manual trigger
+    async def mock_send_ctx(message):
+        print(f"[MOCK CTX]: {message}")
+
+    mock_ctx = MagicMock()
+    mock_ctx.send = AsyncMock(side_effect=mock_send_ctx)
+    mock_ctx.author_id = 123
+    mock_ctx.guild = None 
+
+    # Should print "Check complete. No new free games found."
+    await plugin._process_feed(manual=True, ctx=mock_ctx)
+
+    logger.info("--- Run 4: Manual Trigger (Force New Games) ---")
+    plugin._seen_bsky_posts.clear()
+    # Should find games and NOT print "No new free games found."
+    await plugin._process_feed(manual=True, ctx=mock_ctx)
     
     logger.info("Test Complete.")
 

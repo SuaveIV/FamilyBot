@@ -27,6 +27,44 @@ async def send_admin_dm(bot: FamilyBotClient, message: str) -> None:
         )
 
 
+async def fetch_game_details(
+    app_id: str, steam_api_manager: SteamAPIManager
+) -> dict | None:
+    """
+    Fetch game details from cache or Steam Store API.
+    Returns the 'data' dict for the game if found, else None.
+    """
+    try:
+        # Get cached game details first
+        cached_game = get_cached_game_details(app_id)
+        if cached_game:
+            return cached_game
+
+        # If not cached, fetch from API with enhanced retry logic
+        await steam_api_manager.rate_limit_steam_store_api()
+        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+        app_info_response = await steam_api_manager.make_request_with_retry(game_url)
+
+        if app_info_response is None:
+            return None
+
+        game_info_json = app_info_response.json()
+        if not game_info_json:
+            return None
+
+        game_data = game_info_json.get(str(app_id), {}).get("data")
+        if not game_data:
+            return None
+
+        # Cache the game details
+        cache_game_details(app_id, game_data, permanent=True)
+        return game_data
+
+    except Exception as e:
+        logger.warning(f"Error fetching game details for {app_id}: {e}")
+        return None
+
+
 async def process_game_deal(
     app_id: str,
     steam_api_manager: SteamAPIManager,
@@ -39,31 +77,9 @@ async def process_game_deal(
     Returns a dict with deal info if found, else None.
     """
     try:
-        # Get cached game details first
-        cached_game = get_cached_game_details(app_id)
-        if cached_game:
-            game_data = cached_game
-        else:
-            # If not cached, fetch from API with enhanced retry logic
-            await steam_api_manager.rate_limit_steam_store_api()
-            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-            app_info_response = await steam_api_manager.make_request_with_retry(
-                game_url
-            )
-
-            if app_info_response is None:
-                return None
-
-            game_info_json = app_info_response.json()
-            if not game_info_json:
-                return None
-
-            game_data = game_info_json.get(str(app_id), {}).get("data")
-            if not game_data:
-                return None
-
-            # Cache the game details
-            cache_game_details(app_id, game_data, permanent=True)
+        game_data = await fetch_game_details(app_id, steam_api_manager)
+        if not game_data:
+            return None
 
         game_name = game_data.get("name", f"Unknown Game ({app_id})")
         # Handle both cached data (price_data) and fresh API data (price_overview)

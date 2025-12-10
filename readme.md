@@ -494,10 +494,13 @@ This plugin includes all features related to Steam Family:
 - `!full_library_scan`: Admin command to scan all family members' complete game libraries with rate limiting.
 - `!full_wishlist_scan`: Admin command to perform comprehensive wishlist scan of ALL common games.
 
-### Free Epic Games
+### Free Games (from freegamefindings.bsky.social)
 
-- Sends a notification in a designated channel about the new weekly free games on the Epic Games Store.
-- `!force_epic`: An admin-only command (usable in DM) to manually trigger an Epic Games free game check.
+This plugin monitors `freegamefindings.bsky.social` (Bluesky) for new free game announcements across various platforms (Steam, Epic Games, Amazon Prime Gaming, etc.).
+
+- Sends a notification in a designated channel about new free games. For **Steam games**, notifications are enhanced with rich embeds including game images, descriptions, and original pricing from the Steam Store API.
+- `!force_free`: An admin-only command to manually trigger a free game check. The bot responds directly in the channel where the command was invoked. If new Steam games are found, they will be posted with rich embeds.
+- `!show_last_free_games`: Displays the last 10 free games identified from the Bluesky feed, with minimal filtering. This command does not affect the bot's tracking of seen games.
 
 ### Common Games
 
