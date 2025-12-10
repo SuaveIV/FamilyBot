@@ -100,6 +100,7 @@ class FreeGames(Extension):
                 excluded_domains = ["gleam.io", "givee.club"]
                 if (
                     "expired" in title_lower
+                    or "(dlc)" in title_lower
                     or any(
                         excluded_domain in domain
                         for excluded_domain in excluded_domains
@@ -310,6 +311,7 @@ class FreeGames(Extension):
                 # Check for keywords that indicate the game is not a simple, direct free offer.
                 exclusion_keywords = [
                     "expired",
+                    "(dlc)",
                     "requires paid base game",
                     "raffle",
                     "sweepstake",

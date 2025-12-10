@@ -91,6 +91,11 @@ MOCK_BLUESKY_POSTS = [
         "[Itch.io] A cool indie game is free",
         "https://some-dev.itch.io/cool-indie-game",
     ),
+    create_bsky_post(
+        "bsky_post_11",
+        "[Steam] (DLC) Some Cool Skin Pack",
+        "https://store.steampowered.com/app/dlc_pack",
+    ),
 ]
 
 MOCK_REDDIT_RESPONSES = {
@@ -272,8 +277,10 @@ async def main():
         # - Prime Free Game (Amazon)
         # - Game from Reddit (Steam)
         # - A great game from GOG
+        # - A great game from GOG (GOG)
         # - A cool indie game from Itch.io
         # The other 4 posts should be filtered out.
+        # The other 5 posts should be filtered out.
         call_count = mock_channel.send.call_count
         logger.info(f"Found {call_count} channel send calls.")
         assert call_count == 6, f"Expected 6 game announcements, but got {call_count}"
@@ -282,6 +289,7 @@ async def main():
         logger.info("Filtered out:")
         logger.info(" - 'Expired Game' (text filter)")
         logger.info(" - 'DLC that requires paid base game' (text filter)")
+        logger.info(" - '(DLC) Some Cool Skin Pack' (text filter)")
         logger.info(" - 'Expired game from Reddit' (Reddit flair scraping filter)")
         logger.info(
             " - 'Reddit post linking to excluded domain' (domain filter after Reddit scrape)"
