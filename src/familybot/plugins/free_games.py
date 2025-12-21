@@ -137,19 +137,50 @@ class FreeGames(Extension):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    bsky_url, headers=headers, timeout=15
-                ) as response:
-                    if response.status != 200:
-                        logger.warning(f"Bluesky API returned status {response.status}")
-                        return []
-                    data = await response.json()
-                    return data.get("feed", [])
-        except Exception as e:
-            logger.error(f"Error fetching Bluesky posts: {e}", exc_info=True)
-            return []
+
+        max_retries = 3
+        retry_delay = 5
+        timeout_seconds = 30
+
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        bsky_url, headers=headers, timeout=timeout_seconds
+                    ) as response:
+                        if response.status != 200:
+                            logger.warning("Bluesky API returned status %s", response.status)
+                            # If it's a 5xx error, maybe retry. If 4xx, probably don't.
+                            if 500 <= response.status < 600:
+                                if attempt < max_retries - 1:
+                                    await asyncio.sleep(retry_delay)
+                                continue
+                            return []
+                        data = await response.json()
+                        return data.get("feed", [])
+            except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+                logger.warning(
+                    "Attempt %s/%s failed to fetch Bluesky posts: %s",
+                    attempt + 1,
+                    max_retries,
+                    e,
+                )
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(
+                        "Error fetching Bluesky posts after %s attempts: %s",
+                        max_retries,
+                        e,
+                        exc_info=True,
+                    )
+            except Exception as e:
+                logger.error(
+                    "Unexpected error fetching Bluesky posts: %s", e, exc_info=True
+                )
+                return []
+
+        return []
 
     async def _get_reddit_post_details(self, reddit_url: str) -> dict | None:
         """Fetches details from a Reddit post's JSON endpoint."""
@@ -169,7 +200,9 @@ class FreeGames(Extension):
                             final_url = str(response.url)
                         else:
                             logger.warning(
-                                f"Failed to resolve redd.it URL {reddit_url}, status: {response.status}"
+                                "Failed to resolve redd.it URL %s, status: %s",
+                                reddit_url,
+                                response.status,
                             )
                             # Continue with original URL as a fallback
 
@@ -182,7 +215,9 @@ class FreeGames(Extension):
                 ) as response:
                     if response.status != 200:
                         logger.warning(
-                            f"Reddit API returned status {response.status} for {final_url}"
+                            "Reddit API returned status %s for %s",
+                            response.status,
+                            final_url,
                         )
                         return None
                     post_data = await response.json()
@@ -193,7 +228,9 @@ class FreeGames(Extension):
                         "url": post.get("url"),  # The URL the post links to
                     }
         except Exception as e:
-            logger.error(f"Error fetching Reddit post details for {final_url}: {e}")
+            logger.error(
+                "Error fetching Reddit post details for %s: %s", final_url, e
+            )
             return None
 
     def _extract_game_details_from_post(self, post_item: dict) -> dict | None:
@@ -242,12 +279,290 @@ class FreeGames(Extension):
         if not extracted_url:
             return None
 
+        # Clean URL for deduplication (remove query params)
+        if "?" in extracted_url:
+            extracted_url = extracted_url.split("?")[0]
+
         return {
             "platform": platform,
             "title": game_title,
             "url": extracted_url,
             "full_text": full_text,  # Include full text for filtering later if needed
         }
+
+    async def _process_single_post(
+        self, post_item: dict, manual: bool, ctx: PrefixedContext | None
+    ) -> bool:
+        """
+        Process a single Bluesky post: filter, extract details, and send notification.
+        Returns True if a notification was sent, False otherwise.
+        """
+        post_record = post_item.get("post", {}).get("record", {})
+        post_uri = post_item.get("post", {}).get("uri")
+
+        if not post_uri or post_uri in self._seen_bsky_posts:
+            return False
+
+        game_details = self._extract_game_details_from_post(post_item)
+        if not game_details:
+            logger.debug(
+                "Could not extract details for post: %s",
+                post_record.get("text", "")[:50],
+            )
+            return False
+
+        # --- Filtering Logic (re-applied to Bluesky content) ---
+        title_lower = game_details["full_text"].lower()
+        parsed_url = urlparse(game_details["url"])
+        domain = parsed_url.netloc.lower()
+
+        # --- Exclusion Filters ---
+        exclusion_keywords = [
+            "expired",
+            "(dlc)",
+            "requires paid base game",
+            "raffle",
+            "sweepstake",
+        ]
+        if any(keyword in title_lower for keyword in exclusion_keywords):
+            return False
+
+        # Check for domains we want to exclude (e.g., giveaway sites)
+        excluded_domains = ["gleam.io", "givee.club"]
+        if any(excluded_domain in domain for excluded_domain in excluded_domains):
+            return False
+
+        # --- Inclusions (Platform Whitelist) ---
+        is_steam = "[steam]" in title_lower
+        is_epic = "[epic" in title_lower or "[egs]" in title_lower
+        is_amazon = (
+            "[amazon]" in title_lower
+            or "[luna]" in title_lower
+            or "[prime gaming]" in title_lower
+        )
+        is_gog = "[gog]" in title_lower
+        is_itch = "[itch" in title_lower
+
+        if not (is_steam or is_epic or is_amazon or is_gog or is_itch):
+            return False
+
+        # --- Specific Logic for "Directly Free" Steam Games ---
+        if is_steam:
+            is_reddit_link = any(
+                d in domain for d in ["redd.it", "reddit.com", "www.reddit.com"]
+            )
+            is_steam_store_link = "store.steampowered.com" in domain
+
+            if not is_steam_store_link and not is_reddit_link:
+                return False
+
+            if is_reddit_link:
+                reddit_details = await self._get_reddit_post_details(
+                    game_details["url"]
+                )
+                if not reddit_details:
+                    logger.warning(
+                        "Could not fetch details from Reddit for %s, skipping.",
+                        game_details["url"],
+                    )
+                    return False
+
+                # Filter based on Reddit flair
+                flair_lower = (reddit_details.get("link_flair_text") or "").lower()
+                if any(keyword in flair_lower for keyword in exclusion_keywords):
+                    logger.info("Skipping Reddit post due to flair: '%s'", flair_lower)
+                    return False
+
+                # Update the game URL to the one from the Reddit post for accuracy
+                if reddit_details.get("url"):
+                    game_details["url"] = reddit_details["url"]
+                    # Re-parse domain for Steam store check
+                    domain = urlparse(game_details["url"]).netloc.lower()
+
+                    # Re-check the new domain from Reddit against exclusions
+                    if any(
+                        excluded_domain in domain for excluded_domain in excluded_domains
+                    ):
+                        logger.info(
+                            "Skipping Reddit post linking to excluded domain: %s", domain
+                        )
+                        return False
+
+        self._seen_bsky_posts.add(post_uri)  # Use post_uri for deduplication
+
+        logger.info(
+            "Found new free game on Bluesky: %s",
+            game_details["full_text"].splitlines()[0],
+        )
+
+        # If manual, post to context channel, otherwise post to default channel
+        channel = (
+            ctx.channel
+            if manual and ctx
+            else await self.bot.fetch_channel(EPIC_CHANNEL_ID)
+        )
+
+        if not channel:
+            return False
+
+        embed_sent = False
+        # Try to fetch rich details for Steam games
+        if is_steam:
+            steam_id = self._extract_steam_id(game_details["url"])
+            if steam_id:
+                steam_data = await fetch_game_details(steam_id, self.steam_api_manager)
+
+                if steam_data:
+                    # Steam Embed
+                    embed = Embed()
+                    embed.title = (
+                        f"FREE: {steam_data.get('name', game_details['title'])}"
+                    )
+                    embed.url = game_details["url"]
+                    embed.description = steam_data.get(
+                        "short_description", "No description available."
+                    )
+                    embed.color = Color.from_hex("00FF00")  # Green
+
+                    if steam_data.get("header_image"):
+                        embed.set_image(url=steam_data["header_image"])
+
+                    price_overview = steam_data.get("price_overview", {})
+                    if price_overview:
+                        original_price = price_overview.get("initial_formatted", "N/A")
+                        discount = price_overview.get("discount_percent", 0)
+                        embed.add_field(
+                            name="Price",
+                            value=f"~~{original_price}~~ -> FREE ({discount}% off)",
+                            inline=True,
+                        )
+
+                    # --- Add more details inspired by RedditSteamGameInfo ---
+                    # Add Reviews
+                    if steam_data.get("review_summary"):
+                        embed.add_field(
+                            name="Reviews",
+                            value=steam_data["review_summary"],
+                            inline=True,
+                        )
+
+                    # Add Release Date
+                    release_date_data = steam_data.get("release_date")
+                    if release_date_data and release_date_data.get("date"):
+                        embed.add_field(
+                            name="Release Date",
+                            value=release_date_data["date"],
+                            inline=True,
+                        )
+
+                    # Add Developer/Publisher
+                    developers = steam_data.get("developers", [])
+                    publishers = steam_data.get("publishers", [])
+                    if developers or publishers:
+                        dev_str = ", ".join(developers) if developers else "N/A"
+                        pub_str = ", ".join(publishers) if publishers else "N/A"
+                        dev_pub = f"**Dev:** {dev_str}\n**Pub:** {pub_str}"
+                        embed.add_field(name="Creator(s)", value=dev_pub, inline=True)
+
+                    embed.set_footer(
+                        text="Source: bsky.app/profile/freegamefindings.bsky.social"
+                    )
+
+                    await channel.send(embeds=embed)  # type: ignore
+                    embed_sent = True
+        elif is_epic:
+            # Epic Games Store Embed
+            embed = Embed()
+            embed.title = f"FREE: {game_details['title']}"
+            embed.url = game_details["url"]
+            embed.color = Color.from_hex("0078F2")  # Epic Games blue
+
+            embed.description = "Claim this game for free on the Epic Games Store!"
+            # Using a generic Epic Games logo thumbnail
+            embed.set_thumbnail(
+                url="https://cdn.icon-icons.com/icons2/2699/PNG/128/epic_games_logo_icon_169084.png"
+            )
+
+            embed.add_field(name="Platform", value="Epic Games Store", inline=True)
+            embed.set_footer(
+                text="Source: bsky.app/profile/freegamefindings.bsky.social"
+            )
+
+            await channel.send(embeds=embed)  # type: ignore
+            embed_sent = True
+        elif is_amazon:
+            # Amazon Prime Gaming Embed
+            embed = Embed()
+            embed.title = f"FREE: {game_details['title']}"
+            embed.url = game_details["url"]
+            embed.color = Color.from_hex("00A8E1")  # Amazon Prime blue
+
+            embed.description = "Claim this game for free with Amazon Prime Gaming!"
+            # Using a generic Amazon Prime Gaming logo thumbnail
+            embed.set_thumbnail(
+                url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png"
+            )
+
+            embed.add_field(name="Platform", value="Amazon Prime Gaming", inline=True)
+            embed.set_footer(
+                text="Source: bsky.app/profile/freegamefindings.bsky.social"
+            )
+
+            await channel.send(embeds=embed)  # type: ignore
+            embed_sent = True
+        elif is_gog:
+            # GOG.com Embed
+            embed = Embed()
+            embed.title = f"FREE: {game_details['title']}"
+            embed.url = game_details["url"]
+            embed.color = Color.from_hex("8A4399")  # GOG purple
+
+            embed.description = "Claim this game for free on GOG.com!"
+            # Using a generic GOG logo thumbnail
+            embed.set_thumbnail(
+                url="https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png"
+            )
+
+            embed.add_field(name="Platform", value="GOG.com", inline=True)
+            embed.set_footer(
+                text="Source: bsky.app/profile/freegamefindings.bsky.social"
+            )
+
+            await channel.send(embeds=embed)  # type: ignore
+            embed_sent = True
+        elif is_itch:
+            # Itch.io Embed
+            embed = Embed()
+            embed.title = f"FREE: {game_details['title']}"
+            embed.url = game_details["url"]
+            embed.color = Color.from_hex("FA5C5C")  # Itch.io pink
+
+            embed.description = "Claim this game for free on Itch.io!"
+            # Using a generic Itch.io logo thumbnail
+            embed.set_thumbnail(
+                url="https://cdn.icon-icons.com/icons2/2428/PNG/512/itch_io_logo_icon_147227.png"
+            )
+
+            embed.add_field(name="Platform", value="Itch.io", inline=True)
+            embed.set_footer(
+                text="Source: bsky.app/profile/freegamefindings.bsky.social"
+            )
+
+            await channel.send(embeds=embed)  # type: ignore
+            embed_sent = True
+
+        # Fallback for non-Steam or failed Steam fetch
+        if not embed_sent:
+            msg = (
+                f"🎮 🌌 **New Free Game Alert (Bluesky)!**\n"
+                f"**Platform:** {game_details['platform']}\n"
+                f"**Game:** {game_details['title']}\n"
+                f"**Link:** {game_details['url']}\n"
+                f"*Source: <https://bsky.app/profile/freegamefindings.bsky.social>*"
+            )
+            await channel.send(msg)  # type: ignore
+
+        return True
 
     async def _process_feed(
         self,
@@ -258,7 +573,6 @@ class FreeGames(Extension):
         """Checks freegamefindings.bsky.social for new free games via Bluesky API."""
         logger.info("Checking freegamefindings.bsky.social...")
 
-        # ... (rest of the file is unchanged)
         try:
             posts = await self._fetch_bluesky_posts()
 
@@ -275,7 +589,8 @@ class FreeGames(Extension):
                         self._seen_bsky_posts.add(post_uri)
                 self._first_bsky_run = False
                 logger.info(
-                    f"Initialized Bluesky tracker with {len(self._seen_bsky_posts)} posts."
+                    "Initialized Bluesky tracker with %d posts.",
+                    len(self._seen_bsky_posts),
                 )
                 if manual and ctx:
                     await ctx.send(
@@ -289,288 +604,7 @@ class FreeGames(Extension):
             posts_to_process = reversed(posts) if force_check else posts
 
             for post_item in posts_to_process:
-                post_record = post_item.get("post", {}).get("record", {})
-                post_uri = post_item.get("post", {}).get("uri")
-
-                if not post_uri or post_uri in self._seen_bsky_posts:
-                    continue
-
-                game_details = self._extract_game_details_from_post(post_item)
-                if not game_details:
-                    logger.debug(
-                        f"Could not extract details for post: {post_record.get('text', '')[:50]}"
-                    )
-                    continue
-
-                # --- Filtering Logic (re-applied to Bluesky content) ---
-                title_lower = game_details["full_text"].lower()
-                parsed_url = urlparse(game_details["url"])
-                domain = parsed_url.netloc.lower()
-
-                # --- Exclusion Filters ---
-                # Check for keywords that indicate the game is not a simple, direct free offer.
-                exclusion_keywords = [
-                    "expired",
-                    "(dlc)",
-                    "requires paid base game",
-                    "raffle",
-                    "sweepstake",
-                ]
-                if any(keyword in title_lower for keyword in exclusion_keywords):
-                    continue
-
-                # Check for domains we want to exclude (e.g., giveaway sites)
-                excluded_domains = ["gleam.io", "givee.club"]
-                if any(
-                    excluded_domain in domain for excluded_domain in excluded_domains
-                ):
-                    continue
-
-                # --- Inclusions (Platform Whitelist) ---
-                is_steam = "[steam]" in title_lower
-                is_epic = (
-                    "[epic" in title_lower or "[egs]" in title_lower
-                )  # Matches [Epic Games], [Epic], [EGS]
-                is_amazon = (
-                    "[amazon]" in title_lower
-                    or "[luna]" in title_lower
-                    or "[prime gaming]" in title_lower
-                )
-                is_gog = "[gog]" in title_lower
-                is_itch = "[itch" in title_lower  # Matches [itch.io]
-
-                if not (is_steam or is_epic or is_amazon or is_gog or is_itch):
-                    continue
-
-                # --- Specific Logic for "Directly Free" Steam Games ---
-                # Exclude key giveaways on other sites, strictly allow store.steampowered.com OR reddit links (which we assume link to the store)
-                if is_steam:
-                    is_reddit_link = any(
-                        d in domain for d in ["redd.it", "reddit.com", "www.reddit.com"]
-                    )
-                    is_steam_store_link = "store.steampowered.com" in domain
-
-                    if not is_steam_store_link and not is_reddit_link:
-                        continue
-
-                    if is_reddit_link:
-                        reddit_details = await self._get_reddit_post_details(
-                            game_details["url"]
-                        )
-                        if not reddit_details:
-                            logger.warning(
-                                f"Could not fetch details from Reddit for {game_details['url']}, skipping."
-                            )
-                            continue
-
-                        # Filter based on Reddit flair
-                        flair_lower = (
-                            reddit_details.get("link_flair_text") or ""
-                        ).lower()
-                        if any(
-                            keyword in flair_lower for keyword in exclusion_keywords
-                        ):
-                            logger.info(
-                                f"Skipping Reddit post due to flair: '{flair_lower}'"
-                            )
-                            continue
-
-                        # Update the game URL to the one from the Reddit post for accuracy
-                        if reddit_details.get("url"):
-                            game_details["url"] = reddit_details["url"]
-                            # Re-parse domain for Steam store check
-                            domain = urlparse(game_details["url"]).netloc.lower()
-
-                            # Re-check the new domain from Reddit against exclusions
-                            if any(
-                                excluded_domain in domain
-                                for excluded_domain in excluded_domains
-                            ):
-                                logger.info(
-                                    f"Skipping Reddit post linking to excluded domain: {domain}"
-                                )
-                                continue
-
-                self._seen_bsky_posts.add(post_uri)  # Use post_uri for deduplication
-
-                logger.info(
-                    f"Found new free game on Bluesky: {game_details['full_text'].splitlines()[0]}"
-                )
-
-                # If manual, post to context channel, otherwise post to default channel
-                channel = (
-                    ctx.channel
-                    if manual and ctx
-                    else await self.bot.fetch_channel(EPIC_CHANNEL_ID)
-                )
-
-                if channel:
-                    embed_sent = False
-                    # Try to fetch rich details for Steam games
-                    if is_steam:
-                        steam_id = self._extract_steam_id(game_details["url"])
-                        if steam_id:
-                            steam_data = await fetch_game_details(
-                                steam_id, self.steam_api_manager
-                            )
-
-                            if steam_data:
-                                # Steam Embed
-                                embed = Embed()
-                                embed.title = f"FREE: {steam_data.get('name', game_details['title'])}"
-                                embed.url = game_details["url"]
-                                embed.description = steam_data.get(
-                                    "short_description", "No description available."
-                                )
-                                embed.color = Color.from_hex("00FF00")  # Green
-
-                                if steam_data.get("header_image"):
-                                    embed.set_image(url=steam_data["header_image"])
-
-                                price_overview = steam_data.get("price_overview", {})
-                                if price_overview:
-                                    original_price = price_overview.get(
-                                        "initial_formatted", "N/A"
-                                    )
-                                    discount = price_overview.get("discount_percent", 0)
-                                    embed.add_field(
-                                        name="Price",
-                                        value=f"~~{original_price}~~ -> FREE ({discount}% off)",
-                                        inline=True,
-                                    )
-
-                                # --- Add more details inspired by RedditSteamGameInfo ---
-                                # Add Reviews
-                                if steam_data.get("review_summary"):
-                                    embed.add_field(
-                                        name="Reviews",
-                                        value=steam_data["review_summary"],
-                                        inline=True,
-                                    )
-
-                                # Add Release Date
-                                if steam_data.get("release_date"):
-                                    embed.add_field(
-                                        name="Release Date",
-                                        value=steam_data["release_date"],
-                                        inline=True,
-                                    )
-
-                                # Add Developer/Publisher
-                                if steam_data.get("developer") or steam_data.get(
-                                    "publisher"
-                                ):
-                                    dev_pub = f"**Dev:** {steam_data.get('developer', 'N/A')}\n**Pub:** {steam_data.get('publisher', 'N/A')}"
-                                    embed.add_field(
-                                        name="Creator(s)", value=dev_pub, inline=True
-                                    )
-
-                                embed.set_footer(
-                                    text="Source: bsky.app/profile/freegamefindings.bsky.social"
-                                )
-
-                                await channel.send(embeds=embed)  # type: ignore
-                                embed_sent = True
-                    elif is_epic:
-                        # Epic Games Store Embed
-                        embed = Embed()
-                        embed.title = f"FREE: {game_details['title']}"
-                        embed.url = game_details["url"]
-                        embed.color = Color.from_hex("0078F2")  # Epic Games blue
-
-                        embed.description = (
-                            "Claim this game for free on the Epic Games Store!"
-                        )
-                        # Using a generic Epic Games logo thumbnail
-                        embed.set_thumbnail(
-                            url="https://cdn.icon-icons.com/icons2/2699/PNG/128/epic_games_logo_icon_169084.png"
-                        )
-
-                        embed.add_field(
-                            name="Platform", value="Epic Games Store", inline=True
-                        )
-                        embed.set_footer(
-                            text="Source: bsky.app/profile/freegamefindings.bsky.social"
-                        )
-
-                        await channel.send(embeds=embed)  # type: ignore
-                        embed_sent = True
-                    elif is_amazon:
-                        # Amazon Prime Gaming Embed
-                        embed = Embed()
-                        embed.title = f"FREE: {game_details['title']}"
-                        embed.url = game_details["url"]
-                        embed.color = Color.from_hex("00A8E1")  # Amazon Prime blue
-
-                        embed.description = (
-                            "Claim this game for free with Amazon Prime Gaming!"
-                        )
-                        # Using a generic Amazon Prime Gaming logo thumbnail
-                        embed.set_thumbnail(
-                            url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png"
-                        )
-
-                        embed.add_field(
-                            name="Platform", value="Amazon Prime Gaming", inline=True
-                        )
-                        embed.set_footer(
-                            text="Source: bsky.app/profile/freegamefindings.bsky.social"
-                        )
-
-                        await channel.send(embeds=embed)  # type: ignore
-                        embed_sent = True
-                    elif is_gog:
-                        # GOG.com Embed
-                        embed = Embed()
-                        embed.title = f"FREE: {game_details['title']}"
-                        embed.url = game_details["url"]
-                        embed.color = Color.from_hex("8A4399")  # GOG purple
-
-                        embed.description = "Claim this game for free on GOG.com!"
-                        # Using a generic GOG logo thumbnail
-                        embed.set_thumbnail(
-                            url="https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png"
-                        )
-
-                        embed.add_field(name="Platform", value="GOG.com", inline=True)
-                        embed.set_footer(
-                            text="Source: bsky.app/profile/freegamefindings.bsky.social"
-                        )
-
-                        await channel.send(embeds=embed)  # type: ignore
-                        embed_sent = True
-                    elif is_itch:
-                        # Itch.io Embed
-                        embed = Embed()
-                        embed.title = f"FREE: {game_details['title']}"
-                        embed.url = game_details["url"]
-                        embed.color = Color.from_hex("FA5C5C")  # Itch.io pink
-
-                        embed.description = "Claim this game for free on Itch.io!"
-                        # Using a generic Itch.io logo thumbnail
-                        embed.set_thumbnail(
-                            url="https://cdn.icon-icons.com/icons2/2428/PNG/512/itch_io_logo_icon_147227.png"
-                        )
-
-                        embed.add_field(name="Platform", value="Itch.io", inline=True)
-                        embed.set_footer(
-                            text="Source: bsky.app/profile/freegamefindings.bsky.social"
-                        )
-
-                        await channel.send(embeds=embed)  # type: ignore
-                        embed_sent = True
-
-                    # Fallback for non-Steam or failed Steam fetch
-                    if not embed_sent:
-                        msg = (
-                            f"🎮 🌌 **New Free Game Alert (Bluesky)!**\n"
-                            f"**Platform:** {game_details['platform']}\n"
-                            f"**Game:** {game_details['title']}\n"
-                            f"**Link:** {game_details['url']}\n"
-                            f"*Source: <https://bsky.app/profile/freegamefindings.bsky.social>*"
-                        )
-                        await channel.send(msg)  # type: ignore
-
+                if await self._process_single_post(post_item, manual, ctx):
                     games_found += 1
                     await asyncio.sleep(2)
 
@@ -578,7 +612,7 @@ class FreeGames(Extension):
                 await ctx.send("Check complete. No new free games found.")
 
         except Exception as e:
-            logger.error(f"Error checking Bluesky: {e}", exc_info=True)
+            logger.error("Error checking Bluesky: %s", e, exc_info=True)
             if manual and ctx:
                 await ctx.send(f"Error occurred during check: {str(e)}")
 
