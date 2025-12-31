@@ -260,7 +260,7 @@ status:
     @echo "Virtual environment: $(if [ -d '.venv' ]; then echo '✅ Present'; else echo '❌ Missing'; fi)"
     @echo "Config file: $(if [ -f 'config.yml' ]; then echo '✅ Present'; else echo '❌ Missing (use config-template.yml)'; fi)"
     @echo "Browser profile: $(if [ -d 'FamilyBotBrowserProfile' ]; then echo '✅ Present'; else echo '❌ Missing (run just setup-browser)'; fi)"
-    @echo "Database: $(if [ -f 'data/familybot.db' ]; then echo '✅ Present'; else echo '❌ Missing (run just populate-db)'; fi)"
+    @echo "Database: $(if [ -f 'bot_data.db' ]; then echo '✅ Present'; else echo '❌ Missing (run just populate-db)'; fi)"
 
 # === CLEANUP TASKS ===
 

@@ -1,14 +1,12 @@
-# FamilyBot/pyproject.toml
-
 [project]
 name = "familybot"
 version = "1.21.0"
 description = "Family Bot is a discord bot mainly made to get the new games that are added to the Steam Family library."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = [ # Use ~= for safe upgrades, == for pinned versions
+dependencies = [
     "discord-py-interactions~=5.15.0",
-    "aiohttp~=3.9.5",
+    "aiohttp>=3.12.14",
     "requests~=2.32.4",
     "websockets~=12.0",
     "PyYAML~=6.0.2",
@@ -26,6 +24,7 @@ dependencies = [ # Use ~= for safe upgrades, == for pinned versions
     "pre-commit~=4.0.1",
     "pylint~=3.3.1",
     "audioop-lts~=0.2.1",
+    "filelock>=3.20.1",
 ]
 
 [project.scripts]
@@ -39,8 +38,6 @@ familybot-setup-precommit = "scripts.setup_precommit:main"
 familybot-lint = "scripts.lint:main"
 
 [tool.setuptools]
-# This tells setuptools to look for your package(s) inside the 'src' directory.
-# Since your main package is now 'familybot' inside 'src/', this is correct.
 package-dir = {"" = "src"}
 
 [project.optional-dependencies]
@@ -48,4 +45,18 @@ dev = [
     "ruff~=0.12.5",
     "mypy",
     "pip-audit",
+    "types-PyYAML",
+    "types-requests",
+    "types-tqdm",
 ]
+
+[tool.mypy]
+python_version = "3.13"
+
+[[tool.mypy.overrides]]
+module = "steam.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "coloredlogs"
+ignore_missing_imports = true
