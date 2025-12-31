@@ -44,8 +44,10 @@ class TokenBucket:
             capacity: Maximum tokens in bucket (defaults to rate * 10)
         """
         self.rate = rate
-        self.capacity = capacity if capacity is not None else max(1, int(rate * 10))
-        self.tokens = self.capacity
+        self.capacity: int = (
+            capacity if capacity is not None else max(1, int(rate * 10.0))
+        )
+        self.tokens: float = float(self.capacity)
         self.last_update = time.time()
         self._lock = asyncio.Lock()
 
@@ -350,7 +352,7 @@ class DatabasePopulator:
             logger.error("Steam API key not configured. Cannot fetch wishlists.")
             return 0
 
-        global_wishlist = []
+        global_wishlist: list[list] = []
         total_cached = 0
 
         for i, (steam_id, name) in enumerate(family_members.items(), 1):

@@ -349,7 +349,7 @@ class _WebLogQueueHolder:
     """A singleton-like class to hold the web log queue."""
 
     def __init__(self):
-        self.queue: Optional[Queue] = None
+        self.queue: Optional[Queue[str]] = None
 
 
 _web_log_queue_holder = _WebLogQueueHolder()

@@ -40,7 +40,7 @@ def convert_owned_games(
             "Steam ID is required for owned games conversion. Use --steam-id parameter."
         )
 
-    converted_games = []
+    converted_games: list[Dict[str, Any]] = []
     for game in games:
         appid = str(game.get("appid"))
         if appid:
@@ -59,8 +59,8 @@ def convert_owned_games(
                     {
                         "type": "game_details",
                         "appid": appid,
-                        "name": game["name"],
-                        "is_free": False,  # Default, will be updated if we have price info
+                        "name": game.get("name"),
+                        "is_free": False,
                         "categories": [],
                     }
                 )
@@ -73,7 +73,7 @@ def convert_player_summaries(data: Dict[str, Any]) -> Dict[str, Any]:
     response = data.get("response", {})
     players = response.get("players", [])
 
-    converted_users = []
+    converted_users: list[Dict[str, Any]] = []
     for player in players:
         steam_id = player.get("steamid")
         persona_name = player.get("personaname")
@@ -104,7 +104,7 @@ def convert_wishlist(
             "Steam ID is required for wishlist conversion. Use --steam-id parameter."
         )
 
-    converted_items = []
+    converted_items: list[Dict[str, Any]] = []
     for item in items:
         appid = str(item.get("appid"))
         if appid:
@@ -122,7 +122,7 @@ def convert_wishlist(
 
 def convert_app_details(data: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Steam Store API appdetails response to FamilyBot format."""
-    converted_games = []
+    converted_games: list[Dict[str, Any]] = []
 
     # Steam Store API returns data keyed by appid
     for appid, app_data in data.items():
@@ -153,7 +153,7 @@ def convert_family_library(data: Dict[str, Any]) -> Dict[str, Any]:
     response = data.get("response", {})
     apps = response.get("apps", [])
 
-    converted_games = []
+    converted_games: list[Dict[str, Any]] = []
     for app in apps:
         appid = str(app.get("appid"))
         if appid:

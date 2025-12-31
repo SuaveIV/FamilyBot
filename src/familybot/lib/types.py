@@ -19,8 +19,17 @@ class FamilyBotClient(Client):
     """
 
     # Dynamically added methods from FamilyBot.py
-    async def send_to_channel(self, channel_id: int, message: str) -> None: ...
-    async def send_log_dm(self, message: str) -> None: ...
-    async def send_dm(self, discord_id: int, message: str) -> None: ...
-    async def edit_msg(self, chan_id: int, msg_id: int, message: str) -> None: ...
-    async def get_pinned_message(self, chan_id: int) -> List[Message]: ...
+    async def send_to_channel(self, channel_id: int, message: str) -> None:
+        raise NotImplementedError
+
+    async def send_log_dm(self, message: str) -> None:
+        raise NotImplementedError
+
+    async def send_dm(self, discord_id: int, message: str) -> None:
+        raise NotImplementedError
+
+    async def edit_msg(self, chan_id: int, msg_id: int, message: str) -> None:
+        raise NotImplementedError
+
+    async def get_pinned_message(self, chan_id: int) -> List[Message]:
+        raise NotImplementedError

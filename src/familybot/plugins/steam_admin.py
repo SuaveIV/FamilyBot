@@ -113,7 +113,7 @@ class steam_admin(Extension):
                 await ctx.send("🔍 **Forcing deals check for all family wishlists...**")
 
             # Collect wishlist games from the target user(s)
-            global_wishlist = []
+            global_wishlist: list[list] = []
             for user_steam_id in target_user_steam_ids:
                 user_name_for_log = current_family_members.get(
                     user_steam_id, f"Unknown ({user_steam_id})"
@@ -217,7 +217,7 @@ class steam_admin(Extension):
                 )
                 return
 
-            deals_found = []
+            deals_found: list = []
             games_checked = 0
             total_games = len(global_wishlist)
             progress_tracker = ProgressTracker(total_games)
@@ -431,7 +431,7 @@ class steam_admin(Extension):
         try:
             current_family_members = load_family_members_from_db()
             all_unique_steam_ids_to_check = set(current_family_members.keys())
-            global_wishlist = []
+            global_wishlist: list[list] = []
             for user_steam_id in all_unique_steam_ids_to_check:
                 cached_wishlist = get_cached_wishlist(user_steam_id)
                 if cached_wishlist is not None:
@@ -814,7 +814,7 @@ class steam_admin(Extension):
         try:
             # Step 1: Collect all wishlist data (same as regular refresh)
             logger.info("Full wishlist scan: Starting comprehensive scan...")
-            global_wishlist = []
+            global_wishlist: list[list] = []
             current_family_members = load_family_members_from_db()
             all_unique_steam_ids_to_check = set(current_family_members.keys())
 
@@ -896,7 +896,7 @@ class steam_admin(Extension):
                     )
 
             # Step 2: Collect ALL duplicate games (no limit)
-            all_duplicate_games = []
+            all_duplicate_games: list[list] = []
             for item in global_wishlist:
                 app_id = item[0]
                 owner_steam_ids = item[1]
@@ -920,7 +920,7 @@ class steam_admin(Extension):
             )
 
             # Step 3: Process ALL games with slower rate limiting
-            duplicate_games_for_display = []
+            duplicate_games_for_display: list = []
             saved_game_appids = {item[0] for item in get_saved_games()}
             processed_count = 0
             skipped_count = 0

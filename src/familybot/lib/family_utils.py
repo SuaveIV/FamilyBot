@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Optional
 
 import requests
 
@@ -9,6 +10,7 @@ from familybot.config import FAMILY_STEAM_ID  # Import FAMILY_USER_DICT here
 from familybot.config import FAMILY_USER_DICT
 from familybot.lib.token_manager import get_token  # <<< IMPORT get_token here
 from familybot.lib.utils import get_lowest_price
+
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ if not logger.handlers:
     )
 
 
-def find_in_2d_list(to_find: str, list_2d: list) -> int or None:
+def find_in_2d_list(to_find: str, list_2d: list) -> Optional[int]:
     """Finds the index of a sublist where the first element matches to_find."""
     for i in range(len(list_2d)):
         if list_2d[i][0] == to_find:

@@ -422,7 +422,7 @@ async def force_wishlist_action() -> Dict[str, Any]:
             "message": "Steam API key is not configured for wishlist task.",
         }
 
-    global_wishlist = []
+    global_wishlist: list[list] = []
 
     current_family_members = await _load_family_members_from_db()
 
@@ -633,8 +633,8 @@ async def force_deals_action(
             target_user_steam_ids = list(current_family_members.keys())
             logger.info("Force deals: Checking deals for all family wishlists")
 
-        # Collect wishlist games from the target user(s)
-        global_wishlist = []
+            # Collect wishlist games from the target user(s)
+            global_wishlist: list[list] = []
         for user_steam_id in target_user_steam_ids:
             user_name_for_log = current_family_members.get(
                 user_steam_id, f"Unknown ({user_steam_id})"
