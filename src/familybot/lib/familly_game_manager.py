@@ -89,13 +89,14 @@ def get_saved_games() -> list:
 
 
 def set_saved_games(game_data_list: list) -> None:  # Renamed parameter for clarity
-    """Writes the list of game AppIDs to the database (overwriting previous list).
+    """Updates the list of saved game AppIDs in the database.
+    This is cumulative; it adds new games or updates timestamps for existing ones,
+    but does NOT remove games that are missing from the input list.
     game_data_list should be a list of (appid, detected_at_timestamp_str) tuples."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM saved_games")  # Clear existing games
 
         # Prepare data for insertion: (appid, detected_at)
         # If detected_at is not provided, use current timestamp
@@ -113,11 +114,11 @@ def set_saved_games(game_data_list: list) -> None:  # Renamed parameter for clar
 
         if appids_to_insert:
             cursor.executemany(
-                "INSERT INTO saved_games (appid, detected_at) VALUES (?, ?)",
+                "INSERT OR REPLACE INTO saved_games (appid, detected_at) VALUES (?, ?)",
                 appids_to_insert,
             )
         conn.commit()
-        logger.info(f"Saved {len(game_data_list)} games to database.")
+        logger.info(f"Updated {len(game_data_list)} games in database.")
     except sqlite3.Error as e:
         logger.error(f"Error writing saved games to DB: {e}")
     finally:

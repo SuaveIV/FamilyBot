@@ -152,6 +152,11 @@ backup-db:
     mise exec -- uv run python scripts/backup_database.py
     @echo "✅ Database backed up"
 
+# Check database integrity
+check-db:
+    @echo "🩺 Checking database integrity..."
+    mise exec -- uv run python scripts/check_db_integrity.py
+
 # === LINTING AND FORMATTING ===
 
 # Run ruff linter
