@@ -11,6 +11,7 @@ from typing import Dict, Optional
 import httpx
 
 from steam.webapi import WebAPI
+from typing import Tuple
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -194,6 +195,33 @@ class DatabasePopulator:
         except (ValueError, TypeError, KeyError) as e:
             logger.error("Unexpected error for %s: %s", api_name, e)
             return None
+
+    def batch_write_games(self, games_data: Dict[str, Dict]) -> int:
+        """Write a batch of game details to the database in a single transaction."""
+        if not games_data:
+            return 0
+
+        conn = get_db_connection()
+        written = 0
+        try:
+            conn.execute("BEGIN TRANSACTION")
+            for app_id, data in games_data.items():
+                cache_game_details(app_id, data, permanent=True, conn=conn)
+                written += 1
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Batch write failed: {e}")
+            # Fallback to individual writes to save what we can
+            for app_id, data in games_data.items():
+                try:
+                    cache_game_details(app_id, data, permanent=True)
+                    written += 1
+                except Exception:
+                    pass
+        finally:
+            conn.close()
+        return written
 
     async def get_fallback_game_info(self, app_id: str) -> Optional[dict]:
         """Get basic game info using multiple fallback strategies for games without store pages."""
@@ -533,7 +561,7 @@ class DatabasePopulator:
         )
         total_cached = 0
 
-        async def fetch_game_with_progress(app_id: str) -> bool:
+        async def fetch_game_with_progress(app_id: str) -> Optional[Tuple[str, Dict]]:
             nonlocal user_cached, user_skipped, total_cached
             game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
             try:
@@ -547,7 +575,7 @@ class DatabasePopulator:
                         games_progress_iterator_tqdm.set_postfix_str(
                             f"Cached: {user_cached}, Skipped: {user_skipped}"
                         )
-                    return False
+                    return None
 
                 game_info = self.handle_api_response(
                     f"AppDetails ({app_id})", game_response
@@ -559,7 +587,7 @@ class DatabasePopulator:
                         games_progress_iterator_tqdm.set_postfix_str(
                             f"Cached: {user_cached}, Skipped: {user_skipped}"
                         )
-                    return False
+                    return None
 
                 game_data = game_info.get(str(app_id), {}).get("data")
                 if not game_data:
@@ -569,9 +597,8 @@ class DatabasePopulator:
                         games_progress_iterator_tqdm.set_postfix_str(
                             f"Cached: {user_cached}, Skipped: {user_skipped}"
                         )
-                    return False
+                    return None
 
-                cache_game_details(app_id, game_data, permanent=True)
                 async with progress_lock:
                     user_cached += 1
                     total_cached += 1
@@ -579,7 +606,7 @@ class DatabasePopulator:
                     games_progress_iterator_tqdm.set_postfix_str(
                         f"Cached: {user_cached}, Skipped: {user_skipped}"
                     )
-                return True
+                return (app_id, game_data)
             except (
                 httpx.RequestError,
                 httpx.TimeoutException,
@@ -595,13 +622,22 @@ class DatabasePopulator:
                     games_progress_iterator_tqdm.set_postfix_str(
                         f"Cached: {user_cached}, Skipped: {user_skipped}"
                     )
-                return False
+                return None
 
         batch_size = 10
         for i in range(0, len(games_to_fetch), batch_size):
             batch = games_to_fetch[i : i + batch_size]
             tasks = [fetch_game_with_progress(app_id) for app_id in batch]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Collect successful results
+            batch_data = {}
+            for res in results:
+                if isinstance(res, tuple):
+                    batch_data[res[0]] = res[1]
+
+            # Write batch to DB
+            self.batch_write_games(batch_data)
 
         games_progress_iterator_tqdm.close()
         return total_cached
@@ -783,58 +819,71 @@ class DatabasePopulator:
 
         print(f"   🎯 Found {len(games_to_fetch)} new games to cache")
 
+        # Setup progress bar if available
+        pbar = None
         if TQDM_AVAILABLE:
-            games_iterator = tqdm(
-                games_to_fetch, desc="🎯 Wishlist Games", unit="game", leave=True
+            pbar = tqdm(
+                total=len(games_to_fetch),
+                desc="🎯 Wishlist Games",
+                unit="game",
+                leave=True,
             )
-        else:
-            games_iterator = games_to_fetch
 
-        for i, app_id in enumerate(games_iterator):
-            try:
-                game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+        # Process in batches for concurrency
+        batch_size = 10
 
-                response = await self.make_request_with_retry(
-                    game_url, api_type="store"
-                )
-                if response is None:
-                    continue
+        for i in range(0, len(games_to_fetch), batch_size):
+            batch = games_to_fetch[i : i + batch_size]
+            batch_data = {}
 
-                game_info = self.handle_api_response(f"AppDetails ({app_id})", response)
-                if not game_info:
-                    continue
-
-                game_data = game_info.get(str(app_id), {}).get("data")
-                if not game_data:
-                    # Try to get basic game info using Steam Web API as fallback
-                    fallback_data = await self.get_fallback_game_info(app_id)
-                    if fallback_data:
-                        cache_game_details(app_id, fallback_data, permanent=True)
-                        total_cached += 1
-                    continue
-
-                # Cache the full game details
-                cache_game_details(app_id, game_data, permanent=True)
-                total_cached += 1
-
-                # Progress update for non-tqdm mode
-                if not TQDM_AVAILABLE and (i + 1) % 10 == 0:
-                    print(
-                        f"   📈 Progress: {i + 1}/{len(games_to_fetch)} games processed"
+            async def fetch_wishlist_item(app_id):
+                try:
+                    game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                    response = await self.make_request_with_retry(
+                        game_url, api_type="store"
                     )
 
-            except (
-                httpx.RequestError,
-                httpx.TimeoutException,
-                httpx.HTTPStatusError,
-                ValueError,
-                TypeError,
-                KeyError,
-                asyncio.TimeoutError,
-            ) as e:
-                if not TQDM_AVAILABLE:
-                    print(f"   ⚠️  Error processing game {app_id}: {e}")
-                continue
+                    if response:
+                        game_info = self.handle_api_response(
+                            f"AppDetails ({app_id})", response
+                        )
+                        if game_info:
+                            game_data = game_info.get(str(app_id), {}).get("data")
+                            if game_data:
+                                return (app_id, game_data)
+
+                            # Fallback
+                            fallback_data = await self.get_fallback_game_info(app_id)
+                            if fallback_data:
+                                return (app_id, fallback_data)
+                    return None
+                except Exception as e:
+                    if not TQDM_AVAILABLE:
+                        print(f"   ⚠️  Error processing game {app_id}: {e}")
+                    return None
+
+            # Run batch concurrently
+            tasks = [fetch_wishlist_item(app_id) for app_id in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for res in results:
+                if isinstance(res, tuple):
+                    batch_data[res[0]] = res[1]
+                    total_cached += 1
+
+            # Write batch
+            self.batch_write_games(batch_data)
+
+            # Update progress
+            if pbar:
+                pbar.update(len(batch))
+            elif not TQDM_AVAILABLE:
+                print(
+                    f"   📈 Progress: {min(i + batch_size, len(games_to_fetch))}/{len(games_to_fetch)} games processed"
+                )
+
+        if pbar:
+            pbar.close()
 
         print("\n🎯 Wishlist population complete!")
         print(f"   💾 All wishlist games cached: {total_cached}")

@@ -236,11 +236,11 @@ async def run_application():
     """Runs the Discord bot and optionally the Web UI."""
     # Initialize the database
     try:
-        init_db()
+        await asyncio.to_thread(init_db)
         logger.info("Database initialized successfully.")
 
         # Synchronize family members from config.yml to the database
-        sync_family_members_from_config()
+        await asyncio.to_thread(sync_family_members_from_config)
         logger.info("Family members synchronized from config.yml.")
     except sqlite3.Error as e:
         logger.critical(

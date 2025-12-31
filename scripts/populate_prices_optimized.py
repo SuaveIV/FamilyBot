@@ -299,7 +299,7 @@ class OptimizedPricePopulator:
 
     def fetch_steam_price_batch(
         self, app_ids: List[str]
-    ) -> List[Tuple[str, bool, str]]:
+    ) -> List[Tuple[str, bool, dict, str]]:
         """Fetch Steam prices for a batch of games concurrently."""
         results = []
 
@@ -318,12 +318,12 @@ class OptimizedPricePopulator:
                     results.append(result)
                 except Exception as e:
                     logger.error("Error fetching Steam price for %s: %s", app_id, e)
-                    results.append((app_id, False, "error"))
+                    results.append((app_id, False, {}, "error"))
 
         return results
 
-    def fetch_steam_price_single(self, app_id: str) -> Tuple[str, bool, str]:
-        """Fetch Steam price for a single game with multiple strategies."""
+    def fetch_steam_price_single(self, app_id: str) -> Tuple[str, bool, dict, str]:
+        """Fetch Steam price for a single game with multiple strategies. Returns data instead of writing."""
 
         # Strategy 1: Steam Store API
         try:
@@ -337,10 +337,7 @@ class OptimizedPricePopulator:
                     f"Steam Store ({app_id})", response
                 )
                 if game_info and game_info.get(str(app_id), {}).get("data"):
-                    cache_game_details(
-                        app_id, game_info[str(app_id)]["data"], permanent=True
-                    )
-                    return app_id, True, "store_api"
+                    return app_id, True, game_info[str(app_id)]["data"], "store_api"
         except Exception as e:
             logger.debug("Steam Store API failed for %s: %s", app_id, e)
 
@@ -359,16 +356,15 @@ class OptimizedPricePopulator:
                                 "categories": [],
                                 "price_overview": None,
                             }
-                            cache_game_details_with_source(
-                                app_id, game_data, "steam_library"
-                            )
-                            return app_id, True, "steam_library"
+                            return app_id, True, game_data, "steam_library"
             except Exception as e:
                 logger.debug("Steam WebAPI failed for %s: %s", app_id, e)
 
-        return app_id, False, "failed"
+        return app_id, False, {}, "failed"
 
-    def fetch_itad_price_batch(self, app_ids: List[str]) -> List[Tuple[str, str]]:
+    def fetch_itad_price_batch(
+        self, app_ids: List[str]
+    ) -> List[Tuple[str, str, dict, str]]:
         """Fetch ITAD prices for a batch of games concurrently."""
         results = []
 
@@ -387,12 +383,12 @@ class OptimizedPricePopulator:
                     results.append(result)
                 except Exception as e:
                     logger.error("Error fetching ITAD price for %s: %s", app_id, e)
-                    results.append((app_id, "error"))
+                    results.append((app_id, "error", {}, "failed"))
 
         return results
 
-    def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str]:
-        """Fetch ITAD price for a single game with multiple strategies."""
+    def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str, dict, str]:
+        """Fetch ITAD price for a single game with multiple strategies. Returns data instead of writing."""
 
         # Strategy 1: ITAD App ID lookup
         try:
@@ -431,17 +427,12 @@ class OptimizedPricePopulator:
                             )
 
                             if price_amount is not None:
-                                cache_itad_price_enhanced(
-                                    app_id,
-                                    {
-                                        "lowest_price": str(price_amount),
-                                        "lowest_price_formatted": f"${price_amount}",
-                                        "shop_name": shop_name,
-                                    },
-                                    lookup_method="appid",
-                                    permanent=True,
-                                )
-                                return app_id, "cached"
+                                price_data = {
+                                    "lowest_price": str(price_amount),
+                                    "lowest_price_formatted": f"${price_amount}",
+                                    "shop_name": shop_name,
+                                }
+                                return app_id, "cached", price_data, "appid"
         except Exception as e:
             logger.debug("ITAD App ID lookup failed for %s: %s", app_id, e)
 
@@ -493,22 +484,127 @@ class OptimizedPricePopulator:
                                     )
 
                                     if price_amount is not None:
-                                        cache_itad_price_enhanced(
+                                        price_data = {
+                                            "lowest_price": str(price_amount),
+                                            "lowest_price_formatted": f"${price_amount}",
+                                            "shop_name": shop_name,
+                                        }
+                                        return (
                                             app_id,
-                                            {
-                                                "lowest_price": str(price_amount),
-                                                "lowest_price_formatted": f"${price_amount}",
-                                                "shop_name": shop_name,
-                                            },
-                                            lookup_method="name_search",
-                                            steam_game_name=game_name,
-                                            permanent=True,
+                                            "cached",
+                                            price_data,
+                                            "name_search",
                                         )
-                                        return app_id, "cached"
         except Exception as e:
             logger.debug("ITAD name search failed for %s: %s", app_id, e)
 
-        return app_id, "not_found"
+        return app_id, "not_found", {}, "failed"
+
+    def batch_write_steam_data(
+        self, steam_data: Dict[str, Dict], batch_size: int = 100
+    ) -> int:
+        """Write Steam data to database in safe batches with proper error handling."""
+        if not steam_data:
+            return 0
+
+        written_count = 0
+        items = list(steam_data.items())
+
+        for i in range(0, len(items), batch_size):
+            batch = items[i : i + batch_size]
+
+            conn = get_db_connection()
+            try:
+                conn.execute("BEGIN TRANSACTION")
+                for app_id, game_info in batch:
+                    game_data = game_info["data"]
+                    source = game_info["source"]
+
+                    if source == "steam_library":
+                        cache_game_details_with_source(
+                            app_id, game_data, source, conn=conn
+                        )
+                    else:
+                        cache_game_details(app_id, game_data, permanent=True, conn=conn)
+
+                    written_count += 1
+
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to write Steam batch: {e}")
+                # Try individual records to salvage what we can
+                for app_id, game_info in batch:
+                    try:
+                        game_data = game_info["data"]
+                        source = game_info["source"]
+                        if source == "steam_library":
+                            cache_game_details_with_source(app_id, game_data, source)
+                        else:
+                            cache_game_details(app_id, game_data, permanent=True)
+                        written_count += 1
+                    except Exception:
+                        pass
+            finally:
+                conn.close()
+
+        return written_count
+
+    def batch_write_itad_data(
+        self, itad_data: Dict[str, Dict], batch_size: int = 100
+    ) -> int:
+        """Write ITAD data to database in safe batches with proper error handling."""
+        if not itad_data:
+            return 0
+
+        written_count = 0
+        items = list(itad_data.items())
+
+        for i in range(0, len(items), batch_size):
+            batch = items[i : i + batch_size]
+
+            conn = get_db_connection()
+            try:
+                conn.execute("BEGIN TRANSACTION")
+                for app_id, price_info in batch:
+                    price_data = price_info["data"]
+                    lookup_method = price_info["method"]
+                    game_name = price_info.get("game_name")
+
+                    cache_itad_price_enhanced(
+                        app_id,
+                        price_data,
+                        lookup_method=lookup_method,
+                        steam_game_name=game_name,
+                        permanent=True,
+                        conn=conn,
+                    )
+                    written_count += 1
+
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to write ITAD batch: {e}")
+                # Try individual records
+                for app_id, price_info in batch:
+                    try:
+                        price_data = price_info["data"]
+                        lookup_method = price_info["method"]
+                        game_name = price_info.get("game_name")
+                        cache_itad_price_enhanced(
+                            app_id,
+                            price_data,
+                            lookup_method=lookup_method,
+                            steam_game_name=game_name,
+                            permanent=True,
+                        )
+                        written_count += 1
+                    except Exception:
+                        pass
+            finally:
+                conn.close()
+
+        return written_count
 
     def populate_steam_prices(
         self,
@@ -563,10 +659,11 @@ class OptimizedPricePopulator:
 
         for batch in batches:
             results = self.fetch_steam_price_batch(batch)
+            batch_data = {}
 
-            for app_id, success, source in results:
+            for app_id, success, data, source in results:
                 if success:
-                    steam_prices_cached += 1
+                    batch_data[app_id] = {"data": data, "source": source}
                 else:
                     steam_errors += 1
 
@@ -581,6 +678,9 @@ class OptimizedPricePopulator:
                         print(
                             f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {steam_prices_cached} | Errors: {steam_errors}"
                         )
+
+            # Write batch to database
+            steam_prices_cached += self.batch_write_steam_data(batch_data)
 
         if TQDM_AVAILABLE:
             progress_bar.close()
@@ -644,10 +744,23 @@ class OptimizedPricePopulator:
 
         for batch in batches:
             results = self.fetch_itad_price_batch(batch)
+            batch_data = {}
 
-            for app_id, status in results:
+            for app_id, status, data, method in results:
                 if status == "cached":
-                    itad_prices_cached += 1
+                    # Get game name for name_search method
+                    game_name = None
+                    if method == "name_search":
+                        cached_details = get_cached_game_details(app_id)
+                        game_name = (
+                            cached_details.get("name") if cached_details else None
+                        )
+
+                    batch_data[app_id] = {
+                        "data": data,
+                        "method": method,
+                        "game_name": game_name,
+                    }
                 elif status == "not_found":
                     itad_not_found += 1
                 elif status == "error":
@@ -664,6 +777,9 @@ class OptimizedPricePopulator:
                         print(
                             f"   📈 Progress: {processed}/{len(games_to_process)} | Cached: {itad_prices_cached} | Not Found: {itad_not_found} | Errors: {itad_errors}"
                         )
+
+            # Write batch to database
+            itad_prices_cached += self.batch_write_itad_data(batch_data)
 
         if TQDM_AVAILABLE:
             progress_bar.close()

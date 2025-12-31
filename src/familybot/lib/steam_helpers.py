@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from familybot.config import ADMIN_DISCORD_ID
@@ -36,7 +37,7 @@ async def fetch_game_details(
     """
     try:
         # Get cached game details first
-        cached_game = get_cached_game_details(app_id)
+        cached_game = await asyncio.to_thread(get_cached_game_details, app_id)
         if cached_game:
             return cached_game
 
@@ -59,7 +60,7 @@ async def fetch_game_details(
             return None
 
         # Cache the game details
-        cache_game_details(app_id, game_data, permanent=True)
+        await asyncio.to_thread(cache_game_details, app_id, game_data, permanent=True)
         return game_data
 
     except Exception as e:
@@ -96,7 +97,7 @@ async def process_game_deal(
         original_price = price_overview.get("initial_formatted", current_price)
 
         # Get historical low price
-        lowest_price = get_lowest_price(int(app_id))
+        lowest_price = await asyncio.to_thread(get_lowest_price, int(app_id))
 
         # Determine if this is a good deal
         is_good_deal = False
