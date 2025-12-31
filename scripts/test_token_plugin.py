@@ -47,7 +47,9 @@ class TokenTester:
         )
         # Create a temporary directory for test token storage
         self.test_token_save_dir = tempfile.mkdtemp()
-        print(f"Created temporary directory for test tokens: {self.test_token_save_dir}")
+        print(
+            f"Created temporary directory for test tokens: {self.test_token_save_dir}"
+        )
 
     def __del__(self):
         # Clean up the temporary directory when the object is deleted
@@ -114,7 +116,8 @@ class TokenTester:
                     await page.route(
                         "**/*",
                         lambda route: route.abort()
-                        if route.request.resource_type in ["image", "stylesheet", "font", "media"]
+                        if route.request.resource_type
+                        in ["image", "stylesheet", "font", "media"]
                         else route.continue_(),
                     )
 
@@ -289,13 +292,15 @@ class TokenTester:
             if os.path.exists(live_token_path):
                 with open(live_token_path, "r") as f:
                     live_token = f.read().strip()
-                
+
                 print("\n🔍 Comparing with live bot token...")
                 if live_token == token:
                     print("✅ Live token matches the newly fetched token.")
                 else:
                     print("⚠️  Live token differs from the newly fetched token.")
-                    print("   (This is normal if the live token is older but still valid,")
+                    print(
+                        "   (This is normal if the live token is older but still valid,"
+                    )
                     print("    or if the live token has expired and needs a refresh.)")
             else:
                 print("\nℹ️  No live token found to compare with.")

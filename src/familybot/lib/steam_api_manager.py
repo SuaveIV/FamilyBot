@@ -9,12 +9,17 @@ from familybot.lib.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
 class SteamAPIManager:
     # --- RATE LIMITING CONSTANTS ---
     MAX_WISHLIST_GAMES_TO_PROCESS = 100  # Limit appdetails calls to 100 games per run
     STEAM_API_RATE_LIMIT = 3.0  # Minimum seconds between Steam API calls (e.g., GetOwnedGames, GetFamilySharedApps)
-    STEAM_STORE_API_RATE_LIMIT = 2.0  # Minimum seconds between Steam Store API calls (e.g., appdetails)
-    FULL_SCAN_RATE_LIMIT = 5.0  # Minimum seconds between Steam Store API calls for full wishlist scans
+    STEAM_STORE_API_RATE_LIMIT = (
+        2.0  # Minimum seconds between Steam Store API calls (e.g., appdetails)
+    )
+    FULL_SCAN_RATE_LIMIT = (
+        5.0  # Minimum seconds between Steam Store API calls for full wishlist scans
+    )
 
     def __init__(self):
         self.steam_api = (

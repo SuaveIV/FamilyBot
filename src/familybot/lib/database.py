@@ -1078,8 +1078,10 @@ def migrate_database_phase2():
         if conn:
             conn.close()
 
+
 # --- Migration Flag for Family Members ---
 _family_members_migrated_this_run = False
+
 
 def load_family_members_from_db() -> dict:
     """
@@ -1156,6 +1158,7 @@ def load_family_members_from_db() -> dict:
         if conn:
             conn.close()
     return members
+
 
 def load_all_registered_users_from_db() -> dict:
     """Loads all registered users (discord_id: steam_id) from the database."""

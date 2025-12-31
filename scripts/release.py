@@ -160,7 +160,7 @@ def main():
         gh_release_command.extend(["--notes-file", args.notes_file])
     else:
         gh_release_command.append("--generate-notes")
-    
+
     run_command(gh_release_command)
 
     print(f"OK: Successfully created and published release {tag_name}!")

@@ -426,7 +426,9 @@ class OptimizedPricePopulator:
                         ):
                             history_low = prices_data[0]["historyLow"].get("all", {})
                             price_amount = history_low.get("amount")
-                            shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
+                            shop_name = history_low.get("shop", {}).get(
+                                "name", "Historical Low (All Stores)"
+                            )
 
                             if price_amount is not None:
                                 cache_itad_price_enhanced(
@@ -482,9 +484,13 @@ class OptimizedPricePopulator:
                                     and len(prices_data) > 0
                                     and "historyLow" in prices_data[0]
                                 ):
-                                    history_low = prices_data[0]["historyLow"].get("all", {})
+                                    history_low = prices_data[0]["historyLow"].get(
+                                        "all", {}
+                                    )
                                     price_amount = history_low.get("amount")
-                                    shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
+                                    shop_name = history_low.get("shop", {}).get(
+                                        "name", "Historical Low (All Stores)"
+                                    )
 
                                     if price_amount is not None:
                                         cache_itad_price_enhanced(

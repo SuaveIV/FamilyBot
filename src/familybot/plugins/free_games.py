@@ -149,7 +149,9 @@ class FreeGames(Extension):
                         bsky_url, headers=headers, timeout=timeout_seconds
                     ) as response:
                         if response.status != 200:
-                            logger.warning("Bluesky API returned status %s", response.status)
+                            logger.warning(
+                                "Bluesky API returned status %s", response.status
+                            )
                             # If it's a 5xx error, maybe retry. If 4xx, probably don't.
                             if 500 <= response.status < 600:
                                 if attempt < max_retries - 1:
@@ -228,9 +230,7 @@ class FreeGames(Extension):
                         "url": post.get("url"),  # The URL the post links to
                     }
         except Exception as e:
-            logger.error(
-                "Error fetching Reddit post details for %s: %s", final_url, e
-            )
+            logger.error("Error fetching Reddit post details for %s: %s", final_url, e)
             return None
 
     def _extract_game_details_from_post(self, post_item: dict) -> dict | None:
@@ -381,10 +381,12 @@ class FreeGames(Extension):
 
                     # Re-check the new domain from Reddit against exclusions
                     if any(
-                        excluded_domain in domain for excluded_domain in excluded_domains
+                        excluded_domain in domain
+                        for excluded_domain in excluded_domains
                     ):
                         logger.info(
-                            "Skipping Reddit post linking to excluded domain: %s", domain
+                            "Skipping Reddit post linking to excluded domain: %s",
+                            domain,
                         )
                         return False
 

@@ -379,10 +379,14 @@ class AsyncPricePopulator:
                                 and len(prices_data) > 0
                                 and "historyLow" in prices_data[0]
                             ):
-                                history_low = prices_data[0]["historyLow"].get("all", {})
+                                history_low = prices_data[0]["historyLow"].get(
+                                    "all", {}
+                                )
                                 price_amount = history_low.get("amount")
-                                shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
-                                
+                                shop_name = history_low.get("shop", {}).get(
+                                    "name", "Historical Low (All Stores)"
+                                )
+
                                 if price_amount is not None:
                                     price_data = {
                                         "lowest_price": str(price_amount),
@@ -432,9 +436,13 @@ class AsyncPricePopulator:
                                         and len(prices_data) > 0
                                         and "historyLow" in prices_data[0]
                                     ):
-                                        history_low = prices_data[0]["historyLow"].get("all", {})
+                                        history_low = prices_data[0]["historyLow"].get(
+                                            "all", {}
+                                        )
                                         price_amount = history_low.get("amount")
-                                        shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
+                                        shop_name = history_low.get("shop", {}).get(
+                                            "name", "Historical Low (All Stores)"
+                                        )
 
                                         if price_amount is not None:
                                             price_data = {
@@ -476,7 +484,9 @@ class AsyncPricePopulator:
                     source = game_info["source"]
 
                     if source == "steam_library":
-                        cache_game_details_with_source(app_id, game_data, source, conn=conn)
+                        cache_game_details_with_source(
+                            app_id, game_data, source, conn=conn
+                        )
                     else:
                         cache_game_details(app_id, game_data, permanent=True, conn=conn)
 

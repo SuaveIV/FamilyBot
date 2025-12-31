@@ -46,7 +46,7 @@ async def get_token_with_playwright() -> str:
         if BROWSER_PROFILE_PATH
         else None
     )
-    
+
     if not profile_path or not os.path.exists(profile_path):
         logger.error(f"Browser profile not found at {profile_path}")
         logger.error("Run 'uv run python scripts/setup_browser.py' first.")
@@ -97,26 +97,28 @@ async def get_token_with_playwright() -> str:
                 pass
 
             # Extract
-            start_marker = '"webapi_token":"' # Corrected escaping for the string literal
-            end_marker = '"}' # Corrected escaping for the string literal
-            
+            start_marker = (
+                '"webapi_token":"'  # Corrected escaping for the string literal
+            )
+            end_marker = '"}'  # Corrected escaping for the string literal
+
             start_idx = content.find(start_marker)
             if start_idx == -1:
                 logger.error("Could not find webapi_token. Are you logged in?")
                 return ""
-                
+
             key_start = start_idx + len(start_marker)
             key_end = content.find(end_marker, key_start)
-            
+
             if key_end == -1:
                 logger.error("Could not find end of webapi_token")
                 return ""
-                
+
             token = content[key_start:key_end]
             if not token:
                 logger.error("Extracted token is empty")
                 return ""
-                
+
             logger.info(f"Token extracted successfully (starts with {token[:5]}...)")
             return token
 
@@ -130,31 +132,31 @@ async def get_token_with_playwright() -> str:
 def save_token(token: str) -> bool:
     """Save the token and its expiration to the live tokens directory."""
     token_save_dir = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
-    
+
     try:
         os.makedirs(token_save_dir, exist_ok=True)
-        
+
         # 1. Save Token
         token_path = os.path.join(token_save_dir, "token")
         with open(token_path, "w") as f:
             f.write(token)
-            
+
         # 2. Decode & Save Expiry
         coded_string = token.split(".")[1]
         padded = coded_string.replace("-", "+").replace("_", "/")
         padded += "=" * (-len(padded) % 4)
-        
+
         key_info = json.loads(base64.b64decode(padded).decode("utf-8"))
         exp_ts = key_info["exp"]
-        
+
         exp_path = os.path.join(token_save_dir, "token_exp")
         with open(exp_path, "w") as f:
             f.write(str(exp_ts))
-            
+
         exp_dt = datetime.fromtimestamp(exp_ts)
         logger.info(f"✅ Token updated! Expires at: {exp_dt}")
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to save token: {e}")
         return False
@@ -166,7 +168,7 @@ async def main():
         if save_token(token):
             print("\n🎉 Token force update completed successfully.")
             sys.exit(0)
-    
+
     print("\n❌ Token update failed.")
     sys.exit(1)
 

@@ -42,7 +42,9 @@ async def fetch_game_details(
 
         # If not cached, fetch from API with enhanced retry logic
         await steam_api_manager.rate_limit_steam_store_api()
-        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+        game_url = (
+            f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+        )
         app_info_response = await steam_api_manager.make_request_with_retry(game_url)
 
         if app_info_response is None:
@@ -111,7 +113,9 @@ async def process_game_deal(
                 if current_price_num <= lowest_price_num * historical_low_buffer:
                     is_good_deal = True
                     if historical_low_buffer > 1.1:
-                        deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
+                        deal_reason = (
+                            f"💎 **Near Historical Low** ({discount_percent}% off)"
+                        )
                     else:
                         deal_reason = f"💎 **Historical Low** ({discount_percent}% off)"
             except (ValueError, TypeError):

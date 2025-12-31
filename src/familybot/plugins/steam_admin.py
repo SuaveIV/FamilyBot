@@ -26,6 +26,7 @@ from familybot.lib.steam_helpers import send_admin_dm
 
 logger = get_logger(__name__)
 
+
 class steam_admin(Extension):
     def __init__(self, bot: FamilyBotClient):
         self.bot: FamilyBotClient = bot
@@ -204,8 +205,9 @@ class steam_admin(Extension):
                         logger.error(
                             f"Force deals: Error fetching wishlist for {user_name_for_log}: {e}"
                         )
-                        await send_admin_dm(self.bot,
-                            f"Force deals wishlist error for {user_name_for_log}: {e}"
+                        await send_admin_dm(
+                            self.bot,
+                            f"Force deals wishlist error for {user_name_for_log}: {e}",
                         )
                         continue
 
@@ -244,8 +246,10 @@ class steam_admin(Extension):
                         # If not cached, fetch from API with enhanced retry logic
                         await self.steam_api_manager.rate_limit_steam_store_api()
                         game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        app_info_response = await self.steam_api_manager.make_request_with_retry(
-                            game_url
+                        app_info_response = (
+                            await self.steam_api_manager.make_request_with_retry(
+                                game_url
+                            )
                         )
                         if app_info_response is None:
                             continue
@@ -388,7 +392,9 @@ class steam_admin(Extension):
                     await ctx.send(
                         f"❌ **Error posting deals to channel or sending DM:** {e}"
                     )
-                    await send_admin_dm(self.bot, f"Force deals channel or DM error: {e}")
+                    await send_admin_dm(
+                        self.bot, f"Force deals channel or DM error: {e}"
+                    )
             else:
                 await ctx.send(
                     f"📊 **Force deals complete!** No significant deals found among {games_checked} games checked."
@@ -563,8 +569,8 @@ class steam_admin(Extension):
                         f"Force deals unlimited: Error posting to wishlist channel: {e}"
                     )
                     await ctx.send(f"❌ **Error posting deals to channel:** {e}")
-                    await send_admin_dm(self.bot,
-                        f"Force deals unlimited channel error: {e}"
+                    await send_admin_dm(
+                        self.bot, f"Force deals unlimited channel error: {e}"
                     )
             else:
                 await ctx.send(
@@ -885,8 +891,8 @@ class steam_admin(Extension):
                         f"Full scan: Error fetching/processing {user_name_for_log}'s wishlist: {e}",
                         exc_info=True,
                     )
-                    await send_admin_dm(self.bot,
-                        f"Full scan error for {user_name_for_log}: {e}"
+                    await send_admin_dm(
+                        self.bot, f"Full scan error for {user_name_for_log}: {e}"
                     )
 
             # Step 2: Collect ALL duplicate games (no limit)
@@ -1066,6 +1072,7 @@ class steam_admin(Extension):
             )
             await ctx.send(f"❌ **Critical error during full scan:** {e}")
             await send_admin_dm(self.bot, f"Full scan critical error: {e}")
+
 
 def setup(bot):
     steam_admin(bot)

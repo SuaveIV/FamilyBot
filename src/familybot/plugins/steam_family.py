@@ -190,7 +190,9 @@ class steam_family(Extension):
                         content="Steam API key not configured. Cannot fetch family games."
                     )
                     return
-                await self.steam_api_manager.rate_limit_steam_api()  # Apply rate limit before API call
+                await (
+                    self.steam_api_manager.rate_limit_steam_api()
+                )  # Apply rate limit before API call
                 try:
                     # Corrected method name based on Steam Web API documentation
                     games_json = self.steam_api.call(

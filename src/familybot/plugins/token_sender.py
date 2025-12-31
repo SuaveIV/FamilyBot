@@ -114,7 +114,8 @@ class token_sender(Extension):
                 await page.route(
                     "**/*",
                     lambda route: route.abort()
-                    if route.request.resource_type in ["image", "stylesheet", "font", "media"]
+                    if route.request.resource_type
+                    in ["image", "stylesheet", "font", "media"]
                     else route.continue_(),
                 )
 

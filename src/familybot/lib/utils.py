@@ -63,9 +63,11 @@ def get_lowest_price(steam_app_id: int) -> str:
         ):
             history_low = answer_prices[0]["historyLow"].get("all", {})
             price_amount = history_low.get("amount")
-            
+
             # v3 historyLow usually contains shop info
-            shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
+            shop_name = history_low.get("shop", {}).get(
+                "name", "Historical Low (All Stores)"
+            )
 
             if price_amount is not None:
                 # Cache the price data permanently (historical lowest price)
@@ -83,7 +85,7 @@ def get_lowest_price(steam_app_id: int) -> str:
                     f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}"
                 )
                 return str(price_amount)
-        
+
         logger.info(
             f"No historical lowest price found for Steam App ID {steam_app_id}."
         )
@@ -93,14 +95,10 @@ def get_lowest_price(steam_app_id: int) -> str:
         logger.error(f"Request error fetching ITAD data for {steam_app_id}: {e}")
         return "N/A"
     except json.JSONDecodeError as e:
-        logger.error(
-            f"JSON decode error for ITAD data {steam_app_id}: {e}."
-        )
+        logger.error(f"JSON decode error for ITAD data {steam_app_id}: {e}.")
         return "N/A"
     except KeyError as e:
-        logger.error(
-            f"Missing key in ITAD response for {steam_app_id}: {e}."
-        )
+        logger.error(f"Missing key in ITAD response for {steam_app_id}: {e}.")
         return "N/A"
     except Exception as e:
         logger.critical(

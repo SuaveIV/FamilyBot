@@ -10,6 +10,7 @@ from familybot.lib.steam_helpers import send_admin_dm
 
 logger = get_logger(__name__)
 
+
 class steam_tasks(Extension):
     def __init__(self, bot: FamilyBotClient):
         self.bot: FamilyBotClient = bot
@@ -63,6 +64,7 @@ class steam_tasks(Extension):
         self.new_game_task.start()
         self.wishlist_task.start()
         logger.info("--Steam Family background tasks started")
+
 
 def setup(bot):
     steam_tasks(bot)
