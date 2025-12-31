@@ -409,7 +409,7 @@ class OptimizedPricePopulator:
 
                 if game_id:
                     # Get price data
-                    prices_url = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
+                    prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
                     prices_response = self.make_request_with_retry(
                         prices_url, method="POST", json_data=[game_id], api_type="itad"
                     )
@@ -422,11 +422,11 @@ class OptimizedPricePopulator:
                         if (
                             prices_data
                             and len(prices_data) > 0
-                            and "price" in prices_data[0]
+                            and "historyLow" in prices_data[0]
                         ):
-                            price_info = prices_data[0]["price"]
-                            price_amount = price_info.get("amount")
-                            shop_name = prices_data[0].get("shop", {}).get("name", "Unknown Store")
+                            history_low = prices_data[0]["historyLow"].get("all", {})
+                            price_amount = history_low.get("amount")
+                            shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
 
                             if price_amount is not None:
                                 cache_itad_price_enhanced(
@@ -464,7 +464,7 @@ class OptimizedPricePopulator:
                         game_id = search_data[0].get("id")
                         if game_id:
                             # Get price data
-                            prices_url = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
+                            prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
                             prices_response = self.make_request_with_retry(
                                 prices_url,
                                 method="POST",
@@ -480,11 +480,11 @@ class OptimizedPricePopulator:
                                 if (
                                     prices_data
                                     and len(prices_data) > 0
-                                    and "price" in prices_data[0]
+                                    and "historyLow" in prices_data[0]
                                 ):
-                                    price_info = prices_data[0]["price"]
-                                    price_amount = price_info.get("amount")
-                                    shop_name = prices_data[0].get("shop", {}).get("name", "Unknown Store")
+                                    history_low = prices_data[0]["historyLow"].get("all", {})
+                                    price_amount = history_low.get("amount")
+                                    shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
 
                                     if price_amount is not None:
                                         cache_itad_price_enhanced(

@@ -49,25 +49,23 @@ def get_lowest_price(steam_app_id: int) -> str:
             )
             return "N/A"
 
-        # Use the historical low endpoint (lowest/v2) instead of current store low (storelow/v2)
-        url_lowest = f"https://api.isthereanydeal.com/games/lowest/v2?key={ITAD_API_KEY}&country=US"
+        # Use the prices/v3 endpoint for comprehensive price data including historical lows
+        url_prices = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
         data = [game_id]
-        lowest_response = requests.post(url_lowest, json=data, timeout=5)
-        lowest_response.raise_for_status()
-        answer_lowest = json.loads(lowest_response.text)
+        prices_response = requests.post(url_prices, json=data, timeout=5)
+        prices_response.raise_for_status()
+        answer_prices = json.loads(prices_response.text)
 
         if (
-            answer_lowest
-            and len(answer_lowest) > 0
-            and "price" in answer_lowest[0]
+            answer_prices
+            and len(answer_prices) > 0
+            and "historyLow" in answer_prices[0]
         ):
-            price_data = answer_lowest[0]["price"]
-            price_amount = price_data.get("amount")
+            history_low = answer_prices[0]["historyLow"].get("all", {})
+            price_amount = history_low.get("amount")
             
-            # Note: lowest/v2 might not return 'shop' info in the same structure or at all if it's an aggregate.
-            # We will attempt to extract shop if available or default to 'Unknown'.
-            # Based on typical ITAD v2 responses, historical low often includes shop info.
-            shop_name = answer_lowest[0].get("shop", {}).get("name", "Unknown Store")
+            # v3 historyLow usually contains shop info
+            shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
 
             if price_amount is not None:
                 # Cache the price data permanently (historical lowest price)
