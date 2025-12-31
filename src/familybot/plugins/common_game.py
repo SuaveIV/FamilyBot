@@ -3,7 +3,6 @@
 import json
 import os
 import sqlite3  # Import sqlite3 for specific error handling
-from typing import cast
 
 import requests
 from interactions import Extension, IntervalTrigger, Task, listen
@@ -21,7 +20,7 @@ from familybot.lib.database import (
     get_db_connection,
 )
 from familybot.lib.logging_config import get_logger
-from familybot.lib.types import FamilyBotClient, FamilyBotClientProtocol
+from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import get_common_elements_in_lists, truncate_message_list
 
 # Setup enhanced logging for this specific module
@@ -74,9 +73,7 @@ def _migrate_users_to_db(conn: sqlite3.Connection):
 
 class common_games(Extension):
     def __init__(self, bot: FamilyBotClient):
-        self.bot: FamilyBotClientProtocol = cast(
-            FamilyBotClientProtocol, bot
-        )  # Cast to protocol for type checking
+        self.bot: FamilyBotClient = bot
         logger.info("common Games Plugin loaded")
 
     async def _send_admin_dm(self, message: str) -> None:

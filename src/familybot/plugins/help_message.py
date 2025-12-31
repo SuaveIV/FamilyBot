@@ -1,13 +1,13 @@
 # In src/familybot/plugins/help_message.py
 
 # Explicitly import what's needed from interactions
+import asyncio
 import os
-from datetime import datetime  # For admin DM timestamp
 from string import Template
 
 from interactions import Extension, listen
 
-from familybot.config import ADMIN_DISCORD_ID, HELP_CHANNEL_ID, PLUGIN_PATH
+from familybot.config import HELP_CHANNEL_ID, PLUGIN_PATH
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import truncate_message_list
@@ -23,46 +23,8 @@ class help_message(Extension):
         )
         logger.info("Help Message Plugin loaded")
 
-    async def _send_admin_dm(self, message: str) -> None:
-        """Helper to send error/warning messages to the bot admin via DM."""
-        try:
-            admin_user = await self.bot.fetch_user(ADMIN_DISCORD_ID)
-            if admin_user:
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                await admin_user.send(
-                    f"Help Message Plugin Error ({now_str}): {message}"
-                )
-        except Exception as e:
-            logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
-
-    async def write_help(self):
-        """Generates, sends, and pins/edits the help message in the designated channel."""
-        help_channel = None
-        try:
-            help_channel = await self.bot.fetch_channel(HELP_CHANNEL_ID)
-            if not help_channel:
-                logger.error(
-                    f"Help channel not found for ID: {HELP_CHANNEL_ID}. Check config.yml."
-                )
-                await self._send_admin_dm(
-                    f"Help channel not found for ID: {HELP_CHANNEL_ID}."
-                )
-                return
-        except Exception as e:
-            logger.error(f"Error fetching help channel (ID: {HELP_CHANNEL_ID}): {e}")
-            await self._send_admin_dm(f"Error fetching help channel: {e}")
-            return
-
-        pinned_messages = []
-        try:
-            if hasattr(help_channel, "fetch_pinned_messages"):
-                pinned_messages = await help_channel.fetch_pinned_messages()  # type: ignore
-        except Exception as e:
-            logger.error(
-                f"Error fetching pinned messages from channel {HELP_CHANNEL_ID}: {e}"
-            )
-            await self._send_admin_dm(f"Error fetching pinned messages: {e}")
-
+    def _generate_command_sections(self) -> list[str]:
+        """Parses plugin files for help strings and generates formatted markdown sections. This is a blocking I/O function."""
         header = "# __🤖 Bot Command Usage__ \n"
         command_template = Template("""
 ### `${name}`
@@ -70,7 +32,6 @@ class help_message(Extension):
 **Usage:** `${usage}`
 *${comment}*
 """)
-
         plugin_files = []
         try:
             plugin_files = os.listdir(PLUGIN_PATH)
@@ -78,22 +39,21 @@ class help_message(Extension):
                 logger.warning(
                     f"No plugin files found in {PLUGIN_PATH}. Help message will be empty."
                 )
+                return [header]
         except FileNotFoundError:
             logger.error(
                 f"Plugin directory not found: {PLUGIN_PATH}. Cannot generate help message."
             )
-            await self._send_admin_dm(f"Plugin directory not found: {PLUGIN_PATH}")
-            return
+            # This error is critical, so we'll let it propagate to the on_startup handler
+            raise
         except Exception as e:
             logger.error(f"Error listing plugin directory {PLUGIN_PATH}: {e}")
-            await self._send_admin_dm(f"Error listing plugin directory: {e}")
-            return
+            raise
 
         plugin_files.sort()  # Sort plugin files for consistent help message order
 
         # Build command sections as separate items for better truncation control
         command_sections = []
-
         for file_name in plugin_files:
             if file_name.endswith(".py") and not file_name.startswith("__"):
                 file_path = os.path.join(PLUGIN_PATH, file_name)
@@ -125,20 +85,11 @@ class help_message(Extension):
                                     logger.warning(
                                         f"Malformed help line in {file_name}: '{line}' (Expected 5 parts, got {len(parts)})"
                                     )
-                                    await self._send_admin_dm(
-                                        f"Malformed help line in {file_name}: {line}"
-                                    )
                 except FileNotFoundError:
                     logger.error(f"Plugin file not found: {file_path}")
-                    await self._send_admin_dm(
-                        f"Error generating help: {file_name} not found."
-                    )
                 except Exception as e:
                     logger.error(
                         f"Error reading plugin file {file_name}: {e}", exc_info=True
-                    )
-                    await self._send_admin_dm(
-                        f"Error reading plugin file {file_name}: {e}"
                     )
 
                 if commands_in_file:
@@ -146,6 +97,59 @@ class help_message(Extension):
                     for cmd_data in commands_in_file:
                         section_content += command_template.substitute(cmd_data)
                     command_sections.append(section_content)
+        return [header] + command_sections
+
+    async def write_help(self):
+        """Generates, sends, and pins/edits the help message in the designated channel."""
+        help_channel = None
+        try:
+            help_channel = await self.bot.fetch_channel(HELP_CHANNEL_ID)
+            if not help_channel:
+                logger.error(
+                    f"Help channel not found for ID: {HELP_CHANNEL_ID}. Check config.yml."
+                )
+                await self.bot.send_log_dm(
+                    f"Help channel not found for ID: {HELP_CHANNEL_ID}."
+                )
+                return
+        except Exception as e:
+            logger.error(f"Error fetching help channel (ID: {HELP_CHANNEL_ID}): {e}")
+            await self.bot.send_log_dm(f"Error fetching help channel: {e}")
+            return
+
+        pinned_messages = []
+        try:
+            if hasattr(help_channel, "fetch_pinned_messages"):
+                pinned_messages = await help_channel.fetch_pinned_messages()  # type: ignore
+        except Exception as e:
+            logger.error(
+                f"Error fetching pinned messages from channel {HELP_CHANNEL_ID}: {e}"
+            )
+            await self.bot.send_log_dm(f"Error fetching pinned messages: {e}")
+
+        # Generate command sections by running the blocking I/O in a separate thread
+        try:
+            command_sections_with_header = await asyncio.to_thread(
+                self._generate_command_sections
+            )
+            if (
+                not command_sections_with_header
+                or len(command_sections_with_header) <= 1
+            ):
+                logger.warning("No command help sections were generated.")
+                # Optionally send a minimal help message
+                await self.bot.send_to_channel(
+                    HELP_CHANNEL_ID, "# __🤖 Bot Command Usage__ \nNo commands found."
+                )
+                return
+
+            header = command_sections_with_header[0]
+            command_sections = command_sections_with_header[1:]
+
+        except Exception as e:
+            logger.error(f"Failed to generate help sections: {e}", exc_info=True)
+            await self.bot.send_log_dm(f"Failed to generate help sections: {e}")
+            return
 
         # Use utility function to handle message truncation
         footer_template = "\n... and {count} more command sections!"
@@ -170,7 +174,7 @@ class help_message(Extension):
                             )
                     except Exception as pin_error:
                         logger.warning(f"Could not pin help message: {pin_error}")
-                        await self._send_admin_dm(
+                        await self.bot.send_log_dm(
                             f"Help message sent but could not pin: {pin_error}"
                         )
                 else:
@@ -183,7 +187,7 @@ class help_message(Extension):
                 f"Error sending/editing/pinning help message in channel {HELP_CHANNEL_ID}: {e}",
                 exc_info=True,
             )
-            await self._send_admin_dm(f"Error with help message (send/edit/pin): {e}")
+            await self.bot.send_log_dm(f"Error with help message (send/edit/pin): {e}")
 
     @listen()
     async def on_startup(self):
@@ -191,5 +195,5 @@ class help_message(Extension):
         logger.info("--Help Message created/modified")
 
 
-def setup(bot):  # Remove type annotation to avoid Extension constructor conflict
+def setup(bot: FamilyBotClient):
     help_message(bot)
