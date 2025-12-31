@@ -146,7 +146,9 @@ class FreeGames(Extension):
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
-                        bsky_url, headers=headers, timeout=timeout_seconds
+                        bsky_url,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=timeout_seconds),
                     ) as response:
                         if response.status != 200:
                             logger.warning(
@@ -196,7 +198,10 @@ class FreeGames(Extension):
                 # If it's a short URL (redd.it), resolve it to the full URL first.
                 if "redd.it" in urlparse(final_url).netloc:
                     async with session.head(
-                        final_url, headers=headers, allow_redirects=True, timeout=10
+                        final_url,
+                        headers=headers,
+                        allow_redirects=True,
+                        timeout=aiohttp.ClientTimeout(total=10),
                     ) as response:
                         if response.status == 200:
                             final_url = str(response.url)
@@ -213,7 +218,7 @@ class FreeGames(Extension):
                     final_url += ".json"
 
                 async with session.get(
-                    final_url, headers=headers, timeout=10
+                    final_url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)
                 ) as response:
                     if response.status != 200:
                         logger.warning(
