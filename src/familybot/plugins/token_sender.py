@@ -97,7 +97,7 @@ class token_sender(Extension):
                         logger.warning(f"Could not load storage state: {e}")
 
                 # Launch with persistent context (storage state is automatically loaded from user_data_dir)
-                browser = await p.chromium.launch_persistent_context(
+                context = await p.chromium.launch_persistent_context(
                     user_data_dir=BROWSER_PROFILE_PATH,
                     headless=True,
                     args=[
@@ -108,7 +108,7 @@ class token_sender(Extension):
                         "--blink-settings=imagesEnabled=false",
                     ],
                 )
-                page = await browser.new_page()
+                page = await context.new_page()
 
                 # Block unnecessary resources to speed up loading
                 await page.route(
@@ -122,7 +122,7 @@ class token_sender(Extension):
                 # If we have storage state, apply it to the context
                 if storage_state:
                     try:
-                        await browser.add_cookies(storage_state.get("cookies", []))
+                        await context.add_cookies(storage_state.get("cookies", []))
                         logger.info("Applied cookies from storage state")
                     except Exception as e:
                         logger.warning(f"Could not apply storage state cookies: {e}")
@@ -178,7 +178,7 @@ class token_sender(Extension):
                 return extracted_key
 
             finally:
-                await browser.close()
+                await context.close()
 
     async def _process_token(self, token: str) -> bool:
         """Process and save the token, return True if token was updated."""
