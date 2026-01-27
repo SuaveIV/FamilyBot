@@ -4,6 +4,7 @@ import base64
 import binascii
 import json
 import logging
+import re
 import os
 from datetime import datetime
 
@@ -142,6 +143,14 @@ class token_sender(Extension):
                 # Get page content
                 content = await page.content()
 
+                # Check for empty JSON response (Steam specific issue)
+                if '{"success":1,"data":[]}' in content or (
+                    len(content) < 200 and '"success":1' in content
+                ):
+                    raise ValueError(
+                        "Steam returned empty data response. Session expired. Run setup_browser.py."
+                    )
+
                 # Try to click rawdata-tab if it exists
                 try:
                     rawdata_tab = page.locator("#rawdata-tab")
@@ -152,24 +161,14 @@ class token_sender(Extension):
                 except Exception as e:
                     logger.warning(f"Could not click rawdata-tab: {e}")
 
-                # Extract token from page content
-                start_token_marker = '"webapi_token":"'
-                end_token_marker = '"}'
+                # Extract token from page content using regex
+                token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'
+                match = re.search(token_pattern, content)
 
-                start_index = content.find(start_token_marker)
-                if start_index == -1:
-                    raise ValueError(
-                        "Could not find 'webapi_token' start marker in page source"
-                    )
+                if not match:
+                    raise ValueError("Could not find 'webapi_token' in page source")
 
-                key_start = start_index + len(start_token_marker)
-                key_end = content.find(end_token_marker, key_start)
-                if key_end == -1:
-                    raise ValueError(
-                        "Could not find 'webapi_token' end marker in page source"
-                    )
-
-                extracted_key = content[key_start:key_end]
+                extracted_key = match.group(1)
 
                 if not extracted_key:
                     raise ValueError("Extracted token is empty")

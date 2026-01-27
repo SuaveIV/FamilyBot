@@ -32,6 +32,7 @@ except ImportError as e:
 import base64
 import binascii
 import json
+import re
 import tempfile  # Import tempfile
 import shutil  # Import shutil
 from datetime import datetime
@@ -146,6 +147,17 @@ class TokenTester:
                 # Get page content
                 content = await page.content()
 
+                # Check for empty JSON response
+                if '{"success":1,"data":[]}' in content or (
+                    len(content) < 200 and '"success":1' in content
+                ):
+                    print("❌ CRITICAL: Steam returned empty data response.")
+                    print("   This means your session is expired or invalid.")
+                    print(
+                        "   Run 'uv run python scripts/setup_browser.py' to refresh login."
+                    )
+                    return False
+
                 # Try to click rawdata-tab if it exists
                 try:
                     rawdata_tab = page.locator("#rawdata-tab")
@@ -159,23 +171,16 @@ class TokenTester:
 
                 # Extract token from page content
                 print("   Searching for webapi_token...")
-                start_token_marker = '"webapi_token":"'
-                end_token_marker = '"}'
+                token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'
+                match = re.search(token_pattern, content)
 
-                start_index = content.find(start_token_marker)
-                if start_index == -1:
+                if not match:
                     print("❌ Could not find 'webapi_token' in page source")
                     print("   This usually means you're not logged into Steam")
                     print("   Run 'uv run python scripts/setup_browser.py' to log in")
                     return False
 
-                key_start = start_index + len(start_token_marker)
-                key_end = content.find(end_token_marker, key_start)
-                if key_end == -1:
-                    print("❌ Could not find end of webapi_token")
-                    return False
-
-                extracted_key = content[key_start:key_end]
+                extracted_key = match.group(1)
 
                 if not extracted_key:
                     print("❌ Extracted token is empty")

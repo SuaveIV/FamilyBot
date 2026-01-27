@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import os
 import sys
 from datetime import datetime
@@ -52,6 +53,17 @@ async def get_token_with_playwright() -> str:
         logger.error("Run 'uv run python scripts/setup_browser.py' first.")
         return ""
 
+    # Load storage state if available
+    storage_state_path = os.path.join(profile_path, "storage_state.json")
+    storage_state = None
+    if os.path.exists(storage_state_path):
+        try:
+            with open(storage_state_path, "r") as f:
+                storage_state = json.load(f)
+            logger.info("Loaded storage state for session persistence")
+        except Exception as e:
+            logger.warning(f"Could not load storage state: {e}")
+
     async with async_playwright() as p:
         # Launch with optimized arguments (same as plugin)
         logger.info("Launching headless browser...")
@@ -66,6 +78,15 @@ async def get_token_with_playwright() -> str:
                 "--blink-settings=imagesEnabled=false",
             ],
         )
+
+        # Apply cookies if available
+        if storage_state:
+            try:
+                await browser.add_cookies(storage_state.get("cookies", []))
+                logger.info("Applied cookies from storage state")
+            except Exception as e:
+                logger.warning(f"Could not apply storage state cookies: {e}")
+
         page = await browser.new_page()
 
         # Block unnecessary resources
@@ -96,25 +117,24 @@ async def get_token_with_playwright() -> str:
             except Exception:
                 pass
 
-            # Extract
-            start_marker = (
-                '"webapi_token":"'  # Corrected escaping for the string literal
-            )
-            end_marker = '"}'  # Corrected escaping for the string literal
+            # Check for empty JSON response
+            if '{"success":1,"data":[]}' in content or (
+                len(content) < 200 and '"success":1' in content
+            ):
+                logger.error(
+                    "Steam returned empty data response. Session expired. Run setup_browser.py."
+                )
+                return ""
 
-            start_idx = content.find(start_marker)
-            if start_idx == -1:
+            # Extract using regex
+            token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'
+            match = re.search(token_pattern, content)
+
+            if not match:
                 logger.error("Could not find webapi_token. Are you logged in?")
                 return ""
 
-            key_start = start_idx + len(start_marker)
-            key_end = content.find(end_marker, key_start)
-
-            if key_end == -1:
-                logger.error("Could not find end of webapi_token")
-                return ""
-
-            token = content[key_start:key_end]
+            token = match.group(1)
             if not token:
                 logger.error("Extracted token is empty")
                 return ""

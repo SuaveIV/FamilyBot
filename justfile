@@ -74,10 +74,22 @@ test-token:
     @echo "🔑 Testing token extraction..."
     mise exec -- uv run python scripts/test_token_plugin.py
 
+# Run token diagnostic tool (detailed debugging)
+diagnose-token:
+    @echo "🔍 Running token diagnostics..."
+    mise exec -- uv run python scripts/diagnose_token.py
+
 # Force immediate token update
 force-token:
     @echo "🔄 Forcing token update..."
     mise exec -- uv run python scripts/force_token_update.py
+
+# Update Playwright and browser binaries
+update-playwright:
+    @echo "🎭 Updating Playwright..."
+    mise exec -- uv pip install --upgrade playwright
+    mise exec -- uv run playwright install chromium
+    @echo "✅ Playwright updated"
 
 # Test free games plugin
 test-free-games:
@@ -123,6 +135,16 @@ populate-db:
     mise exec -- uv run python scripts/populate_database.py
     @echo "✅ Database populated"
 
+# Import data from JSON file
+import-json *args:
+    @echo "📥 Importing JSON data..."
+    mise exec -- uv run python scripts/json_database_importer.py {{args}}
+
+# Convert Steamworks JSON to FamilyBot format
+convert-json *args:
+    @echo "🔄 Converting Steamworks JSON..."
+    mise exec -- uv run python scripts/steamworks_json_converter.py {{args}}
+
 # Populate price data (standard mode)
 populate-prices *args:
     @echo "💰 Populating price data (standard mode)..."
@@ -156,6 +178,11 @@ backup-db:
 check-db:
     @echo "🩺 Checking database integrity..."
     mise exec -- uv run python scripts/check_db_integrity.py
+
+# Debug deals detection logic
+debug-deals:
+    @echo "🔍 Debugging deals detection..."
+    mise exec -- uv run python scripts/debug_deals.py
 
 # Restore database from a backup (interactive)
 restore-db:

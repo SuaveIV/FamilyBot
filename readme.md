@@ -300,12 +300,15 @@ just status          # Check bot status
 - `just setup` - Complete development environment setup
 - `just reinstall` - Clean reinstall (removes .venv and rebuilds)
 - `just verify-setup` - Verify installation is working
+- `just update-playwright` - Update Playwright and browser binaries
 
 **Running the Bot:**
 
 - `just run` - Start FamilyBot (recommended method)
 - `just setup-browser` - Set up Steam login (first-time only)
 - `just test-token` - Test token extraction functionality
+- `just diagnose-token` - Run detailed token diagnostics
+- `just force-token` - Force immediate token update
 
 **Cache Management:**
 
@@ -320,6 +323,8 @@ just status          # Check bot status
 - `just populate-prices` - Standard price population
 - `just populate-prices-fast` - Optimized price population (6-10x faster)
 - `just populate-prices-turbo` - Async price population (15-25x faster)
+- `just import-json` - Import data from JSON file
+- `just convert-json` - Convert Steamworks JSON to FamilyBot format
 - `just inspect-db` - Inspect database structure
 - `just backup-db` - Backup database
 
@@ -336,6 +341,7 @@ just status          # Check bot status
 - `just status` - Check bot configuration status
 - `just bump-patch` - Bump patch version
 - `just help` - Show detailed help
+- `just debug-deals` - Debug deals detection logic
 
 **Migration:**
 

@@ -77,3 +77,9 @@ FamilyBotBrowserProfile/
 
 # Gemini specific files
 .gemini/
+
+# Backup and diagnostic files
+backups/
+steam_page_content.html
+.gitignore
+steam_page_screenshot.png
