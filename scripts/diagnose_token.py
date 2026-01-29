@@ -59,7 +59,7 @@ async def diagnose_token_extraction():
     print("🔍 Steam Token Diagnostic Tool")
     print("=" * 60)
 
-    print(f"\n📁 Configuration:")
+    print("\n📁 Configuration:")
     print(f"   Project root: {PROJECT_ROOT}")
     print(
         f"   Browser profile: {BROWSER_PROFILE_PATH if BROWSER_PROFILE_PATH else 'Not found'}"
@@ -85,7 +85,7 @@ async def diagnose_token_extraction():
         try:
             # Launch with profile if available
             if BROWSER_PROFILE_PATH and BROWSER_PROFILE_PATH.exists():
-                print(f"\n🌐 Launching browser with profile...")
+                print("\n🌐 Launching browser with profile...")
                 print(f"   Profile: {BROWSER_PROFILE_PATH}")
 
                 # Check for storage state
@@ -169,7 +169,7 @@ async def diagnose_token_extraction():
             ]
 
             if found_indicators:
-                print(f"   ⚠️  Page appears to show login form")
+                print("   ⚠️  Page appears to show login form")
                 print(f"   Found indicators: {', '.join(found_indicators)}")
                 print("   ❌ You are likely NOT logged into Steam")
             else:
@@ -246,7 +246,7 @@ async def diagnose_token_extraction():
                     webapi_contexts.append(match.group())
 
                 if webapi_contexts:
-                    print(f"   Showing first 3 contexts:")
+                    print("   Showing first 3 contexts:")
                     for i, ctx in enumerate(webapi_contexts[:3], 1):
                         # Clean up for display
                         ctx_clean = ctx.replace("\n", " ").replace("\r", "")
@@ -302,7 +302,7 @@ async def diagnose_token_extraction():
                 print(f"   Has g_sessionID: {js_result.get('hasSessionID', False)}")
 
                 if "token" in js_result:
-                    print(f"   ✅ Found token via JavaScript!")
+                    print("   ✅ Found token via JavaScript!")
                     print(f"   Token preview: {js_result['token'][:30]}...")
                     print(f"   Token length: {js_result['tokenLength']} characters")
                     found_token = True
