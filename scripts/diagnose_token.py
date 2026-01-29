@@ -10,6 +10,7 @@ import os
 import sys
 from pathlib import Path
 import re
+import traceback
 
 # Configuration - automatically detect project root
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -28,9 +29,9 @@ BROWSER_PROFILE_PATHS = [
 ]
 
 BROWSER_PROFILE_PATH = None
-for path in BROWSER_PROFILE_PATHS:
-    if path.exists():
-        BROWSER_PROFILE_PATH = path
+for p_path in BROWSER_PROFILE_PATHS:
+    if p_path.exists():
+        BROWSER_PROFILE_PATH = p_path
         break
 
 # Output directory for debug files
@@ -69,8 +70,8 @@ async def diagnose_token_extraction():
     if not BROWSER_PROFILE_PATH:
         print("\n⚠️  WARNING: No browser profile found!")
         print("   Checked locations:")
-        for path in BROWSER_PROFILE_PATHS:
-            print(f"   - {path}")
+        for checked_path in BROWSER_PROFILE_PATHS:
+            print(f"   - {checked_path}")
         print("\n   You may need to run the setup script first:")
         print("   just setup-browser")
         print("   OR: python scripts/setup_browser.py")
@@ -93,10 +94,10 @@ async def diagnose_token_extraction():
                 storage_state = None
                 if storage_state_path.exists():
                     try:
-                        with open(storage_state_path, "r") as f:
+                        with open(storage_state_path, "r", encoding="utf-8") as f:
                             storage_state = json.load(f)
                         print("   ✅ Found storage_state.json")
-                    except Exception as e:
+                    except (json.JSONDecodeError, OSError) as e:
                         print(f"   ⚠️  Could not load storage_state.json: {e}")
 
                 context = await p.chromium.launch_persistent_context(
@@ -113,7 +114,7 @@ async def diagnose_token_extraction():
                     try:
                         await context.add_cookies(storage_state.get("cookies", []))
                         print("   ✅ Applied cookies from storage_state.json")
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-exception-caught
                         print(f"   ⚠️  Could not apply cookies: {e}")
 
                 page = await context.new_page()
@@ -136,7 +137,7 @@ async def diagnose_token_extraction():
                     wait_until="networkidle",
                     timeout=30000,
                 )
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"   ⚠️  Navigation warning: {e}")
                 print("   Continuing anyway...")
 
@@ -158,7 +159,7 @@ async def diagnose_token_extraction():
             try:
                 debug_file.write_text(content, encoding="utf-8")
                 print(f"💾 Saved page content to: {debug_file}")
-            except Exception as e:
+            except OSError as e:
                 print(f"⚠️  Could not save content: {e}")
 
             # Check for login indicators
@@ -229,7 +230,7 @@ async def diagnose_token_extraction():
 
                 if not found_token:
                     print("   ❌ No tokens found with regex patterns")
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"   ⚠️  Regex search error: {e}")
 
             # Method 3: Search for any occurrence of "webapi"
@@ -309,7 +310,7 @@ async def diagnose_token_extraction():
                 else:
                     print("   ❌ No token found via JavaScript")
 
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"   ⚠️  JavaScript evaluation error: {e}")
 
             # Take a screenshot for visual debugging
@@ -317,7 +318,7 @@ async def diagnose_token_extraction():
             try:
                 await page.screenshot(path=str(screenshot_path), full_page=True)
                 print(f"\n📸 Screenshot saved to: {screenshot_path}")
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"\n⚠️  Could not save screenshot: {e}")
 
             # Final summary
@@ -333,10 +334,8 @@ async def diagnose_token_extraction():
             print("   Check the browser window to see what Steam returned")
             await asyncio.sleep(15)
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"\n❌ Error during diagnosis: {e}")
-            import traceback
-
             traceback.print_exc()
         finally:
             print("\n🔒 Closing browser...")
