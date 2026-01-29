@@ -1,15 +1,15 @@
-# Family Bot
+# FamilyBot
 
-This project is a modified version of the original "FamilyBot" created by Chachigo. I have made significant improvements and refactorings to the codebase.
+This project is a modified version of the original "FamilyBot" created by Chachigo. It includes improvements and refactoring to the codebase.
 **Original Source:** [Chachigo/FamilyBot](https://github.com/Chachigo/FamilyBot)
 
 ## Introduction
 
-Family Bot is a Discord bot primarily designed to notify about new games that are added to the Steam Family library. Plugins can be made to add functionalities using the [interactions.py](https://interactions-py.github.io/interactions.py/) library.
+Family Bot is a Discord bot designed to notify about new games added to the Steam Family library. Plugins can be made to add functionalities using the [interactions.py](https://interactions-py.github.io/interactions.py/) library.
 
 ## Project Structure
 
-The project follows a modern Python package structure with the following key components:
+The project follows a Python package structure with these components:
 
 ```bash
 FamilyBot/
@@ -51,44 +51,44 @@ FamilyBot/
 
 ## How It Works
 
-FamilyBot consists of several interconnected components:
+FamilyBot consists of several components:
 
 ### Main Bot (`FamilyBot.py`)
 
-- **Discord Bot**: Handles all Discord interactions using the interactions.py library
-- **Plugin System**: Automatically loads plugins from the `plugins/` directory, enabling modular and extensible functionality
+- **Discord Bot**: Handles Discord interactions using the interactions.py library
+- **Plugin System**: Loads plugins from the `plugins/` directory, allowing modular functionality
 - **Database Management**: SQLite database for caching game data, wishlists, and user information
 - **Command-line Interface**: Supports cache management, database population, and other maintenance operations
 
 ### Token Sender Plugin (`plugins/token_sender.py`)
 
-- **Automated Token Extraction**: Uses the Playwright library with Chromium to reliably extract Steam web API tokens
-- **Integrated Plugin**: Runs as a plugin within the main bot process, eliminating the need for separate WebSocket communication
-- **Enhanced Session Management**: Utilizes explicit storage state saving to ensure reliable and persistent Steam login sessions
+- **Automated Token Extraction**: Uses the Playwright library with Chromium to extract Steam web API tokens
+- **Integrated Plugin**: Runs as a plugin within the main bot process, removing the need for separate WebSocket communication
+- **Session Management**: Uses storage state saving for persistent Steam login sessions
 - **Admin Commands**: Provides `!force_token` and `!token_status` commands for monitoring and controlling the token extraction process
 - **Easy Setup**: Automated browser profile creation with the `scripts/setup_browser.py` script
 
 ### Plugin Architecture
 
 - **Modular Design**: Each feature is implemented as a separate plugin
-- **Auto-loading**: Plugins are automatically discovered and loaded at startup
+- **Auto-loading**: Plugins are discovered and loaded at startup
 - **Extensible**: New functionality can be added by creating new plugin files
 
 ### Database System
 
-- **SQLite Backend**: Lightweight, file-based database for efficient data persistence
-- **Caching Strategy**: Intelligent caching of Steam API responses to minimize the number of API calls required
+- **SQLite Backend**: Lightweight, file-based database for data persistence
+- **Caching Strategy**: Caching of Steam API responses to minimize the number of API calls required
 - **Performance Optimization**: Pre-populating price data for family wishlist games, enabling faster deal detection during sales periods
 
 ### Web UI (`web/`)
 
-- **Modern Interface**: FastAPI-powered web dashboard for comprehensive bot management and monitoring
-- **Real-time Monitoring**: Live bot status, cache statistics, recent game activity, family member information, and overall system health metrics
-- **Log Management**: Advanced log viewer with powerful filtering, search, and export capabilities
-- **Theme Support**: 16+ Bootswatch themes, including comprehensive dark mode options, providing a visually appealing and customizable user experience
-- **Cache Control**: Web-based interface for purging various cache types and monitoring cache statistics
-- **Configuration Help**: Built-in setup guides and configuration templates to assist users in the initial bot setup
-- **Responsive Design**: Mobile-friendly interface that seamlessly adapts to desktop, tablet, and mobile devices
+- **Interface**: FastAPI-powered web dashboard for bot management and monitoring
+- **Real-time Monitoring**: Bot status, cache statistics, recent game activity, family member information, and system health metrics
+- **Log Management**: Log viewer with filtering, search, and export capabilities
+- **Theme Support**: 16+ Bootswatch themes, including dark mode options, providing a customizable user experience
+- **Cache Control**: Web-based interface for purging cache and monitoring cache statistics
+- **Configuration Help**: Built-in setup guides and configuration templates
+- **Responsive Design**: Mobile-friendly interface that adapts to desktop, tablet, and mobile devices
 
 ## Installation
 
@@ -97,34 +97,34 @@ To install the bot, clone or unzip the repository archive.
 ### Requirements
 
 This bot is compatible with **Python 3.13 and above.**
-We use `uv` for blazing-fast dependency management and virtual environment creation.
+We use `uv` for dependency management and virtual environment creation.
 
 ### Dependencies
 
 The project uses the following main dependencies (defined in `pyproject.toml`):
 
-- **discord-py-interactions**: Modern Discord bot framework
+- **discord-py-interactions**: Discord bot framework
 - **requests**: HTTP library for API calls
 - **playwright**: for automated token extraction
 - **PyYAML**: Configuration file parsing
 - **tqdm**: Progress bars for long-running operations
-- **httpx**: Async HTTP client for improved performance
-- **fastapi**: Modern web framework for the Web UI
+- **httpx**: Async HTTP client
+- **fastapi**: Web framework for the Web UI
 - **uvicorn**: ASGI server for FastAPI
 - **jinja2**: Template engine for HTML rendering
 - **pydantic**: Data validation and serialization
 - **audioop-lts**: Required for voice support in Discord interactions
-- **pylint**: Code linter for maintaining code quality
+- **pylint**: Code linter
 
 ### Setup
 
-FamilyBot offers two setup methods: the modern `just` command runner (recommended) and legacy platform-specific scripts.
+FamilyBot offers two setup methods: the `just` command runner (recommended) and platform-specific scripts.
 
 #### Development Environment with `mise`
 
 This project uses `mise` to manage the Python version and ensure a consistent development environment. Before you begin, please install `mise` by following the official instructions:
 
--   [mise documentation](https://mise.jdx.dev/getting-started.html)
+- [mise documentation](https://mise.jdx.dev/getting-started.html)
 
 Once `mise` is installed, you can set up the project environment with the following commands:
 
@@ -135,7 +135,7 @@ mise install
 # Now you can proceed with the setup using `just`
 ```
 
-#### Modern Setup with `just` (Recommended)
+#### Setup with `just` (Recommended)
 
 First, install the `just` command runner:
 
@@ -174,7 +174,7 @@ cargo install just
  Fedora: dnf install just
 ```
 
-Then set up FamilyBot:
+ Then set up FamilyBot:
 
 ```bash
 # Install python version
@@ -192,7 +192,7 @@ just help
 
 #### Legacy Setup (Platform-Specific Scripts)
 
-If you prefer the traditional approach, you can use the platform-specific scripts. However, it is **highly recommended** to use the `just` command runner for a more streamlined experience.
+If you prefer the traditional approach, you can use the platform-specific scripts. However, it is **recommended** to use the `just` command runner.
 
 **For Windows (PowerShell 7):**
 
@@ -411,11 +411,11 @@ To stop the bot, go to its terminal window and press `Ctrl+C`. The bot has grace
 
 ## Utility Scripts
 
-The `scripts/` directory contains a suite of powerful utility scripts for managing the FamilyBot's database, cache, and overall performance. For detailed documentation, see [scripts/README.md](scripts/README.md) and [scripts/PRICE_OPTIMIZATION_README.md](scripts/PRICE_OPTIMIZATION_README.md).
+The `scripts/` directory contains a suite of utility scripts for managing the FamilyBot's database, cache, and performance. For detailed documentation, see [scripts/README.md](scripts/README.md) and [scripts/PRICE_OPTIMIZATION_README.md](scripts/PRICE_OPTIMIZATION_README.md).
 
 ### Database Population Scripts
 
-- **`populate_database.py`** - A comprehensive script that populates the FamilyBot database with game data, wishlists, and family library information without requiring Discord interaction. This script is perfect for initial setup or complete database rebuilds.
+- **`populate_database.py`** - A script that populates the FamilyBot database with game data, wishlists, and family library information without requiring Discord interaction. This script is perfect for initial setup or complete database rebuilds.
 
 #### Price Population Scripts (Performance Optimized)
 
@@ -457,7 +457,7 @@ just purge-all-cache                # Clear all caches
 
 ## Logging System
 
-FamilyBot includes a comprehensive logging system that provides complete visibility into all bot operations, with special focus on private profile detection and error management.
+FamilyBot includes a logging system that provides visibility into all bot operations, with focus on private profile detection and error management.
 
 ### Log File Structure
 
@@ -530,14 +530,14 @@ This plugin dynamically generates a help message for all plugin commands. It aut
 
 ### Web UI
 
-The Web UI provides a modern, browser-based interface for managing and monitoring FamilyBot:
+The Web UI provides a browser-based interface for managing and monitoring FamilyBot:
 
 - **Dashboard**: Real-time bot status, cache statistics, recent games, family members, and wishlist summary
-- **Log Viewer**: Advanced log filtering, search, real-time updates, and export functionality
+- **Log Viewer**: Log filtering, search, real-time updates, and export functionality
 - **Configuration**: View current settings, plugin status, family member management, and setup help
 - **Theme Support**: 16+ Bootswatch themes including multiple dark mode options (Darkly, Cyborg, Slate, Solar, Superhero, Vapor)
 - **Cache Management**: Web-based cache purging and statistics monitoring
-- **Mobile Responsive**: Works seamlessly on desktop, tablet, and mobile devices
+- **Mobile Responsive**: Works on desktop, tablet, and mobile devices
 
 #### Accessing the Web UI
 
