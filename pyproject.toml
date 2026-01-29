@@ -5,49 +5,51 @@ description = "Family Bot is a discord bot mainly made to get the new games that
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "discord-py-interactions~=5.15.0",
-    "aiohttp>=3.12.14",
-    "requests~=2.32.4",
-    "websockets~=12.0",
-    "PyYAML~=6.0.2",
-    "tqdm~=4.66.5",
-    "httpx~=0.28.1",
-    "playwright~=1.53.0",
-    "fastapi~=0.122.1",
-    "uvicorn~=0.32.1",
-    "jinja2~=3.1.6",
-    "python-multipart~=0.0.18",
-    "pydantic~=2.10.3",
-    "coloredlogs~=15.0.1",
-    "python-json-logger~=2.0.7",
-    "steam~=1.4.4",
-    "pre-commit~=4.0.1",
-    "pylint~=3.3.1",
-    "audioop-lts~=0.2.1",
-    "filelock>=3.20.1",
+  "PyYAML~=6.0.2",
+  "aiohttp>=3.12.14",
+  "audioop-lts~=0.2.1",
+  "coloredlogs~=15.0.1",
+  "discord-py-interactions~=5.15.0",
+  "fastapi~=0.122.1",
+  "filelock>=3.20.1",
+  "httpx~=0.28.1",
+  "jinja2~=3.1.6",
+  "playwright~=1.53.0",
+  "pre-commit~=4.0.1",
+  "pydantic~=2.10.3",
+  "pylint~=3.3.1",
+  "python-json-logger~=2.0.7",
+  "python-multipart~=0.0.18",
+  "requests~=2.32.4",
+  "steam~=1.4.4",
+  "tqdm~=4.66.5",
+  "uvicorn~=0.32.1",
+  "websockets~=12.0",
 ]
 
 [project.scripts]
 familybot = "familybot.FamilyBot:main"
-familybot-setup = "scripts.setup_browser:main"
-familybot-test = "scripts.test_token_plugin:main"
 familybot-force-token = "scripts.force_token_update:main"
-familybot-populate = "scripts.populate_database:main"
 familybot-inspect-db = "inspect_db:inspect_database"
-familybot-setup-precommit = "scripts.setup_precommit:main"
 familybot-lint = "scripts.lint:main"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
+familybot-populate = "scripts.populate_database:main"
+familybot-setup = "scripts.setup_browser:main"
+familybot-setup-precommit = "scripts.setup_precommit:main"
+familybot-test = "scripts.test_token_plugin:main"
 
 [project.optional-dependencies]
 dev = [
-    "ruff~=0.12.5",
-    "mypy",
-    "pip-audit",
-    "types-PyYAML",
-    "types-requests",
-    "types-tqdm",
+  "ruff~=0.12.5",
+  "mypy",
+  "pip-audit",
+  "types-PyYAML",
+  "types-requests",
+  "types-tqdm",
+]
+
+[dependency-groups]
+dev = [
+  "tombi>=0.7.25",
 ]
 
 [tool.mypy]
@@ -60,3 +62,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "coloredlogs"
 ignore_missing_imports = true
+
+[tool.setuptools.packages.find]
+where = ["src"]

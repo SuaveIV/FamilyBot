@@ -216,17 +216,27 @@ type-check:
     @echo "🧐 Running mypy type checker..."
     mise exec -- uv run mypy src/ scripts/
 
-# Run security audit for dependencies
+# Run pip-audit for security vulnerabilities
 audit:
     @echo "🛡️ Running pip-audit for security vulnerabilities..."
     mise exec -- uv run pip-audit -r requirements.txt
 
+# Lint TOML files
+check-toml:
+    @echo "🔍 Checking TOML files..."
+    mise exec -- uv run tombi lint pyproject.toml
+
+# Format TOML files
+format-toml:
+    @echo "✨ Formatting TOML files..."
+    mise exec -- uv run tombi format pyproject.toml
+
 # Run all code quality checks
-check: lint format-check type-check audit
+check: lint format-check type-check audit check-toml
     @echo "✅ All code quality checks passed!"
 
 # Fix and format all code issues
-fix: lint-fix format
+fix: lint-fix format format-toml
     @echo "✅ Code fixed and formatted!"
 
 # Legacy lint command (for backward compatibility)
