@@ -213,11 +213,205 @@ async def purge_game_details_cache_action() -> Dict[str, Any]:
         return {"success": False, "message": f"Error purging cache: {e}"}
 
 
-async def force_new_game_action() -> Dict[str, Any]:
+# ==================== HELPER FUNCTIONS ====================
+
+
+async def _fetch_family_library_from_api() -> list:
     """
-    Forces a check for new games and triggers notifications.
+    Helper function to fetch family library from Steam API.
+    Returns the game list or raises an exception.
+
+    This centralizes API fetching logic and is used by both
+    check and force functions.
     """
-    logger.info("Running force_new_game_action...")
+    await _rate_limit_steam_api()
+    url_family_list = get_family_game_list_url()
+    answer = requests.get(url_family_list, timeout=15)
+    games_json = await _handle_api_response("GetFamilySharedApps", answer)
+
+    if not games_json:
+        raise Exception("Failed to get family shared apps from API")
+
+    game_list = games_json.get("response", {}).get("apps", [])
+    if not game_list:
+        logger.warning("No apps found in family game list response.")
+        raise Exception("No games found in the family library")
+
+    return game_list
+
+
+async def _process_new_games(
+    game_list: list, current_family_members: dict
+) -> Dict[str, Any]:
+    """
+    Helper function to process game list and detect new games.
+    Shared logic between check_new_game_action and force_new_game_action.
+
+    Args:
+        game_list: List of games from family library
+        current_family_members: Dict of {steam_id: friendly_name}
+
+    Returns:
+        Dict with success status and message
+    """
+    game_owner_list = {}
+    game_array = []
+    for game in game_list:
+        if game.get("exclude_reason") != 3:
+            appid = str(game.get("appid"))
+            game_array.append(appid)
+            if len(game.get("owner_steamids", [])) == 1:
+                game_owner_list[appid] = str(game["owner_steamids"][0])
+
+    saved_games_with_timestamps = get_saved_games()
+    saved_appids = {item[0] for item in saved_games_with_timestamps}
+
+    new_appids = set(game_array) - saved_appids
+
+    all_games_for_db_update = []
+    current_utc_iso = datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+
+    for appid in game_array:
+        if appid in new_appids:
+            all_games_for_db_update.append((appid, current_utc_iso))
+        else:
+            found_timestamp = next(
+                (ts for ap, ts in saved_games_with_timestamps if ap == appid), None
+            )
+            if found_timestamp:
+                all_games_for_db_update.append((appid, found_timestamp))
+            else:
+                all_games_for_db_update.append((appid, current_utc_iso))
+
+    new_games_to_notify_raw = [(appid, current_utc_iso) for appid in new_appids]
+    new_games_to_notify_raw.sort(key=lambda x: x[1], reverse=True)
+
+    if len(new_games_to_notify_raw) > 10:
+        logger.warning(
+            f"Detected {len(new_games_to_notify_raw)} new games. Processing only the latest 10 (by AppID) to avoid rate limits."
+        )
+        new_games_to_process = new_games_to_notify_raw[:10]
+        message_prefix = f"Detected {len(new_games_to_notify_raw)} new games. Processing only the latest 10. More may be announced in subsequent checks.\n"
+    else:
+        new_games_to_process = new_games_to_notify_raw
+        message_prefix = ""
+
+    notification_messages = []
+    if new_games_to_process:
+        logger.info(
+            f"Processing {len(new_games_to_process)} new games for notification."
+        )
+        for new_appid_tuple in new_games_to_process:
+            new_appid = new_appid_tuple[0]
+
+            # Try to get cached game details first
+            cached_game = get_cached_game_details(new_appid)
+            if cached_game:
+                logger.info(
+                    f"Using cached game details for new game AppID: {new_appid}"
+                )
+                game_data = cached_game
+            else:
+                # If not cached, fetch from API
+                await _rate_limit_steam_store_api()  # Apply store API rate limit
+                game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=us&l=en"
+                logger.info(
+                    f"Fetching app details from API for new game AppID: {new_appid}"
+                )
+                app_info_response = requests.get(game_url, timeout=10)
+                game_info_json = await _handle_api_response(
+                    "AppDetails (New Game)", app_info_response
+                )
+                if not game_info_json:
+                    continue
+
+                game_data = game_info_json.get(str(new_appid), {}).get("data")
+                if not game_data:
+                    logger.warning(
+                        f"No game data found for new game AppID {new_appid} in app details response."
+                    )
+                    continue
+
+                # Cache the game details permanently (game details rarely change)
+                cache_game_details(new_appid, game_data, permanent=True)
+
+            is_family_shared_game = any(
+                cat.get("id") == 62 for cat in game_data.get("categories", [])
+            )
+
+            if (
+                game_data.get("type") == "game"
+                and not game_data.get("is_free")
+                and is_family_shared_game
+            ):
+                owner_steam_id = game_owner_list.get(str(new_appid))
+                owner_name = current_family_members.get(
+                    owner_steam_id, f"Unknown Owner ({owner_steam_id})"
+                )
+
+                # Build the base message
+                game_name = game_data.get("name", "Unknown Game")
+                message = f"Thank you to {owner_name} for **{game_name}**\nhttps://store.steampowered.com/app/{new_appid}"
+
+                # Add pricing information if available
+                try:
+                    current_price = game_data.get("price_overview", {}).get(
+                        "final_formatted", "N/A"
+                    )
+                    lowest_price = get_lowest_price(int(new_appid))
+
+                    if current_price != "N/A" or lowest_price != "N/A":
+                        price_info = []
+                        if current_price != "N/A":
+                            price_info.append(f"Current: {current_price}")
+                        if lowest_price != "N/A":
+                            price_info.append(f"Lowest ever: ${lowest_price}")
+
+                        if price_info:
+                            message += f"\n💰 {'|'.join(price_info)}"
+                except Exception as e:
+                    logger.warning(
+                        f"Could not get pricing info for new game {new_appid}: {e}"
+                    )
+
+                notification_messages.append(message)
+            else:
+                logger.debug(
+                    f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'."
+                )
+
+        set_saved_games(all_games_for_db_update)
+        if notification_messages:
+            full_message = message_prefix + "\n\n".join(notification_messages)
+            return {
+                "success": True,
+                "message": f"New games detected: {len(new_games_to_process)} games processed. Details:\n{full_message}",
+            }
+        else:
+            return {
+                "success": True,
+                "message": "No new family shared games detected for notification.",
+            }
+    else:
+        logger.info("No new games detected.")
+        return {"success": True, "message": "No new games detected."}
+
+
+# ==================== NEW GAME ACTIONS ====================
+
+
+async def check_new_game_action() -> Dict[str, Any]:
+    """
+    Regular check for new games that respects cache (for scheduled tasks).
+    Uses cached family library if available to minimize API calls.
+
+    This function is called by the hourly automated task.
+    It will use cached data if available and valid.
+
+    Returns:
+        Dict with success status and message
+    """
+    logger.info("Running check_new_game_action (cache-respecting)...")
 
     try:
         # Try to get cached family library first
@@ -229,176 +423,50 @@ async def force_new_game_action() -> Dict[str, Any]:
             game_list = cached_family_library
         else:
             # If not cached, fetch from API
-            await _rate_limit_steam_api()  # Apply rate limit before API call
-            url_family_list = (
-                get_family_game_list_url()
-            )  # Use the correct URL for family shared apps
-            answer = requests.get(url_family_list, timeout=15)
-            games_json = await _handle_api_response("GetFamilySharedApps", answer)
-            if not games_json:
-                return {
-                    "success": False,
-                    "message": "Failed to get family shared apps.",
-                }
+            logger.info("No cached family library found, fetching from API...")
+            game_list = await _fetch_family_library_from_api()
 
-            game_list = games_json.get("response", {}).get("apps", [])
-            if not game_list:
-                logger.warning(
-                    "No apps found in family game list response for new game check."
-                )
-                return {
-                    "success": False,
-                    "message": "No games found in the family library.",
-                }
-
-            # Cache the family library for 30 minutes
+            # Cache for next time (30 minute TTL)
             cache_family_library(game_list, cache_minutes=30)
+            logger.info(f"Cached family library ({len(game_list)} games)")
 
         current_family_members = await _load_family_members_from_db()
+        return await _process_new_games(game_list, current_family_members)
 
-        game_owner_list = {}
-        game_array = []
-        for game in game_list:
-            if game.get("exclude_reason") != 3:
-                appid = str(game.get("appid"))
-                game_array.append(appid)
-                if len(game.get("owner_steamids", [])) == 1:
-                    game_owner_list[appid] = str(game["owner_steamids"][0])
+    except Exception as e:
+        logger.critical(
+            f"An unexpected error occurred in check_new_game_action: {e}", exc_info=True
+        )
+        return {
+            "success": False,
+            "message": f"Error checking for new games: {str(e)}",
+        }
 
-        saved_games_with_timestamps = get_saved_games()
-        saved_appids = {item[0] for item in saved_games_with_timestamps}
 
-        new_appids = set(game_array) - saved_appids
+async def force_new_game_action() -> Dict[str, Any]:
+    """
+    Force check for new games that always fetches fresh data (for admin commands).
+    Bypasses cache to ensure the most up-to-date information.
 
-        all_games_for_db_update = []
-        current_utc_iso = datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    This function is called by the !force admin command.
+    It will always fetch fresh data from the Steam API.
 
-        for appid in game_array:
-            if appid in new_appids:
-                all_games_for_db_update.append((appid, current_utc_iso))
-            else:
-                found_timestamp = next(
-                    (ts for ap, ts in saved_games_with_timestamps if ap == appid), None
-                )
-                if found_timestamp:
-                    all_games_for_db_update.append((appid, found_timestamp))
-                else:
-                    all_games_for_db_update.append((appid, current_utc_iso))
+    Returns:
+        Dict with success status and message
+    """
+    logger.info("Running force_new_game_action (bypassing cache)...")
 
-        new_games_to_notify_raw = [(appid, current_utc_iso) for appid in new_appids]
-        new_games_to_notify_raw.sort(key=lambda x: x[1], reverse=True)
+    try:
+        # Always fetch fresh data from API (no cache check)
+        logger.info("Force refresh: Fetching fresh family library from API...")
+        game_list = await _fetch_family_library_from_api()
 
-        if len(new_games_to_notify_raw) > 10:
-            logger.warning(
-                f"Detected {len(new_games_to_notify_raw)} new games. Processing only the latest 10 (by AppID) to avoid rate limits."
-            )
-            # In a real scenario, you might want to send a Discord message here.
-            # For web UI, we just log and process a subset.
-            new_games_to_process = new_games_to_notify_raw[:10]
-            message_prefix = f"Detected {len(new_games_to_notify_raw)} new games. Processing only the latest 10. More may be announced in subsequent checks.\n"
-        else:
-            new_games_to_process = new_games_to_notify_raw
-            message_prefix = ""
+        # Update cache with fresh data for next regular check
+        cache_family_library(game_list, cache_minutes=30)
+        logger.info(f"Updated family library cache with {len(game_list)} games")
 
-        notification_messages = []
-        if new_games_to_process:
-            logger.info(
-                f"Processing {len(new_games_to_process)} new games for notification."
-            )
-            for new_appid_tuple in new_games_to_process:
-                new_appid = new_appid_tuple[0]
-
-                # Try to get cached game details first
-                cached_game = get_cached_game_details(new_appid)
-                if cached_game:
-                    logger.info(
-                        f"Using cached game details for new game AppID: {new_appid}"
-                    )
-                    game_data = cached_game
-                else:
-                    # If not cached, fetch from API
-                    await _rate_limit_steam_store_api()  # Apply store API rate limit
-                    game_url = f"https://store.steampowered.com/api/appdetails?appids={new_appid}&cc=us&l=en"
-                    logger.info(
-                        f"Fetching app details from API for new game AppID: {new_appid}"
-                    )
-                    app_info_response = requests.get(game_url, timeout=10)
-                    game_info_json = await _handle_api_response(
-                        "AppDetails (New Game)", app_info_response
-                    )
-                    if not game_info_json:
-                        continue
-
-                    game_data = game_info_json.get(str(new_appid), {}).get("data")
-                    if not game_data:
-                        logger.warning(
-                            f"No game data found for new game AppID {new_appid} in app details response."
-                        )
-                        continue
-
-                    # Cache the game details permanently (game details rarely change)
-                    cache_game_details(new_appid, game_data, permanent=True)
-
-                is_family_shared_game = any(
-                    cat.get("id") == 62 for cat in game_data.get("categories", [])
-                )
-
-                if (
-                    game_data.get("type") == "game"
-                    and not game_data.get("is_free")
-                    and is_family_shared_game
-                ):
-                    owner_steam_id = game_owner_list.get(str(new_appid))
-                    owner_name = current_family_members.get(
-                        owner_steam_id, f"Unknown Owner ({owner_steam_id})"
-                    )
-
-                    # Build the base message
-                    game_name = game_data.get("name", "Unknown Game")
-                    message = f"Thank you to {owner_name} for **{game_name}**\nhttps://store.steampowered.com/app/{new_appid}"
-
-                    # Add pricing information if available
-                    try:
-                        current_price = game_data.get("price_overview", {}).get(
-                            "final_formatted", "N/A"
-                        )
-                        lowest_price = get_lowest_price(int(new_appid))
-
-                        if current_price != "N/A" or lowest_price != "N/A":
-                            price_info = []
-                            if current_price != "N/A":
-                                price_info.append(f"Current: {current_price}")
-                            if lowest_price != "N/A":
-                                price_info.append(f"Lowest ever: ${lowest_price}")
-
-                            if price_info:
-                                message += f"\n💰 {'|'.join(price_info)}"
-                    except Exception as e:
-                        logger.warning(
-                            f"Could not get pricing info for new game {new_appid}: {e}"
-                        )
-
-                    notification_messages.append(message)
-                else:
-                    logger.debug(
-                        f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'."
-                    )
-
-            set_saved_games(all_games_for_db_update)
-            if notification_messages:
-                full_message = message_prefix + "\n\n".join(notification_messages)
-                return {
-                    "success": True,
-                    "message": f"New games detected: {len(new_games_to_process)} games processed. Details:\n{full_message}",
-                }
-            else:
-                return {
-                    "success": True,
-                    "message": "No new family shared games detected for notification.",
-                }
-        else:
-            logger.info("No new games detected.")
-            return {"success": True, "message": "No new games detected."}
+        current_family_members = await _load_family_members_from_db()
+        return await _process_new_games(game_list, current_family_members)
 
     except Exception as e:
         logger.critical(
@@ -410,22 +478,21 @@ async def force_new_game_action() -> Dict[str, Any]:
         }
 
 
-async def force_wishlist_action() -> Dict[str, Any]:
+# ==================== WISHLIST ACTIONS ====================
+
+
+async def _collect_wishlists(
+    current_family_members: dict, force_fresh: bool
+) -> list[list]:
     """
-    Forces a refresh of the wishlist data.
+    Helper to collect wishlists from all family members.
+    Returns global_wishlist: list of [appid, [user_steam_ids]].
     """
-    logger.info("Running force_wishlist_action task...")
     if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
         logger.error("STEAMWORKS_API_KEY is not configured for wishlist task.")
-        return {
-            "success": False,
-            "message": "Steam API key is not configured for wishlist task.",
-        }
+        return []
 
     global_wishlist: list[list] = []
-
-    current_family_members = await _load_family_members_from_db()
-
     all_unique_steam_ids_to_check = set(current_family_members.keys())
 
     for user_steam_id in all_unique_steam_ids_to_check:
@@ -433,21 +500,22 @@ async def force_wishlist_action() -> Dict[str, Any]:
             user_steam_id, f"Unknown ({user_steam_id})"
         )
 
-        # Try to get cached wishlist first
-        cached_wishlist = get_cached_wishlist(user_steam_id)
-        if cached_wishlist is not None:
-            logger.info(
-                f"Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)"
-            )
-            for app_id in cached_wishlist:
-                idx = find_in_2d_list(app_id, global_wishlist)
-                if idx is not None:
-                    global_wishlist[idx][1].append(user_steam_id)
-                else:
-                    global_wishlist.append([app_id, [user_steam_id]])
-            continue
+        if not force_fresh:
+            # Try to get cached wishlist first
+            cached_wishlist = get_cached_wishlist(user_steam_id)
+            if cached_wishlist is not None:
+                logger.info(
+                    f"Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)"
+                )
+                for app_id in cached_wishlist:
+                    idx = find_in_2d_list(app_id, global_wishlist)
+                    if idx is not None:
+                        global_wishlist[idx][1].append(user_steam_id)
+                    else:
+                        global_wishlist.append([app_id, [user_steam_id]])
+                continue
 
-        # If not cached, fetch from API
+        # If not cached or force_fresh is True, fetch from API
         wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
         logger.info(
             f"Fetching wishlist from API for {user_name_for_log} (Steam ID: {user_steam_id})"
@@ -501,6 +569,13 @@ async def force_wishlist_action() -> Dict[str, Any]:
                 exc_info=True,
             )
 
+    return global_wishlist
+
+
+async def _process_wishlist_duplicates(global_wishlist: list[list]) -> Dict[str, Any]:
+    """
+    Helper to process duplicate games in the global wishlist.
+    """
     # First, collect all duplicate games without fetching details
     potential_duplicate_games = []
     for item in global_wishlist:
@@ -529,9 +604,10 @@ async def force_wishlist_action() -> Dict[str, Any]:
 
     # Now process the selected games and fetch their details
     duplicate_games_for_display = []
-    saved_game_appids = {
-        item[0] for item in get_saved_games()
-    }  # Get saved game app IDs for comparison
+    saved_game_appids = (
+        item[0]
+        for item in get_saved_games()  # Get saved game app IDs for comparison
+    )
 
     for item in games_to_process:
         app_id = item[0]
@@ -596,6 +672,63 @@ async def force_wishlist_action() -> Dict[str, Any]:
         }
 
 
+async def check_wishlist_action() -> Dict[str, Any]:
+    """
+    Regular wishlist check that uses cached wishlist data (for scheduled tasks).
+
+    Cache strategy:
+    - Uses cached wishlist data (2-hour TTL)
+    - Always fetches fresh game details (prices change frequently)
+
+    This balances API efficiency with price accuracy.
+    """
+    logger.info("Running check_wishlist_action (cache-respecting for wishlists)...")
+    try:
+        current_family_members = await _load_family_members_from_db()
+        global_wishlist = await _collect_wishlists(
+            current_family_members, force_fresh=False
+        )
+        return await _process_wishlist_duplicates(global_wishlist)
+    except Exception as e:
+        logger.critical(
+            f"An unexpected error occurred in check_wishlist_action: {e}",
+            exc_info=True,
+        )
+        return {
+            "success": False,
+            "message": f"Error checking wishlist: {str(e)}",
+        }
+
+
+async def force_wishlist_action() -> Dict[str, Any]:
+    """
+    Force wishlist refresh that always fetches fresh data (for admin commands).
+
+    Cache strategy:
+    - Always fetches fresh wishlist data
+    - Always fetches fresh game details
+    - Updates cache for next regular check
+
+    This ensures complete accuracy when admin requests it.
+    """
+    logger.info("Running force_wishlist_action (bypassing cache)...")
+    try:
+        current_family_members = await _load_family_members_from_db()
+        global_wishlist = await _collect_wishlists(
+            current_family_members, force_fresh=True
+        )
+        return await _process_wishlist_duplicates(global_wishlist)
+    except Exception as e:
+        logger.critical(
+            f"An unexpected error occurred in force_wishlist_action: {e}",
+            exc_info=True,
+        )
+        return {
+            "success": False,
+            "message": f"Error forcing wishlist refresh: {str(e)}",
+        }
+
+
 async def force_deals_action(
     target_friendly_name: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -633,8 +766,14 @@ async def force_deals_action(
             target_user_steam_ids = list(current_family_members.keys())
             logger.info("Force deals: Checking deals for all family wishlists")
 
-            # Collect wishlist games from the target user(s)
-            global_wishlist: list[list] = []
+        # Collect wishlist games from the target user(s)
+        # Manually implementing since we might target specific users
+        global_wishlist: list[list] = []
+
+        # If targeting specific users, we can't use the generic _collect_wishlists helper easily
+        # without modifying it to accept target users.
+        # For now, keeping the loop but using logic similar to helpers where possible.
+
         for user_steam_id in target_user_steam_ids:
             user_name_for_log = current_family_members.get(
                 user_steam_id, f"Unknown ({user_steam_id})"
