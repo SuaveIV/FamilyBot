@@ -18,6 +18,7 @@ from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,
+    cache_user_games,
     cache_wishlist,
     get_cached_game_details,
     get_cached_wishlist,
@@ -296,6 +297,11 @@ class DatabasePopulator:
                     continue
 
                 logger.info(f"Found {len(games)} games for {name}")
+
+                # Cache the user's game list for !common_games support
+                user_appids = [str(g.get("appid")) for g in games if g.get("appid")]
+                if user_appids:
+                    cache_user_games(steam_id, user_appids)
 
                 user_cached = 0
                 user_skipped = 0

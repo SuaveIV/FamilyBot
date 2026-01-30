@@ -443,6 +443,25 @@ class common_games(Extension):
         self.cleanup_cache_task.start()
         logger.info("--Common Games cache cleanup task started")
 
+        # Warm Discord user cache for all registered users
+        try:
+            registered_users = await self._load_registered_users()
+            if registered_users:
+                logger.info(
+                    f"Warming Discord user cache for {len(registered_users)} users..."
+                )
+                for discord_id in registered_users.keys():
+                    if not get_cached_discord_user(discord_id):
+                        try:
+                            user_obj = await self.bot.fetch_user(discord_id)
+                            if user_obj:
+                                cache_discord_user(discord_id, user_obj.username)
+                        except Exception:
+                            continue
+                logger.info("Discord user cache warming complete")
+        except Exception as e:
+            logger.error(f"Error warming Discord user cache: {e}")
+
 
 def setup(bot):  # Remove type annotation to avoid Extension constructor conflict
     common_games(bot)

@@ -20,6 +20,7 @@ from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY  # pylint: dis
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,  # pylint: disable=wrong-import-position
+    cache_user_games,
     cache_wishlist,
     get_cached_game_details,
     get_cached_wishlist,
@@ -481,6 +482,11 @@ class DatabasePopulator:
                 if not games:
                     continue
 
+                # Cache the user's game list for !common_games support
+                user_appids = [str(g.get("appid")) for g in games if g.get("appid")]
+                if user_appids:
+                    cache_user_games(steam_id, user_appids)
+
                 user_cached, user_skipped, games_to_fetch = self._process_user_games(
                     games, total_processed
                 )
@@ -537,6 +543,11 @@ class DatabasePopulator:
                     continue
 
                 print(f"   🎯 Found {len(games)} games")
+
+                # Cache the user's game list for !common_games support
+                user_appids = [str(g.get("appid")) for g in games if g.get("appid")]
+                if user_appids:
+                    cache_user_games(steam_id, user_appids)
 
                 user_cached, user_skipped, games_to_fetch = self._process_user_games(
                     games, total_processed
