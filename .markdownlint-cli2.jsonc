@@ -1,0 +1,23 @@
+{
+  "config": {
+    "MD013": false,
+    "MD033": false,
+    "MD007": {
+      "indent": 4
+    },
+    "MD024": {
+      "siblings_only": true
+    },
+    "MD030": false,
+    "MD040": false
+  },
+  "ignores": [
+    ".venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "node_modules",
+    "logs",
+    ".gemini"
+  ]
+}

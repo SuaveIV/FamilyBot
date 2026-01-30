@@ -58,8 +58,8 @@ With these changes, the new workflow for setting up the project will be:
 
 ## Benefits
 
--   **Consistent Environment:** Guarantees that all developers are using the same Python version.
--   **Simplified Setup:** New developers can get up and running with just a few commands.
--   **Automation:** The `justfile` handles the complexity of the environment, making it easy to run tasks.
+- **Consistent Environment:** Guarantees that all developers are using the same Python version.
+- **Simplified Setup:** New developers can get up and running with just a few commands.
+- **Automation:** The `justfile` handles the complexity of the environment, making it easy to run tasks.
 
 This integration will make the development process for FamilyBot more robust and developer-friendly.

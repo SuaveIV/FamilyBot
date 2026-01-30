@@ -12,11 +12,11 @@ The original `populate_prices.py` script processed games sequentially (one at a 
 
 ## Performance Comparison
 
-| Script | Processing Mode | Concurrency | Expected Speed | Data Usage Reduction | Best For |
-|--------|----------------|-------------|----------------|---------------------|----------|
-| **Original** | Sequential | 1 request | ~1,200 games/hour | Baseline | Small collections, reliability |
-| **Optimized** | Threading | 10-20 concurrent | ~8,000-12,000 games/hour | 15-25% reduction | General use, balanced performance |
-| **Async** | True Async | 50-100 concurrent | ~20,000-30,000 games/hour | 25-35% reduction | Large collections, maximum speed |
+| Script        | Processing Mode | Concurrency       | Expected Speed            | Data Usage Reduction | Best For                          |
+| ------------- | --------------- | ----------------- | ------------------------- | -------------------- | --------------------------------- |
+| **Original**  | Sequential      | 1 request         | ~1,200 games/hour         | Baseline             | Small collections, reliability    |
+| **Optimized** | Threading       | 10-20 concurrent  | ~8,000-12,000 games/hour  | 15-25% reduction     | General use, balanced performance |
+| **Async**     | True Async      | 50-100 concurrent | ~20,000-30,000 games/hour | 25-35% reduction     | Large collections, maximum speed  |
 
 ### Real-World Performance Examples
 
@@ -222,27 +222,27 @@ python scripts/populate_prices_optimized.py --itad-only --concurrent 15
 
 ### Common Options (All Scripts)
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--steam-only` | Only populate Steam prices | false |
-| `--itad-only` | Only populate ITAD prices | false |
-| `--refresh-current` | Force refresh current prices | false |
-| `--force-refresh` | Force refresh all cached data | false |
-| `--dry-run` | Show what would be done without changes | false |
+| Option              | Description                             | Default |
+| ------------------- | --------------------------------------- | ------- |
+| `--steam-only`      | Only populate Steam prices              | false   |
+| `--itad-only`       | Only populate ITAD prices               | false   |
+| `--refresh-current` | Force refresh current prices            | false   |
+| `--force-refresh`   | Force refresh all cached data           | false   |
+| `--dry-run`         | Show what would be done without changes | false   |
 
 ### Optimized Script Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--concurrent N` | Max concurrent requests | 10 |
-| `--batch-size N` | Batch size for processing | 50 |
+| Option              | Description                                      | Default  |
+| ------------------- | ------------------------------------------------ | -------- |
+| `--concurrent N`    | Max concurrent requests                          | 10       |
+| `--batch-size N`    | Batch size for processing                        | 50       |
 | `--rate-limit MODE` | Rate limiting (adaptive/conservative/aggressive) | adaptive |
 
 ### Async Script Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--concurrent N` | Max concurrent requests | 50 |
+| Option              | Description                                      | Default  |
+| ------------------- | ------------------------------------------------ | -------- |
+| `--concurrent N`    | Max concurrent requests                          | 50       |
 | `--rate-limit MODE` | Rate limiting (adaptive/conservative/aggressive) | adaptive |
 
 ## Rate Limiting Strategies
@@ -449,11 +449,11 @@ python scripts/populate_prices_optimized.py --itad-only --concurrent 15
 
 ### Benchmark Results
 
-| Script | Total Time | Games/Hour | Data Usage | CPU Usage | Memory Usage |
-|--------|------------|------------|------------|-----------|--------------|
-| **Original** | 38 minutes | ~1,200 | 45 MB | 5% | 50 MB |
-| **Optimized** | 4.2 minutes | ~10,700 | 38 MB | 15% | 120 MB |
-| **Async** | 1.8 minutes | ~25,000 | 32 MB | 12% | 95 MB |
+| Script        | Total Time  | Games/Hour | Data Usage | CPU Usage | Memory Usage |
+| ------------- | ----------- | ---------- | ---------- | --------- | ------------ |
+| **Original**  | 38 minutes  | ~1,200     | 45 MB      | 5%        | 50 MB        |
+| **Optimized** | 4.2 minutes | ~10,700    | 38 MB      | 15%       | 120 MB       |
+| **Async**     | 1.8 minutes | ~25,000    | 32 MB      | 12%       | 95 MB        |
 
 ### Key Insights
 

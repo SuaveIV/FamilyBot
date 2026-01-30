@@ -115,7 +115,7 @@ echo "🔄 Auto-bumping version..."
 # Only bump version for certain commit types
 if git diff --cached --name-only | grep -E '\.(py|toml|yml|yaml)$' > /dev/null; then
     python scripts/bump_version.py patch
-    
+
     if [ $? -eq 0 ]; then
         echo "✅ Version bumped successfully"
         git add pyproject.toml
@@ -172,11 +172,11 @@ git push origin --tags
 
 1. **Consistent Commit Messages**: Use conventional commit format
 
-   ```text
-   feat: add new wishlist filtering
-   fix: resolve database connection issue
-   docs: update installation guide
-   ```
+    ```text
+    feat: add new wishlist filtering
+    fix: resolve database connection issue
+    docs: update installation guide
+    ```
 
 2. **Review Before Committing**: The auto-bump happens before commit, so you can review the version change
 
@@ -184,9 +184,9 @@ git push origin --tags
 
 4. **Tag Important Versions**: Create git tags for releases
 
-   ```bash
-   git tag -a v1.2.0 -m "Release v1.2.0: Major wishlist improvements"
-   ```
+    ```bash
+    git tag -a v1.2.0 -m "Release v1.2.0: Major wishlist improvements"
+    ```
 
 5. **Document Changes**: Update CHANGELOG.md or release notes for significant versions
 
@@ -198,23 +198,23 @@ The version bumping system integrates well with CI/CD pipelines:
 # Example GitHub Actions workflow
 name: Release
 on:
-  push:
-    tags:
-      - 'v*'
+    push:
+        tags:
+            - "v*"
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Get version
-        id: version
-        run: echo "VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")" >> $GITHUB_OUTPUT
-      - name: Create Release
-        uses: actions/create-release@v1
-        with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          release_name: FamilyBot v${{ steps.version.outputs.VERSION }}
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - name: Get version
+              id: version
+              run: echo "VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")" >> $GITHUB_OUTPUT
+            - name: Create Release
+              uses: actions/create-release@v1
+              with:
+                  tag_name: v${{ steps.version.outputs.VERSION }}
+                  release_name: FamilyBot v${{ steps.version.outputs.VERSION }}
 ```
 
 ## 🔗 Related Files
@@ -222,7 +222,7 @@ jobs:
 - `scripts/bump_version.py` - Core version bumping logic
 - `scripts/setup_git_hooks.py` - Git hooks setup
 - `scripts/bump_patch.py` - Quick patch version bump
-- `scripts/bump_minor.py` - Quick minor version bump  
+- `scripts/bump_minor.py` - Quick minor version bump
 - `scripts/bump_major.py` - Quick major version bump
 - `pyproject.toml` - Project configuration with version
 - `.git/hooks/pre-commit` - Git pre-commit hook (after setup)

@@ -69,28 +69,28 @@ This example plugin demonstrates best practices for creating FamilyBot plugins. 
 - **Description**: Search for items using the example API
 - **Usage**: `!example_search gaming news`
 - **Features**:
-  - API caching (15 minutes)
-  - Rate limiting (2 seconds between calls)
-  - Message truncation for long results
-  - Comprehensive error handling
+    - API caching (15 minutes)
+    - Rate limiting (2 seconds between calls)
+    - Message truncation for long results
+    - Comprehensive error handling
 
 #### `!example_list`
 
 - **Description**: List all items from the example database
 - **Usage**: `!example_list`
 - **Features**:
-  - Database query with proper connection handling
-  - Message truncation for large lists
-  - Formatted output with item details
+    - Database query with proper connection handling
+    - Message truncation for large lists
+    - Formatted output with item details
 
 #### `!example_add "ITEM_NAME" "DESCRIPTION"`
 
 - **Description**: Add an item to the example database
 - **Usage**: `!example_add "Cool Game" "A really fun game to play"`
 - **Features**:
-  - Input validation
-  - Database insertion with error handling
-  - Success/failure feedback
+    - Input validation
+    - Database insertion with error handling
+    - Success/failure feedback
 
 ### Admin Commands
 
@@ -99,10 +99,10 @@ This example plugin demonstrates best practices for creating FamilyBot plugins. 
 - **Description**: Display plugin administration information
 - **Usage**: `!example_admin` (DM only, admin only)
 - **Features**:
-  - Cache statistics
-  - Database item count
-  - Last API call timestamp
-  - System health information
+    - Cache statistics
+    - Database item count
+    - Last API call timestamp
+    - System health information
 
 ## 🏗️ Architecture Overview
 
@@ -111,10 +111,10 @@ This example plugin demonstrates best practices for creating FamilyBot plugins. 
 ```python
 class example_plugin(Extension):
     """Main plugin class inheriting from interactions.Extension"""
-    
+
     # Constants
     API_RATE_LIMIT = 2.0  # Rate limiting configuration
-    
+
     # Instance variables
     self.bot: FamilyBotClient          # Bot instance
     self._last_api_call: float         # Rate limiting tracker
@@ -170,11 +170,11 @@ class example_plugin(Extension):
 try:
     # Main operation logic
     result = await some_operation()
-    
+
 except SpecificException as e:
     logger.error(f"Specific error: {e}")
     await self._send_admin_dm(f"Error details: {e}")
-    
+
 except Exception as e:
     logger.critical(f"Unexpected error: {e}", exc_info=True)
     await self._send_admin_dm(f"Critical error: {e}")
@@ -192,17 +192,17 @@ async def command_function(self, ctx: PrefixedContext, ...):
     if not required_param:
         await ctx.send("❌ Error message with usage example")
         return
-    
+
     # Loading message for long operations
     loading_message = await ctx.send("🔍 Processing...")
-    
+
     try:
         # Main command logic
         result = await self.process_command()
-        
+
         # Success response
         await loading_message.edit(content=result)
-        
+
     except Exception as e:
         # Error handling
         await loading_message.edit(content="❌ Error occurred")
@@ -217,15 +217,15 @@ async def database_operation(self):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Database operations
         cursor.execute("SQL QUERY", (params,))
         conn.commit()
-        
+
     except sqlite3.Error as e:
         logger.error(f"Database error: {e}")
         await self._send_admin_dm(f"DB error: {e}")
-        
+
     finally:
         if conn:
             conn.close()

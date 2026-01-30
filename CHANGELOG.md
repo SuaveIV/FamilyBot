@@ -1,4 +1,7 @@
-### Added
+# Changelog
+
+## Added
+
 - **CI/CD & Tooling**:
     - Integrated static analysis and CI tools.
     - Added a Justfile for cross-platform task management and setup automation.
@@ -23,6 +26,7 @@
     - Added Steam integration details to third-party attributions.
 
 ### Changed
+
 - **Refactoring**:
     - Applied linting fixes and code formatting.
     - Refactored `token_sender` and `api` modules.
@@ -38,6 +42,7 @@
     - Updated dependencies and enhanced Steam API integration in the `steam_family` plugin.
 
 ### Fixed
+
 - **Scripts**:
     - Resolved `justfile` script path and error handling issues.
 - **Core Functionality**:

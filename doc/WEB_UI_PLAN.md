@@ -11,17 +11,17 @@ The web-based UI will integrate with the existing FamilyBot system, leveraging t
 ## Technology Stack Selection
 
 - **Backend Framework**: **FastAPI** (Recommended over Flask)
-  - **Pros**: Automatic API documentation, async support, type hints, modern Python
-  - **Cons**: Slightly more complex than Flask
-  - **Alternative**: Flask (simpler, but less feature-rich)
+    - **Pros**: Automatic API documentation, async support, type hints, modern Python
+    - **Cons**: Slightly more complex than Flask
+    - **Alternative**: Flask (simpler, but less feature-rich)
 
 - **Frontend**: **HTML/CSS/JavaScript with Bootstrap** (Keep it simple)
-  - **Pros**: No build process, easy to maintain, responsive design
-  - **Alternative**: React/Vue (more complex but more interactive)
+    - **Pros**: No build process, easy to maintain, responsive design
+    - **Alternative**: React/Vue (more complex but more interactive)
 
 - **Real-time Updates**: **WebSocket** integration
-  - Reuse existing WebSocket infrastructure
-  - Add new endpoints for UI communication
+    - Reuse existing WebSocket infrastructure
+    - Add new endpoints for UI communication
 
 ## Implementation Phases
 
@@ -96,11 +96,11 @@ Add to `config-template.yml`:
 
 ```yaml
 web_ui:
-  enabled: true
-  host: "127.0.0.1"
-  port: 8080
-  auth_token: "your-secure-token-here"  # For API access
-  cors_origins: ["http://localhost:8080"]
+    enabled: true
+    host: "127.0.0.1"
+    port: 8080
+    auth_token: "your-secure-token-here" # For API access
+    cors_origins: ["http://localhost:8080"]
 ```
 
 ## Dependencies to Add

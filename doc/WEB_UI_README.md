@@ -88,22 +88,22 @@ If you need to customize the Web UI settings, add the following section to your 
 ```yaml
 # --- Web UI Configuration ---
 web_ui:
-  enabled: true                    # Enable/disable the Web UI
-  host: "127.0.0.1"               # Host to bind the web server to
-  port: 8080                      # Port for the web server
-  default_theme: "default"        # Default Bootswatch theme
+    enabled: true # Enable/disable the Web UI
+    host: "127.0.0.1" # Host to bind the web server to
+    port: 8080 # Port for the web server
+    default_theme: "default" # Default Bootswatch theme
 ```
 
 ## Configuration
 
 ### Basic Configuration Options
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `enabled` | `true` | Enable or disable the Web UI completely |
-| `host` | `"127.0.0.1"` | IP address to bind the web server to |
-| `port` | `8080` | Port number for the web server |
-| `default_theme` | `"default"` | Default theme for new users |
+| Setting         | Default       | Description                             |
+| --------------- | ------------- | --------------------------------------- |
+| `enabled`       | `true`        | Enable or disable the Web UI completely |
+| `host`          | `"127.0.0.1"` | IP address to bind the web server to    |
+| `port`          | `8080`        | Port number for the web server          |
+| `default_theme` | `"default"`   | Default theme for new users             |
 
 ### Host Configuration
 

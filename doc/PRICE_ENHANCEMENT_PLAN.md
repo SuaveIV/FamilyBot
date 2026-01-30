@@ -2,7 +2,7 @@
 
 **Document Version**: 1.0  
 **Created**: June 28, 2025  
-**Status**: Planning Phase  
+**Status**: Planning Phase
 
 ## 🎯 Overview & Goals
 
@@ -66,7 +66,7 @@ App ID → ITAD Lookup → ITAD Game ID → ITAD StoreLow API → Cache ITAD Pri
 
 **Target Version**: v1.0.5 (Already Implemented)
 **Timeline**: Immediate implementation  
-**Risk Level**: Low  
+**Risk Level**: Low
 
 #### **Scope**
 
@@ -110,7 +110,7 @@ ALTER TABLE game_details_cache ADD COLUMN price_source TEXT DEFAULT 'store_api';
 
 **Target Version**: v1.0.6
 **Timeline**: After Phase 1 completion and testing  
-**Risk Level**: Medium  
+**Risk Level**: Medium
 
 #### **Phase 2 Scope**
 
@@ -155,7 +155,7 @@ ALTER TABLE itad_price_cache ADD COLUMN steam_game_name TEXT;
 
 **Target Version**: v1.0.7
 **Timeline**: After Phase 2 completion and validation  
-**Risk Level**: Low (polish and optimization)  
+**Risk Level**: Low (polish and optimization)
 
 #### **Phase 3 Scope**
 
@@ -189,35 +189,35 @@ ALTER TABLE itad_price_cache ADD COLUMN steam_game_name TEXT;
 ```python
 def fetch_steam_price_enhanced(self, app_id: str) -> tuple[str, bool, str]:
     """Enhanced Steam price fetching with Steam library fallback."""
-    
+
     # Strategy 1: Current Steam Store API (keep existing)
     success, source = self.fetch_steam_store_price(app_id)
     if success:
         return app_id, True, 'store_api'
-    
+
     # Strategy 2: Steam library WebAPI fallback
     success, source = self.fetch_steam_library_price(app_id)
     if success:
         return app_id, True, 'steam_library'
-    
+
     # Strategy 3: Steam library package lookup
     success, source = self.fetch_steam_package_price(app_id)
     if success:
         return app_id, True, 'package_lookup'
-    
+
     return app_id, False, 'failed'
 
 def fetch_steam_library_price(self, app_id: str) -> tuple[bool, str]:
     """Use Steam library WebAPI as fallback for price data."""
     try:
         from steam.webapi import WebAPI
-        
+
         if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
             logger.debug(f"Steam library fallback skipped for {app_id}: No API key")
             return False, 'no_api_key'
-        
+
         api = WebAPI(key=STEAMWORKS_API_KEY)
-        
+
         # Try to get app info using Steam library
         try:
             # Get app list and find our app
@@ -233,19 +233,19 @@ def fetch_steam_library_price(self, app_id: str) -> tuple[bool, str]:
                             'categories': [],
                             'price_overview': None  # No price data from app list
                         }
-                        
+
                         # Cache the basic game details
                         cache_game_details_with_source(app_id, game_data, 'steam_library')
                         logger.debug(f"Steam library fallback successful for app {app_id}: {app['name']}")
                         return True, 'steam_library'
-                        
+
         except Exception as e:
             logger.debug(f"Steam library WebAPI call failed for {app_id}: {e}")
             return False, 'webapi_error'
-        
+
         logger.debug(f"Steam library fallback: app {app_id} not found in app list")
         return False, 'not_found'
-        
+
     except ImportError:
         logger.debug("Steam library not available for fallback")
         return False, 'library_unavailable'
@@ -257,19 +257,19 @@ def fetch_steam_package_price(self, app_id: str) -> tuple[bool, str]:
     """Use Steam library for package-based price lookup."""
     try:
         from steam.webapi import WebAPI
-        
+
         if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
             return False, 'no_api_key'
-        
+
         api = WebAPI(key=STEAMWORKS_API_KEY)
-        
+
         # Try to get package information for the app
         # This is more advanced and may require additional Steam library features
         # Implementation depends on available Steam library capabilities
-        
+
         logger.debug(f"Steam package lookup attempted for app {app_id}")
         return False, 'not_implemented'  # Placeholder for future implementation
-        
+
     except ImportError:
         return False, 'library_unavailable'
     except Exception as e:
@@ -280,7 +280,7 @@ def cache_game_details_with_source(self, app_id: str, game_data: dict, source: s
     """Enhanced cache_game_details with source tracking."""
     # Call existing cache_game_details but with source parameter
     cache_game_details(app_id, game_data, permanent=True)
-    
+
     # Update the price_source field
     try:
         conn = get_db_connection()
@@ -304,24 +304,24 @@ def migrate_database_phase1():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Check if column already exists
         cursor.execute("PRAGMA table_info(game_details_cache)")
         columns = [col[1] for col in cursor.fetchall()]
-        
+
         if 'price_source' not in columns:
             cursor.execute("ALTER TABLE game_details_cache ADD COLUMN price_source TEXT DEFAULT 'store_api'")
-            
+
             # Update existing entries to have 'store_api' as source
             cursor.execute("UPDATE game_details_cache SET price_source = 'store_api' WHERE price_source IS NULL")
-            
+
             conn.commit()
             logger.info("Phase 1 database migration completed: Added price_source column")
         else:
             logger.info("Phase 1 database migration skipped: price_source column already exists")
-        
+
         conn.close()
-        
+
     except Exception as e:
         logger.error(f"Phase 1 database migration failed: {e}")
         raise
@@ -334,34 +334,34 @@ def migrate_database_phase1():
 ```python
 def fetch_itad_price_enhanced(self, app_id: str) -> tuple[str, str]:
     """Enhanced ITAD fetching with Steam library assistance."""
-    
+
     # Strategy 1: Current ITAD App ID lookup (keep existing)
     result = self.fetch_itad_by_appid(app_id)
     if result == "cached":
         return app_id, result
-    
+
     # Strategy 2: Steam library assisted game identification
     game_info = self.get_steam_library_game_info(app_id)
     if game_info and game_info.get('name'):
         result = self.fetch_itad_by_name(app_id, game_info['name'])
         if result == "cached":
             return app_id, result
-    
+
     # Strategy 3: Enhanced name variations (future)
     # Could try alternative names, remove subtitles, etc.
-    
+
     return app_id, "not_found"
 
 def get_steam_library_game_info(self, app_id: str) -> Optional[dict]:
     """Get enhanced game info from Steam library for ITAD matching."""
     try:
         from steam.webapi import WebAPI
-        
+
         if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
             return None
-        
+
         api = WebAPI(key=STEAMWORKS_API_KEY)
-        
+
         # Get app list and find our app
         app_list = api.call('ISteamApps.GetAppList')
         if app_list and 'applist' in app_list:
@@ -371,9 +371,9 @@ def get_steam_library_game_info(self, app_id: str) -> Optional[dict]:
                         'name': app['name'],
                         'appid': app['appid']
                     }
-        
+
         return None
-        
+
     except Exception as e:
         logger.debug(f"Steam library game info failed for {app_id}: {e}")
         return None
@@ -383,43 +383,43 @@ def fetch_itad_by_name(self, app_id: str, game_name: str) -> str:
     try:
         # Use ITAD search API to find game by name
         search_url = f"https://api.isthereanydeal.com/games/search/v1?key={ITAD_API_KEY}&title={game_name}"
-        
+
         search_response = self.make_request_with_retry(search_url, method="GET", api_type="itad")
         if search_response is None:
             return "error"
-        
+
         search_data = self.handle_api_response(f"ITAD Search ({game_name})", search_response)
         if not search_data or not search_data.get('games'):
             return "not_found"
-        
+
         # Take the first match (most relevant)
         game_id = search_data['games'][0].get('id')
         if not game_id:
             return "not_found"
-        
+
         # Now get price data using the found game ID
         storelow_url = f"https://api.isthereanydeal.com/games/storelow/v2?key={ITAD_API_KEY}&country=US&shops=61"
         storelow_response = self.make_request_with_retry(storelow_url, method="POST", json_data=[game_id], api_type="itad")
-        
+
         if storelow_response is None:
             return "error"
-        
+
         storelow_data = self.handle_api_response(f"ITAD StoreLow ({game_name})", storelow_response)
-        
+
         if storelow_data and storelow_data[0].get("lows"):
             low = storelow_data[0]["lows"][0]
-            
+
             # Cache with enhanced metadata
             cache_itad_price_enhanced(app_id, {
-                'lowest_price': str(low["price"]["amount"]), 
-                'lowest_price_formatted': f"${low['price']['amount']}", 
+                'lowest_price': str(low["price"]["amount"]),
+                'lowest_price_formatted': f"${low['price']['amount']}",
                 'shop_name': low.get("shop", {}).get("name", "Unknown Store")
             }, lookup_method='name_search', steam_game_name=game_name)
-            
+
             return "cached"
         else:
             return "not_found"
-            
+
     except Exception as e:
         logger.error(f"ITAD name search failed for {game_name}: {e}")
         return "error"

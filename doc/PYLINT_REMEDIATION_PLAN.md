@@ -57,9 +57,9 @@ The codebase has **1,000+ pylint errors** across 50+ Python files with a current
 
 - **Similar lines in files (R0801)**: Extensive duplicate code blocks
 - **Major duplication between**:
-  - `familybot.lib.plugin_admin_actions` and `familybot.plugins.steam_family`
-  - `populate_database.py` and `populate_prices.py`
-  - Various admin command implementations
+    - `familybot.lib.plugin_admin_actions` and `familybot.plugins.steam_family`
+    - `populate_database.py` and `populate_prices.py`
+    - Various admin command implementations
 
 ## Files with Most Critical Issues
 
@@ -159,10 +159,10 @@ The codebase has **1,000+ pylint errors** across 50+ Python files with a current
 
 - **Priority**: Extract common functions from duplicated code blocks
 - **Focus Areas**:
-  - Steam API interaction patterns
-  - Database operation patterns
-  - Wishlist processing logic
-  - Game data caching logic
+    - Steam API interaction patterns
+    - Database operation patterns
+    - Wishlist processing logic
+    - Game data caching logic
 
 #### 5.2 Reduce Function Complexity
 
@@ -234,15 +234,15 @@ The codebase has **1,000+ pylint errors** across 50+ Python files with a current
 
 ## Timeline Estimate
 
-| Phase | Duration | Risk Level | Error Reduction |
-|-------|----------|------------|-----------------|
-| Phase 1 | 2-3 hours | Low | ~500 errors |
-| Phase 2 | 1-2 hours | Low | ~30 errors |
-| Phase 3 | 4-6 hours | Medium | ~200 errors |
-| Phase 4 | 3-4 hours | Medium | ~100 errors |
-| Phase 5 | 8-12 hours | High | ~50 errors |
-| Phase 6 | 6-8 hours | High | Remaining |
-| **Total** | **24-35 hours** | | **~1000 errors** |
+| Phase     | Duration        | Risk Level | Error Reduction  |
+| --------- | --------------- | ---------- | ---------------- |
+| Phase 1   | 2-3 hours       | Low        | ~500 errors      |
+| Phase 2   | 1-2 hours       | Low        | ~30 errors       |
+| Phase 3   | 4-6 hours       | Medium     | ~200 errors      |
+| Phase 4   | 3-4 hours       | Medium     | ~100 errors      |
+| Phase 5   | 8-12 hours      | High       | ~50 errors       |
+| Phase 6   | 6-8 hours       | High       | Remaining        |
+| **Total** | **24-35 hours** |            | **~1000 errors** |
 
 ## Next Steps
 

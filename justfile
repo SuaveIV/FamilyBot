@@ -12,8 +12,14 @@ setup:
     @echo "🚀 Setting up FamilyBot development environment..."
     just create-venv
     just install-deps
+    just node-deps
     just verify-setup
     @echo "✅ Setup complete! Run 'just run' to start the bot."
+
+# Install Node.js dependencies for linting and formatting
+node-deps:
+    @echo "📥 Installing Node.js development dependencies..."
+    mise exec -- npm install -g markdownlint-cli2 prettier
 
 # Create virtual environment using uv
 create-venv:
@@ -206,10 +212,25 @@ format:
     @echo "✨ Formatting code with ruff..."
     mise exec -- uv run ruff format src/ scripts/
 
+# Format markdown files with prettier
+format-md:
+    @echo "📝 Formatting markdown files..."
+    mise exec -- npx prettier --write "**/*.md"
+
 # Check code formatting without making changes
 format-check:
     @echo "🔍 Checking code formatting..."
     mise exec -- uv run ruff format --check src/ scripts/
+
+# Check markdown formatting without making changes
+format-md-check:
+    @echo "🔍 Checking markdown formatting..."
+    mise exec -- npx prettier --check "**/*.md"
+
+# Run markdown linter
+lint-md:
+    @echo "🔍 Linting markdown files..."
+    mise exec -- npx markdownlint-cli2 "**/*.md"
 
 # Run mypy type checker
 type-check:
@@ -232,11 +253,11 @@ format-toml:
     mise exec -- uv run tombi format pyproject.toml
 
 # Run all code quality checks
-check: lint format-check type-check audit check-toml
+check: lint lint-md format-check format-md-check type-check audit check-toml
     @echo "✅ All code quality checks passed!"
 
 # Fix and format all code issues
-fix: lint-fix format format-toml
+fix: lint-fix format format-md format-toml
     @echo "✅ Code fixed and formatted!"
 
 # Legacy lint command (for backward compatibility)

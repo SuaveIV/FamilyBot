@@ -68,24 +68,24 @@ The behavior is controlled by `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: local
-    hooks:
-      - id: pylint
-        name: Pylint
-        entry: uv run pylint
-        language: system
-        types: [python]
-        files: ^(src/|scripts/).*\.py$
-        args: [--rcfile=.pylintrc]
-      
-      - id: version-bump
-        name: Auto-bump version
-        entry: uv run python scripts/bump_version.py patch
-        language: system
-        stages: [pre-commit]
-        pass_filenames: false
-        always_run: false
-        verbose: true
+    - repo: local
+      hooks:
+          - id: pylint
+            name: Pylint
+            entry: uv run pylint
+            language: system
+            types: [python]
+            files: ^(src/|scripts/).*\.py$
+            args: [--rcfile=.pylintrc]
+
+          - id: version-bump
+            name: Auto-bump version
+            entry: uv run python scripts/bump_version.py patch
+            language: system
+            stages: [pre-commit]
+            pass_filenames: false
+            always_run: false
+            verbose: true
 ```
 
 **Important**:

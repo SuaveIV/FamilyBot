@@ -61,9 +61,9 @@ This new module will serve as the central hub for all discoverable admin command
     ```
 
 - **Responsibilities**:
-  - Provide a decorator for plugins to register their admin functions.
-  - Store metadata (name, description, category, function reference, parameters) for each command.
-  - Offer methods to retrieve all commands, specific commands, and commands grouped by category.
+    - Provide a decorator for plugins to register their admin functions.
+    - Store metadata (name, description, category, function reference, parameters) for each command.
+    - Offer methods to retrieve all commands, specific commands, and commands grouped by category.
 
 ### 2.2. Plugin Integration (Example: `src/familybot/plugins/steam_family.py`)
 
@@ -109,8 +109,8 @@ Plugins will use the `register_admin_command` decorator to expose their admin fu
     ```
 
 - **Note**: The existing Discord-specific prefixed commands (`force_new_game_command`, `force_wishlist_command`, `purge_cache_command`) can either:
-  - Call these new `web_` prefixed methods directly.
-  - Or, be refactored to simply call the underlying logic in `plugin_admin_actions.py` which is then called by both the Discord commands and the web-registered commands. The latter is already partially done.
+    - Call these new `web_` prefixed methods directly.
+    - Or, be refactored to simply call the underlying logic in `plugin_admin_actions.py` which is then called by both the Discord commands and the web-registered commands. The latter is already partially done.
 
 ### 2.3. Generic Web API Endpoint (`src/familybot/web/api.py`)
 
@@ -161,7 +161,7 @@ A single, generic endpoint will handle all admin command execution requests from
                 except json.JSONDecodeError:
                     if cmd.params: # If params are expected but no JSON body
                          raise HTTPException(status_code=400, detail="Invalid JSON body for command parameters.")
-            
+
             # Execute the command function
             # Assuming the command function returns a dict with "success" and "message"
             # Similar to the current plugin_admin_actions functions.
@@ -203,25 +203,27 @@ The web UI will fetch the list of available commands from the new `/api/admin/co
 - **`src/familybot/web/static/js/admin.js`**:
 
     ```javascript
-    document.addEventListener('DOMContentLoaded', function() {
-        const adminCommandsContainer = document.getElementById('admin-commands-container');
-        const commandOutput = document.getElementById('command-output');
+    document.addEventListener("DOMContentLoaded", function () {
+        const adminCommandsContainer = document.getElementById(
+            "admin-commands-container",
+        );
+        const commandOutput = document.getElementById("command-output");
 
         async function fetchAndRenderCommands() {
             try {
-                const response = await fetch('/api/admin/commands');
+                const response = await fetch("/api/admin/commands");
                 const groupedCommands = await response.json(); // { "CategoryName": [{name: "", description: "", params: []}] }
 
-                adminCommandsContainer.innerHTML = ''; // Clear existing content
+                adminCommandsContainer.innerHTML = ""; // Clear existing content
 
                 for (const category in groupedCommands) {
-                    const categorySection = document.createElement('div');
-                    categorySection.classList.add('command-section');
+                    const categorySection = document.createElement("div");
+                    categorySection.classList.add("command-section");
                     categorySection.innerHTML = `<h2>${category}</h2>`;
 
-                    groupedCommands[category].forEach(cmd => {
-                        const button = document.createElement('button');
-                        button.classList.add('admin-command-btn');
+                    groupedCommands[category].forEach((cmd) => {
+                        const button = document.createElement("button");
+                        button.classList.add("admin-command-btn");
                         button.dataset.commandName = cmd.name;
                         button.textContent = cmd.description; // Or a more user-friendly label
 
@@ -237,7 +239,9 @@ The web UI will fetch the list of available commands from the new `/api/admin/co
                         }
 
                         categorySection.appendChild(button);
-                        categorySection.appendChild(document.createElement('p')).classList.add('description');
+                        categorySection
+                            .appendChild(document.createElement("p"))
+                            .classList.add("description");
                         categorySection.lastChild.textContent = cmd.description; // Display description below button
                     });
                     adminCommandsContainer.appendChild(categorySection);
@@ -245,19 +249,19 @@ The web UI will fetch the list of available commands from the new `/api/admin/co
 
                 // Re-attach event listeners to the newly created buttons
                 attachCommandButtonListeners();
-
             } catch (error) {
                 adminCommandsContainer.innerHTML = `<p class="error">Failed to load admin commands: ${error}</p>`;
-                console.error('Error fetching admin commands:', error);
+                console.error("Error fetching admin commands:", error);
             }
         }
 
         function attachCommandButtonListeners() {
-            const commandButtons = document.querySelectorAll('.admin-command-btn');
-            commandButtons.forEach(button => {
+            const commandButtons =
+                document.querySelectorAll(".admin-command-btn");
+            commandButtons.forEach((button) => {
                 // Remove old listeners to prevent duplicates
-                button.removeEventListener('click', handleCommandClick);
-                button.addEventListener('click', handleCommandClick);
+                button.removeEventListener("click", handleCommandClick);
+                button.addEventListener("click", handleCommandClick);
             });
         }
 
@@ -266,18 +270,23 @@ The web UI will fetch the list of available commands from the new `/api/admin/co
             const commandLabel = this.textContent.trim();
 
             // Disable all buttons
-            document.querySelectorAll('.admin-command-btn').forEach(btn => btn.disabled = true);
+            document
+                .querySelectorAll(".admin-command-btn")
+                .forEach((btn) => (btn.disabled = true));
             commandOutput.innerHTML = `<p>Executing "${commandLabel}"...</p>`;
 
             try {
                 // If command has parameters, collect them from a form (not implemented in this simplified example)
                 const requestBody = {}; // Populate with actual parameter values if applicable
 
-                const response = await fetch(`/api/admin/execute/${commandName}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody) // Send parameters if any
-                });
+                const response = await fetch(
+                    `/api/admin/execute/${commandName}`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(requestBody), // Send parameters if any
+                    },
+                );
                 const data = await response.json();
 
                 let outputHtml = `<h3>${commandLabel} Result:</h3>`;
@@ -287,13 +296,14 @@ The web UI will fetch the list of available commands from the new `/api/admin/co
                     outputHtml += `<p class="error">${data.message}</p>`;
                 }
                 commandOutput.innerHTML = outputHtml;
-
             } catch (error) {
                 commandOutput.innerHTML = `<h3>Error:</h3><p class="error">An error occurred while executing the command: ${error}</p>`;
-                console.error('Error executing command:', error);
+                console.error("Error executing command:", error);
             } finally {
                 // Re-enable all buttons
-                document.querySelectorAll('.admin-command-btn').forEach(btn => btn.disabled = false);
+                document
+                    .querySelectorAll(".admin-command-btn")
+                    .forEach((btn) => (btn.disabled = false));
             }
         }
 
@@ -307,7 +317,7 @@ The web UI will fetch the list of available commands from the new `/api/admin/co
 2. **Refactor `src/familybot/lib/plugin_admin_actions.py`**:
     - Decorate existing functions (e.g., `purge_game_details_cache_action`, `force_new_game_action`, `force_wishlist_action`) with `@register_admin_command`.
     - Consider moving these functions directly into the respective plugins if they are tightly coupled, or keep them as a shared library that plugins call and then re-expose via the decorator.
-3. **Update `src/familybot/FamilyBot.py`**: Ensure that plugins are loaded *before* the web server starts, so that all admin commands are registered.
+3. **Update `src/familybot/FamilyBot.py`**: Ensure that plugins are loaded _before_ the web server starts, so that all admin commands are registered.
 4. **Modify `src/familybot/web/api.py`**:
     - Remove the specific admin POST endpoints (`/api/admin/populate-database`, `/api/admin/purge-game-details`, `/api/admin/plugin-action`).
     - Add the new GET endpoint `/api/admin/commands` to expose registered command metadata.

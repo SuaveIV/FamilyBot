@@ -39,9 +39,9 @@ shutdown: false
 
 ```yaml
 token_sender:
-  token_save_path: "tokens/"
-  browser_profile_path: ""
-  update_buffer_hours: 1
+    token_save_path: "tokens/"
+    browser_profile_path: ""
+    update_buffer_hours: 1
 ```
 
 ### 4. New Features
@@ -78,9 +78,9 @@ Add the token_sender section to your main `config.yml`:
 
 ```yaml
 token_sender:
-  token_save_path: "tokens/"  # Directory for token storage
-  browser_profile_path: ""    # Optional: Path to browser profile logged into Steam
-  update_buffer_hours: 1      # Hours before expiry to update token
+    token_save_path: "tokens/" # Directory for token storage
+    browser_profile_path: "" # Optional: Path to browser profile logged into Steam
+    update_buffer_hours: 1 # Hours before expiry to update token
 ```
 
 ### 3. Browser Profile (Optional)

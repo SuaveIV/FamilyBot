@@ -65,9 +65,9 @@ Links Discord users to Steam accounts.
 
 ```json
 {
-  "type": "user",
-  "discord_id": "123456789012345678",
-  "steam_id": "76561198000000000"
+    "type": "user",
+    "discord_id": "123456789012345678",
+    "steam_id": "76561198000000000"
 }
 ```
 
@@ -77,10 +77,10 @@ Adds family members to the database.
 
 ```json
 {
-  "type": "family_member",
-  "steam_id": "76561198000000000",
-  "friendly_name": "John Doe",
-  "discord_id": "123456789012345678"
+    "type": "family_member",
+    "steam_id": "76561198000000000",
+    "friendly_name": "John Doe",
+    "discord_id": "123456789012345678"
 }
 ```
 
@@ -90,9 +90,9 @@ Records games that have been detected/saved.
 
 ```json
 {
-  "type": "saved_game",
-  "appid": "730",
-  "detected_at": "2023-12-01T10:30:00Z"
+    "type": "saved_game",
+    "appid": "730",
+    "detected_at": "2023-12-01T10:30:00Z"
 }
 ```
 
@@ -102,15 +102,13 @@ Caches detailed game information.
 
 ```json
 {
-  "type": "game_details",
-  "appid": "440",
-  "name": "Team Fortress 2",
-  "game_type": "game",
-  "is_free": true,
-  "categories": [
-    {"id": 1, "description": "Multi-player"}
-  ],
-  "price_overview": null
+    "type": "game_details",
+    "appid": "440",
+    "name": "Team Fortress 2",
+    "game_type": "game",
+    "is_free": true,
+    "categories": [{ "id": 1, "description": "Multi-player" }],
+    "price_overview": null
 }
 ```
 
@@ -120,11 +118,11 @@ Import multiple records at once.
 
 ```json
 {
-  "type": "batch",
-  "data": [
-    {"type": "user", "discord_id": "123", "steam_id": "456"},
-    {"type": "family_member", "steam_id": "789", "friendly_name": "Jane"}
-  ]
+    "type": "batch",
+    "data": [
+        { "type": "user", "discord_id": "123", "steam_id": "456" },
+        { "type": "family_member", "steam_id": "789", "friendly_name": "Jane" }
+    ]
 }
 ```
 
@@ -304,3 +302,4 @@ Use `--dry-run` to test without making changes:
 
 ```bash
 python scripts/json_database_importer.py --file data.json --dry-run
+```

@@ -12,7 +12,7 @@ This document explains the fixes applied to `populate_prices_async.py` to resolv
 - **Impact**: 50+ simultaneous SQLite connections causing lock contention
 - **Root Cause**: Each async task called database functions that created their own connections
 
-### 2. Transaction Management Problems  
+### 2. Transaction Management Problems
 
 - **Problem**: Database functions opened/closed their own connections without transaction coordination
 - **Impact**: Race conditions when multiple coroutines tried to write simultaneously
@@ -37,14 +37,14 @@ This document explains the fixes applied to `populate_prices_async.py` to resolv
 Instead of writing to database during async phase, the solution implements a two-phase approach:
 
 1. **Phase 1: Async API Data Collection**
-   - All async tasks collect data into thread-safe in-memory structures
-   - No database writes during concurrent execution
-   - Full async performance benefits maintained
+    - All async tasks collect data into thread-safe in-memory structures
+    - No database writes during concurrent execution
+    - Full async performance benefits maintained
 
 2. **Phase 2: Safe Database Writing**
-   - After async collection completes, write data in safe batches
-   - Use existing synchronous database functions (proven to work)
-   - Proper transaction handling with rollback capability
+    - After async collection completes, write data in safe batches
+    - Use existing synchronous database functions (proven to work)
+    - Proper transaction handling with rollback capability
 
 ### Implementation Details
 
@@ -53,7 +53,7 @@ Instead of writing to database during async phase, the solution implements a two
 ```python
 async def fetch_steam_price_single(self, app_id: str) -> Tuple[str, bool, dict, str]:
     # Returns (app_id, success, game_data, source) instead of writing to DB
-    
+
 async def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str, dict, str]:
     # Returns (app_id, status, price_data, lookup_method) instead of writing to DB
 ```
@@ -63,7 +63,7 @@ async def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str, dict, st
 ```python
 def batch_write_steam_data(self, steam_data: Dict[str, Dict], batch_size: int = 100) -> int:
     # Writes Steam data in safe batches with proper error handling
-    
+
 def batch_write_itad_data(self, itad_data: Dict[str, Dict], batch_size: int = 100) -> int:
     # Writes ITAD data in safe batches with proper error handling
 ```
@@ -83,7 +83,7 @@ def batch_write_itad_data(self, itad_data: Dict[str, Dict], batch_size: int = 10
 - Zero data corruption or lost updates
 - Proper error recovery mechanisms
 
-#### 2. Performance  
+#### 2. Performance
 
 - **Maintains 10-50x speed improvement** over synchronous version
 - Full async benefits for API calls (the bottleneck)
@@ -122,12 +122,12 @@ The script now works in two distinct phases:
 
 ## Performance Comparison
 
-| Metric | Original Async | Fixed Async | Improvement |
-|--------|---------------|-------------|-------------|
-| API Speed | 50x faster | 50x faster | Maintained |
-| Database Reliability | ~60% success | 99%+ success | +65% |
-| Error Handling | Basic | Comprehensive | Major improvement |
-| Data Integrity | At risk | Guaranteed | Critical fix |
+| Metric               | Original Async | Fixed Async   | Improvement       |
+| -------------------- | -------------- | ------------- | ----------------- |
+| API Speed            | 50x faster     | 50x faster    | Maintained        |
+| Database Reliability | ~60% success   | 99%+ success  | +65%              |
+| Error Handling       | Basic          | Comprehensive | Major improvement |
+| Data Integrity       | At risk        | Guaranteed    | Critical fix      |
 
 ## Technical Implementation
 
@@ -142,7 +142,7 @@ for task in asyncio.as_completed(tasks):
         steam_data[app_id] = {"data": game_data, "source": source}
 ```
 
-### Safe Writing Phase  
+### Safe Writing Phase
 
 ```python
 # Write in batches with transactions
@@ -164,7 +164,7 @@ finally:
 The cache-then-write pattern successfully resolves all identified database concurrency issues while maintaining the performance benefits of async processing. The solution is:
 
 - **Reliable**: Guaranteed data integrity with comprehensive error handling
-- **Fast**: Maintains full async speed benefits for API operations  
+- **Fast**: Maintains full async speed benefits for API operations
 - **Safe**: No SQLite concurrency conflicts or data corruption
 - **Maintainable**: Clear architecture with separation of concerns
 

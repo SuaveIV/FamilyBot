@@ -4,14 +4,14 @@ This document outlines the plan to resolve the 41 `mypy` type errors detected by
 
 ---
 
-### 1. Missing Type Stubs (`[import-untyped]`)
+## 1. Missing Type Stubs (`[import-untyped]`)
 
 - **Problem**: This is the most common issue. `mypy` cannot verify code that uses libraries without type information (stubs). This affects `yaml`, `requests`, `tqdm`, `coloredlogs`, and `steam`.
 - **Plan**:
     1.  Install official or community-provided "stub" packages for the libraries that have them.
     2.  Configure `mypy` to ignore the specific modules that do not have available stubs.
 
-### 2. Type Inconsistencies (`[assignment]`, `[attr-defined]`)
+## 2. Type Inconsistencies (`[assignment]`, `[attr-defined]`)
 
 - **Problem**: These are potential bugs where data of one type is being used where a different type is expected.
 - **Examples**:
@@ -20,7 +20,7 @@ This document outlines the plan to resolve the 41 `mypy` type errors detected by
     - In `Token_Sender/getToken.py`, an incorrect attribute `ConnectionRefusedError` is used instead of the correct `ConnectionClosedError`.
 - **Plan**: These will be fixed on a case-by-case basis by correcting the type hints, casting the variables, or using the correct attributes as defined by the libraries.
 
-### 3. Missing Annotations (`[var-annotated]`)
+## 3. Ambiguous Type Hints (`[arg-type]`, `[misc]`)
 
 - **Problem**: `mypy` cannot determine the type of a variable, usually because it is initialized as an empty list (e.g., `global_wishlist = []`).
 - **Plan**: Add explicit type annotations to these variables (e.g., `global_wishlist: list = []`).
@@ -32,6 +32,7 @@ This document outlines the plan to resolve the 41 `mypy` type errors detected by
 Here is the recommended step-by-step process to resolve these errors:
 
 1.  **Install Stub Packages**: Add the following `types-*` packages to the `[project.optional-dependencies.dev]` section in `pyproject.toml`:
+
     ```toml
     "types-requests",
     "types-PyYAML",
@@ -39,6 +40,7 @@ Here is the recommended step-by-step process to resolve these errors:
     ```
 
 2.  **Configure Mypy**: Create a new file named `mypy.ini` in the project root with the following content. This tells `mypy` to ignore the libraries that we know don't have type stubs.
+
     ```ini
     [mypy]
 

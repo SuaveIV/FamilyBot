@@ -18,15 +18,15 @@ FamilyBot now includes **three performance tiers** for price data population, ea
 
 All scripts pre-populate both Steam Store prices and ITAD historical price data for **family wishlist games only**. This is **essential for maximizing performance during Steam Summer/Winter Sales** when you want to achieve the fastest possible deal detection speeds.
 
-#### Performance Comparison:
+#### Performance Comparison
 
-| Script | Processing Mode | Concurrency | Expected Speed | Data Usage Reduction |
-|---|---|---|---|---|
-| **Original** | Sequential | 1 request | ~1,200 games/hour | Baseline |
-| **Optimized** | Threading | 10-20 concurrent | ~8,000-12,000 games/hour | 15-25% reduction |
-| **Async** | True Async | 50-100 concurrent | ~20,000-30,000 games/hour | 25-35% reduction |
+| Script        | Processing Mode | Concurrency       | Expected Speed            | Data Usage Reduction |
+| ------------- | --------------- | ----------------- | ------------------------- | -------------------- |
+| **Original**  | Sequential      | 1 request         | ~1,200 games/hour         | Baseline             |
+| **Optimized** | Threading       | 10-20 concurrent  | ~8,000-12,000 games/hour  | 15-25% reduction     |
+| **Async**     | True Async      | 50-100 concurrent | ~20,000-30,000 games/hour | 25-35% reduction     |
 
-#### Connection Reuse Benefits:
+#### Connection Reuse Benefits
 
 - **Optimized**: 50 max connections, 20 keepalive connections, 30s expiry
 - **Async**: 200 max connections, 100 keepalive connections, 60s expiry
