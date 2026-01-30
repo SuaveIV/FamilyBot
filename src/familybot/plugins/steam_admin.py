@@ -193,10 +193,8 @@ class steam_admin(Extension):
                                         item[1].append(user_steam_id)
                                         break
 
-                        # Cache the wishlist for 2 hours
-                        cache_wishlist(
-                            user_steam_id, user_wishlist_appids, cache_hours=2
-                        )
+                        # Cache the wishlist
+                        cache_wishlist(user_steam_id, user_wishlist_appids)
                         logger.info(
                             f"Force deals: Fetched and cached {len(user_wishlist_appids)} wishlist items for {user_name_for_log}"
                         )
@@ -883,8 +881,8 @@ class steam_admin(Extension):
                         else:
                             global_wishlist.append([app_id, [user_steam_id]])
 
-                    # Cache the wishlist for 2 hours
-                    cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
+                    # Cache the wishlist
+                    cache_wishlist(user_steam_id, user_wishlist_appids)
 
                 except Exception as e:
                     logger.critical(

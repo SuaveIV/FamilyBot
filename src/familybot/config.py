@@ -73,3 +73,14 @@ WEB_UI_ENABLED = config.get("web_ui", {}).get("enabled", True)
 WEB_UI_HOST = config.get("web_ui", {}).get("host", "127.0.0.1")
 WEB_UI_PORT = config.get("web_ui", {}).get("port", 8080)
 WEB_UI_DEFAULT_THEME = config.get("web_ui", {}).get("default_theme", "default")
+
+# -------------Cache TTLs (Hours)---------------
+FAMILY_LIBRARY_CACHE_TTL = (
+    config.get("steam_family", {}).get("cache_ttl_hours", {}).get("family_library", 24)
+)
+WISHLIST_CACHE_TTL = (
+    config.get("steam_family", {}).get("cache_ttl_hours", {}).get("wishlist", 2)
+)
+GAME_DETAILS_CACHE_TTL = (
+    config.get("steam_family", {}).get("cache_ttl_hours", {}).get("game_details", 168)
+)  # 1 week

@@ -215,8 +215,8 @@ class steam_family(Extension):
                     )
                     return
 
-                # Cache the family library for 30 minutes
-                cache_family_library(game_list, cache_minutes=30)
+                # Cache the family library
+                cache_family_library(game_list)
 
             game_array = []
             coop_game_names = []
@@ -405,8 +405,8 @@ class steam_family(Extension):
                         user_wishlist_appids.append(app_id)
                         global_wishlist.append([app_id, [user_steam_id]])
 
-                    # Cache the wishlist for 2 hours
-                    cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
+                    # Cache the wishlist
+                    cache_wishlist(user_steam_id, user_wishlist_appids)
                     logger.info(
                         f"Deals: Fetched and cached {len(user_wishlist_appids)} wishlist items for {user_name_for_log}"
                     )

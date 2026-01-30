@@ -16,13 +16,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
 from familybot.lib.database import (
+    cache_family_library,
     cache_game_details,
     cache_wishlist,
     get_cached_game_details,
     get_cached_wishlist,
     get_db_connection,
 )
-from familybot.lib.family_utils import find_in_2d_list
+from familybot.lib.family_utils import find_in_2d_list, get_family_game_list_url
 from familybot.lib.logging_config import setup_script_logging
 
 # Setup enhanced logging for this script
@@ -212,6 +213,41 @@ class DatabasePopulator:
             return {}
 
         return members
+
+    async def populate_family_library(self, dry_run: bool = False) -> int:
+        """Populate the shared family library cache."""
+        logger.info("Starting family shared library population...")
+
+        if dry_run:
+            logger.info("Would fetch shared family library")
+            return 0
+
+        try:
+            # We need to use requests here because get_family_game_list_url
+            # is typically used with requests in this codebase, but we could
+            # use our async client if we wanted. For consistency with
+            # plugin_admin_actions, we'll fetch then cache.
+            url = get_family_game_list_url()
+            response = await self.client.get(url)
+            games_json = self.handle_api_response("GetSharedLibraryApps", response)
+
+            if not games_json:
+                logger.error("Failed to fetch family shared library apps")
+                return 0
+
+            game_list = games_json.get("response", {}).get("apps", [])
+            if not game_list:
+                logger.warning("No apps found in family shared library")
+                return 0
+
+            # Cache the library using our new 24h default
+            cache_family_library(game_list)
+            logger.info(f"Cached {len(game_list)} family library apps")
+            return len(game_list)
+
+        except Exception as e:
+            logger.error(f"Error populating family shared library: {e}")
+            return 0
 
     async def populate_family_libraries(
         self, family_members: Dict[str, str], dry_run: bool = False
@@ -415,7 +451,8 @@ class DatabasePopulator:
                     else:
                         global_wishlist.append([app_id, [steam_id]])
 
-                cache_wishlist(steam_id, user_wishlist_appids, cache_hours=24)
+                # Cache the wishlist
+                cache_wishlist(steam_id, user_wishlist_appids)
                 logger.info(f"{name}'s wishlist cached")
 
             except Exception as e:

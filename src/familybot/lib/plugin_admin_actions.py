@@ -426,8 +426,8 @@ async def check_new_game_action() -> Dict[str, Any]:
             logger.info("No cached family library found, fetching from API...")
             game_list = await _fetch_family_library_from_api()
 
-            # Cache for next time (30 minute TTL)
-            cache_family_library(game_list, cache_minutes=30)
+            # Cache for next time
+            cache_family_library(game_list)
             logger.info(f"Cached family library ({len(game_list)} games)")
 
         current_family_members = await _load_family_members_from_db()
@@ -462,7 +462,7 @@ async def force_new_game_action() -> Dict[str, Any]:
         game_list = await _fetch_family_library_from_api()
 
         # Update cache with fresh data for next regular check
-        cache_family_library(game_list, cache_minutes=30)
+        cache_family_library(game_list)
         logger.info(f"Updated family library cache with {len(game_list)} games")
 
         current_family_members = await _load_family_members_from_db()
@@ -560,8 +560,8 @@ async def _collect_wishlists(
                 else:
                     global_wishlist.append([app_id, [user_steam_id]])
 
-            # Cache the wishlist for 2 hours
-            cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
+            # Cache the wishlist
+            cache_wishlist(user_steam_id, user_wishlist_appids)
 
         except Exception as e:
             logger.critical(
@@ -852,8 +852,8 @@ async def force_deals_action(
                                     item[1].append(user_steam_id)
                                     break
 
-                    # Cache the wishlist for 2 hours
-                    cache_wishlist(user_steam_id, user_wishlist_appids, cache_hours=2)
+                    # Cache the wishlist
+                    cache_wishlist(user_steam_id, user_wishlist_appids)
                     logger.info(
                         f"Force deals: Fetched and cached {len(user_wishlist_appids)} wishlist items for {user_name_for_log}"
                     )

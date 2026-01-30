@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
+    cache_family_library,
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_wishlist,
     get_cached_game_details,
@@ -25,7 +26,7 @@ from familybot.lib.database import (
     get_db_connection,
     init_db,
 )
-from familybot.lib.family_utils import find_in_2d_list  # pylint: disable=wrong-import-position
+from familybot.lib.family_utils import find_in_2d_list, get_family_game_list_url  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
 
 try:
@@ -333,6 +334,37 @@ class DatabasePopulator:
             return {}
 
         return members
+
+    async def populate_family_library(self, dry_run: bool = False) -> int:
+        """Populate the shared family library cache."""
+        print("\n🏰 Starting family shared library population...")
+
+        if dry_run:
+            print("   🔍 Would fetch shared family library")
+            return 0
+
+        try:
+            url = get_family_game_list_url()
+            response = await self.client.get(url)
+            games_json = self.handle_api_response("GetSharedLibraryApps", response)
+
+            if not games_json:
+                print("   ❌ Failed to fetch family shared library apps")
+                return 0
+
+            game_list = games_json.get("response", {}).get("apps", [])
+            if not game_list:
+                print("   ⚠️  No apps found in family shared library")
+                return 0
+
+            # Cache the library using our new 24h default
+            cache_family_library(game_list)
+            print(f"   ✅ Cached {len(game_list)} family library apps")
+            return len(game_list)
+
+        except Exception as e:
+            print(f"   ❌ Error populating family shared library: {e}")
+            return 0
 
     async def get_owned_games(self, steam_id: str) -> Optional[dict]:
         """Get owned games for a user using the steam library."""
@@ -780,7 +812,7 @@ class DatabasePopulator:
                         global_wishlist.append([app_id, [steam_id]])
 
                 # Cache the wishlist
-                cache_wishlist(steam_id, user_wishlist_appids, cache_hours=24)
+                cache_wishlist(steam_id, user_wishlist_appids)
                 print(f"   ✅ {name}'s wishlist cached")
 
             except (
@@ -951,7 +983,10 @@ async def main():
 
         # Populate family libraries
         if not args.wishlist_only:
-            total_library_cached = await populator.populate_family_libraries(
+            total_library_cached += await populator.populate_family_library(
+                args.dry_run
+            )
+            total_library_cached += await populator.populate_family_libraries(
                 family_members, args.dry_run
             )
 

@@ -5,7 +5,12 @@ import os
 import sqlite3
 from typing import Optional  # Import Optional
 
-from familybot.config import PROJECT_ROOT
+from familybot.config import (
+    FAMILY_LIBRARY_CACHE_TTL,
+    GAME_DETAILS_CACHE_TTL,
+    PROJECT_ROOT,
+    WISHLIST_CACHE_TTL,
+)
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -390,7 +395,7 @@ def cache_game_details(
     appid: str,
     game_data: dict,
     permanent: bool = True,
-    cache_hours: int | None = None,
+    cache_hours: int | None = GAME_DETAILS_CACHE_TTL,
     price_source: str = "store_api",
     conn: Optional[sqlite3.Connection] = None,
 ):
@@ -486,7 +491,9 @@ def get_cached_user_games(steam_id: str):
             conn.close()
 
 
-def cache_user_games(steam_id: str, appids: list, cache_hours: int = 6):
+def cache_user_games(
+    steam_id: str, appids: list, cache_hours: int = WISHLIST_CACHE_TTL
+):
     """Cache user's game list for specified hours."""
     conn = None
     try:
@@ -611,7 +618,7 @@ def cache_itad_price(
     appid: str,
     price_data: dict,
     permanent: bool = False,
-    cache_hours: int = 6,
+    cache_hours: int = WISHLIST_CACHE_TTL,
     lookup_method: str = "appid",
     steam_game_name: Optional[str] = None,
     conn: Optional[sqlite3.Connection] = None,
@@ -710,7 +717,7 @@ def get_cached_wishlist(steam_id: str):
             conn.close()
 
 
-def cache_wishlist(steam_id: str, appids: list, cache_hours: int = 24):
+def cache_wishlist(steam_id: str, appids: list, cache_hours: int = WISHLIST_CACHE_TTL):
     """Cache user's wishlist for specified hours (wishlists change moderately)."""
     conn = None
     try:
@@ -783,8 +790,10 @@ def get_cached_family_library():
             conn.close()
 
 
-def cache_family_library(family_apps: list, cache_minutes: int = 30):
-    """Cache family library data for specified minutes (updates frequently)."""
+def cache_family_library(
+    family_apps: list, cache_hours: int = FAMILY_LIBRARY_CACHE_TTL
+):
+    """Cache family library data for specified hours (updates infrequently)."""
     conn = None
     try:
         conn = get_db_connection()
@@ -793,7 +802,7 @@ def cache_family_library(family_apps: list, cache_minutes: int = 30):
         from datetime import datetime, timedelta
 
         now = datetime.utcnow()
-        expires_at = now + timedelta(minutes=cache_minutes)
+        expires_at = now + timedelta(hours=cache_hours)
 
         # Clear existing cache
         cursor.execute("DELETE FROM family_library_cache")
@@ -820,7 +829,7 @@ def cache_family_library(family_apps: list, cache_minutes: int = 30):
         )
         conn.commit()
         logger.debug(
-            f"Cached {len(family_apps)} family library apps for {cache_minutes} minutes"
+            f"Cached {len(family_apps)} family library apps for {cache_hours} hours"
         )
     except Exception as e:
         logger.error(f"Error caching family library: {e}")

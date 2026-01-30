@@ -478,6 +478,7 @@ async def populate_database_api(
             raise HTTPException(status_code=400, detail="No family members configured.")
 
         if not wishlist_only:
+            total_cached += await populator.populate_family_library()
             total_cached += await populator.populate_family_libraries(family_members)
 
         if not library_only:
