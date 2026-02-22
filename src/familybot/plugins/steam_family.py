@@ -1,6 +1,6 @@
 import time
 
-import requests
+import aiohttp
 from interactions import Extension
 from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
@@ -246,8 +246,14 @@ class steam_family(Extension):
                     logger.info(
                         f"Fetching app details from API for AppID: {game_appid} for coop check"
                     )
-                    app_info_response = requests.get(game_url, timeout=10)
-                    game_info_json = app_info_response.json()
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(
+                            game_url, timeout=aiohttp.ClientTimeout(total=10)
+                        ) as app_info_response:
+                            if app_info_response.status != 200:
+                                continue
+                            game_info_json = await app_info_response.json()
+
                     if not game_info_json:
                         continue
 
