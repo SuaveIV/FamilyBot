@@ -677,8 +677,8 @@ async def _process_wishlist_duplicates(
             )
 
     if duplicate_games_for_display:
-        wishlist_message_content = await asyncio.to_thread(
-            format_message, duplicate_games_for_display, short=False
+        wishlist_message_content = await format_message(
+            duplicate_games_for_display, short=False
         )
         full_message = message_prefix + wishlist_message_content
         return {

@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Optional
 
-import requests
+import aiohttp
 
 from familybot.config import FAMILY_STEAM_ID  # Import FAMILY_USER_DICT here
 from familybot.config import FAMILY_USER_DICT
@@ -52,112 +52,120 @@ def get_family_game_list_url() -> str:
     return url_family_list
 
 
-def format_message(wishlist: list, short=False) -> str:
+async def format_message(wishlist: list, short=False) -> str:
     """Formats a list of wishlist items into a Discord message."""
     message_parts = ["# 📝 Family Wishlist \n"]
     if not wishlist:
         return "# 📝 Family Wishlist \nNo common wishlist items found to display."
 
-    for item in wishlist:
-        app_id = item[0]
-        users_wanting = ", ".join(
-            FAMILY_USER_DICT.get(user_steam_id, f"Unknown User({user_steam_id})")
-            for user_steam_id in item[1]
-        )
+    async with aiohttp.ClientSession() as session:
+        for item in wishlist:
+            app_id = item[0]
+            users_wanting = ", ".join(
+                FAMILY_USER_DICT.get(user_steam_id, f"Unknown User({user_steam_id})")
+                for user_steam_id in item[1]
+            )
 
-        message_parts.append(f"- {users_wanting} want ")
+            message_parts.append(f"- {users_wanting} want ")
 
-        game_url = (
-            f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=fr"
-        )
-        game_info_data = None
-        try:
-            game_info_response = requests.get(game_url, timeout=10)
-            game_info_response.raise_for_status()
-            game_info_json = json.loads(game_info_response.text)
+            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=fr"
+            game_info_data = None
+            try:
+                async with session.get(
+                    game_url, timeout=aiohttp.ClientTimeout(total=10)
+                ) as game_info_response:
+                    game_info_response.raise_for_status()
+                    text_response = await game_info_response.text()
+                    game_info_json = json.loads(text_response)
 
-            if game_info_json.get(str(app_id), {}).get("success"):
-                game_info_data = game_info_json[str(app_id)]["data"]
-            else:
-                logger.warning(
-                    f"App details success false for AppID {app_id} in format_message. Response: {game_info_json}"
+                if game_info_json.get(str(app_id), {}).get("success"):
+                    game_info_data = game_info_json[str(app_id)]["data"]
+                else:
+                    logger.warning(
+                        f"App details success false for AppID {app_id} in format_message. Response: {game_info_json}"
+                    )
+                    message_parts.append(
+                        f"**Unknown Game ({app_id})** (Details Unavailable) \n"
+                    )
+                    continue
+
+            except aiohttp.ClientError as e:
+                logger.error(
+                    f"Request error fetching app details for {app_id} in format_message: {e}"
+                )
+                message_parts.append(f"**Unknown Game ({app_id})** (API Error) \n")
+                continue
+            except json.JSONDecodeError as e:
+                logger.error(
+                    f"JSON decode error for app details {app_id} in format_message: {e}."
+                )
+                message_parts.append(f"**Unknown Game ({app_id})** (Data Error) \n")
+                continue
+            except KeyError as e:
+                logger.error(
+                    f"Missing key in app details for {app_id} in format_message: {e}. Response: {game_info_json}"
+                )
+                message_parts.append(f"**Unknown Game ({app_id})** (Format Error) \n")
+                continue
+            except Exception as e:
+                logger.critical(
+                    f"Unexpected error fetching app details for {app_id} in format_message: {e}",
+                    exc_info=True,
                 )
                 message_parts.append(
-                    f"**Unknown Game ({app_id})** (Details Unavailable) \n"
+                    f"**Unknown Game ({app_id})** (Unexpected Error) \n"
                 )
                 continue
 
-        except requests.exceptions.RequestException as e:
-            logger.error(
-                f"Request error fetching app details for {app_id} in format_message: {e}"
-            )
-            message_parts.append(f"**Unknown Game ({app_id})** (API Error) \n")
-            continue
-        except json.JSONDecodeError as e:
-            logger.error(
-                f"JSON decode error for app details {app_id} in format_message: {e}. Raw: {game_info_response.text[:200]}"
-            )
-            message_parts.append(f"**Unknown Game ({app_id})** (Data Error) \n")
-            continue
-        except KeyError as e:
-            logger.error(
-                f"Missing key in app details for {app_id} in format_message: {e}. Response: {game_info_json}"
-            )
-            message_parts.append(f"**Unknown Game ({app_id})** (Format Error) \n")
-            continue
-        except Exception as e:
-            logger.critical(
-                f"Unexpected error fetching app details for {app_id} in format_message: {e}",
-                exc_info=True,
-            )
-            message_parts.append(f"**Unknown Game ({app_id})** (Unexpected Error) \n")
-            continue
-
-        game_name = game_info_data.get("name", f"Unknown Game ({app_id})")
-        message_parts.append(
-            f"[{game_name}](<https://store.steampowered.com/app/{app_id}>) \n"
-        )
-
-        price_overview = game_info_data.get("price_overview")
-        if price_overview and price_overview.get("discount_percent") != 0:
-            final_formatted = price_overview.get("final_formatted", "N/A")
-            discount_percent = price_overview.get("discount_percent", 0)
+            game_name = game_info_data.get("name", f"Unknown Game ({app_id})")
             message_parts.append(
-                f"  **__The game is on sale at {final_formatted} (-{discount_percent}%)__** \n"
+                f"[{game_name}](<https://store.steampowered.com/app/{app_id}>) \n"
             )
-            if not short:
-                final_price = price_overview.get("final")  # Price in cents
-                if final_price is not None and item[1]:
-                    price_per_person = round(final_price / 100 / len(item[1]), 2)
-                    message_parts.append(f" which is {price_per_person}$ per person \n")
-                try:
-                    lowest_price = get_lowest_price(int(app_id))
-                    message_parts.append(
-                        f"   The lowest price ever was {lowest_price}$ \n"
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not get lowest price for {app_id}: {e}")
-                    message_parts.append("   Lowest price info unavailable. \n")
-        else:
-            final_formatted = (
-                price_overview.get("final_formatted", "N/A")
-                if price_overview
-                else "N/A"
-            )
-            message_parts.append(f"  The game is at {final_formatted} \n")
-            if not short:
-                final_price = price_overview.get("final")
-                if final_price is not None and item[1]:
-                    price_per_person = round(final_price / 100 / len(item[1]), 2)
-                    message_parts.append(f" which is {price_per_person}$ per person \n")
-                try:
-                    lowest_price = get_lowest_price(int(app_id))
-                    message_parts.append(
-                        f"   The lowest price ever was {lowest_price}$ \n"
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not get lowest price for {app_id}: {e}")
-                    message_parts.append("   Lowest price info unavailable. \n")
+
+            price_overview = game_info_data.get("price_overview")
+            if price_overview and price_overview.get("discount_percent") != 0:
+                final_formatted = price_overview.get("final_formatted", "N/A")
+                discount_percent = price_overview.get("discount_percent", 0)
+                message_parts.append(
+                    f"  **__The game is on sale at {final_formatted} (-{discount_percent}%)__** \n"
+                )
+                if not short:
+                    final_price = price_overview.get("final")  # Price in cents
+                    if final_price is not None and item[1]:
+                        price_per_person = round(final_price / 100 / len(item[1]), 2)
+                        message_parts.append(
+                            f" which is {price_per_person}$ per person \n"
+                        )
+                    try:
+                        lowest_price = get_lowest_price(int(app_id))
+                        message_parts.append(
+                            f"   The lowest price ever was {lowest_price}$ \n"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not get lowest price for {app_id}: {e}")
+                        message_parts.append("   Lowest price info unavailable. \n")
+            else:
+                final_formatted = (
+                    price_overview.get("final_formatted", "N/A")
+                    if price_overview
+                    else "N/A"
+                )
+                message_parts.append(f"  The game is at {final_formatted} \n")
+                if not short:
+                    final_price = price_overview.get("final")
+                    if final_price is not None and item[1]:
+                        price_per_person = round(final_price / 100 / len(item[1]), 2)
+                        message_parts.append(
+                            f" which is {price_per_person}$ per person \n"
+                        )
+                    try:
+                        lowest_price = get_lowest_price(int(app_id))
+                        message_parts.append(
+                            f"   The lowest price ever was {lowest_price}$ \n"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not get lowest price for {app_id}: {e}")
+                        message_parts.append("   Lowest price info unavailable. \n")
 
     final_message = "".join(message_parts)
 
@@ -165,7 +173,7 @@ def format_message(wishlist: list, short=False) -> str:
         logger.warning(
             f"Formatted message too long ({len(final_message)} chars). Retrying with short format."
         )
-        return format_message(wishlist, True)
+        return await format_message(wishlist, True)
     elif len(final_message) > 1900 and short:
         logger.warning("Shortened message still too long. Sending generic message.")
         return "# 📝 Family Wishlist \n Can't create a message or it will be too long"

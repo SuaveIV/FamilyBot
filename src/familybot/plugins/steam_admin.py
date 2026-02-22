@@ -1040,7 +1040,7 @@ class steam_admin(Extension):
                     return
 
                 # Generate the message using the same format_message function
-                wishlist_new_message = format_message(
+                wishlist_new_message = await format_message(
                     duplicate_games_for_display, short=False
                 )
 

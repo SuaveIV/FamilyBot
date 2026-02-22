@@ -4,7 +4,7 @@ import json
 import os
 import sqlite3  # Import sqlite3 for specific error handling
 
-import requests
+import aiohttp
 from interactions import Extension, IntervalTrigger, Task, listen
 from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
@@ -240,29 +240,36 @@ class common_games(Extension):
             steam_get_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&format=json&include_appinfo=1"
             logger.info(f"Fetching games from API for Steam ID: {steam_id}")
             try:
-                answer = requests.get(steam_get_games_url, timeout=10)
-                answer.raise_for_status()
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        steam_get_games_url, timeout=aiohttp.ClientTimeout(total=10)
+                    ) as answer:
+                        answer.raise_for_status()
+                        text_response = await answer.text()
+                        logger.debug(f"Status Code: {answer.status}")
+                        logger.debug(
+                            f"Raw Response Text (GetOwnedGames):\n{text_response[:500]}"
+                        )
 
-                logger.debug(f"Status Code: {answer.status_code}")
-                logger.debug(f"Raw Response Text (GetOwnedGames):\n{answer.text[:500]}")
+                        response_data = json.loads(text_response)
+                        user_game_list_json = response_data.get("response", {}).get(
+                            "games", []
+                        )
 
-                response_data = json.loads(answer.text)
-                user_game_list_json = response_data.get("response", {}).get("games", [])
+                        if not user_game_list_json:
+                            logger.warning(
+                                f"No games found or 'games' key missing for Steam ID {steam_id}. Full response: {response_data}"
+                            )
+                            continue
 
-                if not user_game_list_json:
-                    logger.warning(
-                        f"No games found or 'games' key missing for Steam ID {steam_id}. Full response: {response_data}"
-                    )
-                    continue
+                        for game in user_game_list_json:
+                            temp_game_list.append(game["appid"])
 
-                for game in user_game_list_json:
-                    temp_game_list.append(game["appid"])
+                        # Cache the results for 6 hours
+                        cache_user_games(steam_id, temp_game_list, cache_hours=6)
+                        game_lists.append(temp_game_list)
 
-                # Cache the results for 6 hours
-                cache_user_games(steam_id, temp_game_list, cache_hours=6)
-                game_lists.append(temp_game_list)
-
-            except requests.exceptions.RequestException as e:
+            except aiohttp.ClientError as e:
                 logger.error(
                     f"Request error fetching games for Steam ID {steam_id}: {e}"
                 )
@@ -271,9 +278,7 @@ class common_games(Extension):
                     f"Error fetching games for Steam ID {steam_id}. Steam API issue. Check logs.",
                 )
             except json.JSONDecodeError:
-                logger.error(
-                    f"JSON decode error for Steam ID {steam_id}. Response: {answer.text[:200]}"
-                )
+                logger.error(f"JSON decode error for Steam ID {steam_id}.")
                 await self.bot.send_dm(
                     ctx.author_id,
                     f"Error processing Steam API response for Steam ID {steam_id}. Check logs.",
@@ -332,27 +337,35 @@ class common_games(Extension):
                         f"Fetching app details from API for AppID: {game_appid}"
                     )
 
-                    app_info_response = requests.get(game_url, timeout=10)
-                    app_info_response.raise_for_status()
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(
+                            game_url, timeout=aiohttp.ClientTimeout(total=10)
+                        ) as app_info_response:
+                            app_info_response.raise_for_status()
+                            text_response = await app_info_response.text()
 
-                    logger.debug(f"Status Code: {app_info_response.status_code}")
-                    logger.debug(
-                        f"Raw Response Text (AppDetails):\n{app_info_response.text[:500]}"
-                    )
+                            logger.debug(f"Status Code: {app_info_response.status}")
+                            logger.debug(
+                                f"Raw Response Text (AppDetails):\n{text_response[:500]}"
+                            )
 
-                    game_info_json = json.loads(app_info_response.text)
-                    game_data = game_info_json.get(str(game_appid), {}).get("data")
+                            game_info_json = json.loads(text_response)
+                            game_data = game_info_json.get(str(game_appid), {}).get(
+                                "data"
+                            )
 
-                    if not game_data or not game_info_json.get(str(game_appid), {}).get(
-                        "success"
-                    ):
-                        logger.warning(
-                            f"Could not get data for AppID {game_appid} or success=false. Response: {app_info_response.text}"
-                        )
-                        continue
+                            if not game_data or not game_info_json.get(
+                                str(game_appid), {}
+                            ).get("success"):
+                                logger.warning(
+                                    f"Could not get data for AppID {game_appid} or success=false. Response: {text_response}"
+                                )
+                                continue
 
-                    # Cache the game details permanently
-                    cache_game_details(str(game_appid), game_data, permanent=True)
+                            # Cache the game details permanently
+                            cache_game_details(
+                                str(game_appid), game_data, permanent=True
+                            )
 
                 if game_data.get("type") == "game":
                     # Use cached boolean fields for faster performance if available
@@ -371,14 +384,12 @@ class common_games(Extension):
                         )
                         game_entries.append(f"- {game_name}")
 
-            except requests.exceptions.RequestException as e:
+            except aiohttp.ClientError as e:
                 logger.error(
                     f"Request error fetching app details for AppID {game_appid}: {e}"
                 )
             except json.JSONDecodeError:
-                logger.error(
-                    f"JSON decode error for AppID {game_appid}. Response: {app_info_response.text[:200]}"
-                )
+                logger.error(f"JSON decode error for AppID {game_appid}.")
             except Exception as e:
                 logger.error(
                     f"Unexpected error processing game {game_appid}: {e}", exc_info=True
