@@ -29,12 +29,11 @@ from familybot.lib.database import (
 )
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_utils import (
-    find_in_2d_list,
     format_message,
     get_family_game_list_url,
 )
 from familybot.lib.logging_config import get_logger, log_private_profile_detection
-from familybot.lib.utils import get_lowest_price
+from familybot.lib.utils import add_to_wishlist, get_lowest_price
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal
 
@@ -450,11 +449,7 @@ async def _collect_wishlists(
                     f"Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)"
                 )
                 for app_id in cached_wishlist:
-                    idx = find_in_2d_list(app_id, global_wishlist)
-                    if idx is not None:
-                        global_wishlist[idx][1].append(user_steam_id)
-                    else:
-                        global_wishlist.append([app_id, [user_steam_id]])
+                    add_to_wishlist(global_wishlist, app_id, user_steam_id)
                 continue
 
         # If not cached or force_fresh is True, fetch from API
@@ -499,11 +494,7 @@ async def _collect_wishlists(
                     continue
 
                 user_wishlist_appids.append(app_id)
-                idx = find_in_2d_list(app_id, global_wishlist)
-                if idx is not None:
-                    global_wishlist[idx][1].append(user_steam_id)
-                else:
-                    global_wishlist.append([app_id, [user_steam_id]])
+                add_to_wishlist(global_wishlist, app_id, user_steam_id)
 
             # Cache the wishlist
             cache_wishlist(user_steam_id, user_wishlist_appids)
@@ -739,13 +730,7 @@ async def force_deals_action(
                     )
                     for app_id in cached_wishlist:
                         # Ensure app_id is added with its interested users
-                        if app_id not in [item[0] for item in global_wishlist]:
-                            global_wishlist.append([app_id, [user_steam_id]])
-                        else:
-                            for item in global_wishlist:
-                                if item[0] == app_id:
-                                    item[1].append(user_steam_id)
-                                    break
+                        add_to_wishlist(global_wishlist, str(app_id), user_steam_id)
                 else:
                     # If not cached, fetch fresh wishlist data from API
                     if (
@@ -803,14 +788,7 @@ async def force_deals_action(
                                 continue
 
                             user_wishlist_appids.append(app_id)
-                            if app_id not in [item[0] for item in global_wishlist]:
-                                global_wishlist.append([app_id, [user_steam_id]])
-                            else:
-                                # Add user to existing entry
-                                for item in global_wishlist:
-                                    if item[0] == app_id:
-                                        item[1].append(user_steam_id)
-                                        break
+                            add_to_wishlist(global_wishlist, app_id, user_steam_id)
 
                         # Cache the wishlist
                         cache_wishlist(user_steam_id, user_wishlist_appids)

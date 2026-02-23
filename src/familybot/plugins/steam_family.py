@@ -23,7 +23,7 @@ from familybot.lib.database import (
 # Import enhanced logging configuration
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import get_lowest_price, split_message
+from familybot.lib.utils import add_to_wishlist, get_lowest_price, split_message
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
@@ -370,7 +370,7 @@ class steam_family(Extension):
                     f"Deals: Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)"
                 )
                 for app_id in cached_wishlist:
-                    global_wishlist.append([app_id, [user_steam_id]])
+                    add_to_wishlist(global_wishlist, str(app_id), user_steam_id)
             else:
                 # If not cached, fetch fresh wishlist data from API
                 if (
@@ -411,7 +411,7 @@ class steam_family(Extension):
                         if not app_id:
                             continue
                         user_wishlist_appids.append(app_id)
-                        global_wishlist.append([app_id, [user_steam_id]])
+                        add_to_wishlist(global_wishlist, app_id, user_steam_id)
 
                     # Cache the wishlist
                     cache_wishlist(user_steam_id, user_wishlist_appids)

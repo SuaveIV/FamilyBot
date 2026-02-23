@@ -134,6 +134,22 @@ def get_common_elements_in_lists(list_of_lists: list) -> list:
     return sorted(list(common_elements_set))
 
 
+def add_to_wishlist(global_wishlist: list, app_id: str, user_steam_id: str) -> None:
+    """
+    Adds a game app ID to the global wishlist list of lists, tracking users interested.
+    Each item in global_wishlist is [app_id: str, [user_steam_ids: str]].
+    """
+    found = False
+    for item in global_wishlist:
+        if item[0] == app_id:
+            if user_steam_id not in item[1]:
+                item[1].append(user_steam_id)
+            found = True
+            break
+    if not found:
+        global_wishlist.append([app_id, [user_steam_id]])
+
+
 class ProgressTracker:
     """
     Tracks progress and generates formatted progress messages with time estimation.

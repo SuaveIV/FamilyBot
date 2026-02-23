@@ -23,8 +23,9 @@ from familybot.lib.database import (
     get_cached_game_details,
     get_cached_wishlist,
 )
-from familybot.lib.family_utils import find_in_2d_list, get_family_game_list_url
+from familybot.lib.family_utils import get_family_game_list_url
 from familybot.lib.logging_config import setup_script_logging
+from familybot.lib.utils import add_to_wishlist
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("admin_commands", "INFO")
@@ -372,11 +373,7 @@ class DatabasePopulator:
                         f"Using cached wishlist for {name} ({len(cached_wishlist)} items)"
                     )
                     for app_id in cached_wishlist:
-                        idx = find_in_2d_list(app_id, global_wishlist)
-                        if idx is not None:
-                            global_wishlist[idx][1].append(steam_id)
-                        else:
-                            global_wishlist.append([app_id, [steam_id]])
+                        add_to_wishlist(global_wishlist, str(app_id), steam_id)
                     continue
 
                 if dry_run:
@@ -416,11 +413,7 @@ class DatabasePopulator:
                         continue
 
                     user_wishlist_appids.append(app_id)
-                    idx = find_in_2d_list(app_id, global_wishlist)
-                    if idx is not None:
-                        global_wishlist[idx][1].append(steam_id)
-                    else:
-                        global_wishlist.append([app_id, [steam_id]])
+                    add_to_wishlist(global_wishlist, app_id, steam_id)
 
                 # Cache the wishlist
                 cache_wishlist(steam_id, user_wishlist_appids)
