@@ -422,21 +422,21 @@ Review the diff carefully before committing, especially in files that use Pydant
 
 ## Task Summary
 
-| Task    | Description                                           | Priority    | Effort | Depends on       |
-| ------- | ----------------------------------------------------- | ----------- | ------ | ---------------- |
-| TASK-01 | Fix startup crash: add missing config keys            | 🔴 Critical | XS     | —                |
-| TASK-02 | Async HTTP: `plugin_admin_actions.py`                 | 🔴 Critical | M      | —                |
-| TASK-03 | Async HTTP: `steam_admin.py`                          | 🔴 Critical | M      | TASK-02          |
-| TASK-04 | Async HTTP: `SteamAPIManager.make_request_with_retry` | 🔴 Critical | S      | TASK-02          |
-| TASK-05 | Async HTTP: `steam_family.py`, `common_game.py`       | 🟠 High     | M      | TASK-04          |
-| TASK-06 | Async HTTP: `family_utils.py:format_message`          | 🟠 High     | S      | TASK-02          |
-| TASK-07 | Remove duplicated family member loading               | 🟠 High     | S      | —                |
-| TASK-08 | Remove duplicated CLI argument parsing                | 🟠 High     | S      | —                |
-| TASK-09 | Consolidate deal detection logic                      | 🟠 High     | L      | TASK-04, TASK-05 |
-| TASK-10 | Declarative database migration system                 | 🟡 Medium   | M      | —                |
-| TASK-11 | Fix `asyncio.Queue` in `web_logging.py`               | 🟡 Medium   | XS     | —                |
-| TASK-12 | Guard migration check with module-level flag          | 🟡 Medium   | XS     | —                |
-| TASK-13 | Rename `familly_game_manager.py`                      | 🟢 Low      | XS     | TASK-12          |
-| TASK-14 | Standardise type annotations                          | 🟢 Low      | S      | All others       |
+| Task    | Description                                           | Priority    | Effort | Depends on       | Done |
+| ------- | ----------------------------------------------------- | ----------- | ------ | ---------------- | ---  |
+| TASK-01 | Fix startup crash: add missing config keys            | 🔴 Critical | XS     | —                | [x]  |
+| TASK-02 | Async HTTP: `plugin_admin_actions.py`                 | 🔴 Critical | M      | —                | [x]  |
+| TASK-03 | Async HTTP: `steam_admin.py`                          | 🔴 Critical | M      | TASK-02          | [x]  |
+| TASK-04 | Async HTTP: `SteamAPIManager.make_request_with_retry` | 🔴 Critical | S      | TASK-02          | [x]  |
+| TASK-05 | Async HTTP: `steam_family.py`, `common_game.py`       | 🟠 High     | M      | TASK-04          | [x]  |
+| TASK-06 | Async HTTP: `family_utils.py:format_message`          | 🟠 High     | S      | TASK-02          | [x]  |
+| TASK-07 | Remove duplicated family member loading               | 🟠 High     | S      | —                | [ ]  |
+| TASK-08 | Remove duplicated CLI argument parsing                | 🟠 High     | S      | —                | [ ]  |
+| TASK-09 | Consolidate deal detection logic                      | 🟠 High     | L      | TASK-04, TASK-05 | [ ]  |
+| TASK-10 | Declarative database migration system                 | 🟡 Medium   | M      | —                | [ ]  |
+| TASK-11 | Fix `asyncio.Queue` in `web_logging.py`               | 🟡 Medium   | XS     | —                | [ ]  |
+| TASK-12 | Guard migration check with module-level flag          | 🟡 Medium   | XS     | —                | [ ]  |
+| TASK-13 | Rename `familly_game_manager.py`                      | 🟢 Low      | XS     | TASK-12          | [ ]  |
+| TASK-14 | Standardise type annotations                          | 🟢 Low      | S      | All others       | [ ]  |
 
 **Effort key:** XS < 30 min · S 1–2 hrs · M 2–4 hrs · L 4–6 hrs

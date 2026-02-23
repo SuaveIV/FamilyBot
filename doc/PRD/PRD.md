@@ -153,7 +153,7 @@ Several categories of problems have been identified:
 ## 10. Success Criteria
 
 - [x] A fresh install following `config-template.yml` starts the bot without errors.
-- [ ] No `requests.get` or `requests.post` calls appear in `async def` function bodies (verifiable via `grep`).
+- [x] No `requests.get` or `requests.post` calls appear in `async def` function bodies (verifiable via `grep`).
 - [ ] `load_family_members_from_db` appears in exactly one file (`database.py`).
 - [ ] CLI argument definitions appear in exactly one function in `FamilyBot.py`.
 - [ ] Deal detection logic lives in `steam_helpers.py:process_game_deal`; all callers use it.
@@ -161,7 +161,7 @@ Several categories of problems have been identified:
 - [ ] `asyncio.Queue()` is not called at module import time.
 - [ ] `_migrate_gamelist_to_db` is guarded by a module-level flag.
 - [ ] `familly_game_manager.py` is renamed and all references updated.
-- [ ] All modified files pass `ruff check` and `ruff format`.
+- [x] All modified files pass `ruff check` and `ruff format`.
 - [ ] Bot starts and all commands function normally after all tasks are complete.
 
 ---
