@@ -26,10 +26,11 @@ from familybot.lib.database import (
     get_cached_wishlist,
     get_db_connection,
     init_db,
+    load_family_members_from_db,
 )
 from familybot.lib.family_utils import get_family_game_list_url  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
-from familybot.lib.utils import add_to_wishlist  # pylint: disable=wrong-import-position
+from familybot.lib.utils import TokenBucket, add_to_wishlist  # pylint: disable=wrong-import-position
 
 try:
     from tqdm import tqdm
@@ -45,43 +46,6 @@ logger = setup_script_logging("populate_database", "INFO")
 
 # Suppress verbose HTTP request logging from httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-
-class TokenBucket:
-    """Token bucket rate limiter for controlling API request rates."""
-
-    def __init__(self, rate: float, capacity: Optional[int] = None):
-        """
-        Initialize token bucket.
-
-        Args:
-            rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
-            capacity: Maximum tokens in bucket (defaults to rate * 10)
-        """
-        self.rate = rate
-        self.capacity: int = (
-            capacity if capacity is not None else max(1, int(rate * 10.0))
-        )
-        self.tokens: float = float(self.capacity)
-        self.last_update = time.time()
-        self._lock = asyncio.Lock()
-
-    async def acquire(self, tokens: int = 1) -> None:
-        """Acquire tokens from the bucket, waiting if necessary."""
-        async with self._lock:
-            now = time.time()
-            # Add tokens based on elapsed time
-            elapsed = now - self.last_update
-            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
-            self.last_update = now
-
-            # If we don't have enough tokens, wait
-            if self.tokens < tokens:
-                wait_time = (tokens - self.tokens) / self.rate
-                await asyncio.sleep(wait_time)
-                self.tokens = 0
-            else:
-                self.tokens -= tokens
 
 
 class DatabasePopulator:
@@ -304,38 +268,8 @@ class DatabasePopulator:
         return await asyncio.to_thread(get_app_info)
 
     def load_family_members(self) -> Dict[str, str]:
-        """Load family members from database or config."""
-        members = {}
-
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Check if we have family members in database
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                print("📥 Migrating family members from config to database...")
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None),
-                    )
-                conn.commit()
-                print(f"✅ Migrated {len(FAMILY_USER_DICT)} family members")
-
-            # Load family members
-            cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-            for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-
-            conn.close()
-            print(f"👥 Loaded {len(members)} family members")
-
-        except (ValueError, TypeError, OSError) as e:
-            print(f"❌ Error loading family members: {e}")
-            return {}
-
-        return members
+        """Load family members from database."""
+        return load_family_members_from_db()
 
     async def populate_family_library(self, dry_run: bool = False) -> int:
         """Populate the shared family library cache."""

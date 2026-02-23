@@ -1,8 +1,9 @@
 # In src/familybot/lib/utils.py
 
+import asyncio
 import json
 import time
-from typing import List
+from typing import List, Optional
 
 import requests
 
@@ -228,6 +229,43 @@ class ProgressTracker:
         except (ZeroDivisionError, OverflowError, ValueError):
             logger.warning("Error calculating time estimation")
             return ""
+
+
+class TokenBucket:
+    """Token bucket rate limiter for controlling API request rates."""
+
+    def __init__(self, rate: float, capacity: Optional[int] = None):
+        """
+        Initialize token bucket.
+
+        Args:
+            rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
+            capacity: Maximum tokens in bucket (defaults to rate * 10)
+        """
+        self.rate = rate
+        self.capacity: int = (
+            capacity if capacity is not None else max(1, int(rate * 10.0))
+        )
+        self.tokens: float = float(self.capacity)
+        self.last_update = time.time()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self, tokens: int = 1) -> None:
+        """Acquire tokens from the bucket, waiting if necessary."""
+        async with self._lock:
+            now = time.time()
+            # Add tokens based on elapsed time
+            elapsed = now - self.last_update
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+            self.last_update = now
+
+            # If we don't have enough tokens, wait
+            if self.tokens < tokens:
+                wait_time = (tokens - self.tokens) / self.rate
+                await asyncio.sleep(wait_time)
+                self.tokens = 0
+            else:
+                self.tokens -= tokens
 
 
 def split_message(message: str, max_length: int = 1900) -> List[str]:

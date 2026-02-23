@@ -40,6 +40,7 @@ from familybot.lib.database import (
     get_cached_wishlist,  # pylint: disable=wrong-import-position
     get_db_connection,
     init_db,  # pylint: disable=wrong-import-position
+    load_family_members_from_db,
     migrate_database_phase1,  # pylint: disable=wrong-import-position
     migrate_database_phase2,
 )  # pylint: disable=wrong-import-position
@@ -258,30 +259,7 @@ class OptimizedPricePopulator:
 
     def load_family_members(self) -> Dict[str, str]:
         """Load family members from database."""
-        members = {}
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                print("📥 Migrating family members from config to database...")
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None),
-                    )
-                conn.commit()
-                print(f"✅ Migrated {len(FAMILY_USER_DICT)} family members")
-
-            cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-            for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-            conn.close()
-            print(f"👥 Loaded {len(members)} family members")
-        except (ValueError, TypeError, OSError) as e:
-            print(f"❌ Error loading family members: {e}")
-            return {}
-        return members
+        return load_family_members_from_db()
 
     def collect_all_game_ids(self, family_members: Dict[str, str]) -> Set[str]:
         """Collect all unique game IDs from family wishlists."""

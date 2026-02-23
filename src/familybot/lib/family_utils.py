@@ -15,18 +15,6 @@ from familybot.lib.utils import get_lowest_price
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-
-
-def find_in_2d_list(to_find: str, list_2d: list) -> Optional[int]:
-    """Finds the index of a sublist where the first element matches to_find."""
-    for i in range(len(list_2d)):
-        if list_2d[i][0] == to_find:
-            return i
-    return None
 
 
 def get_family_game_list_url() -> str:
