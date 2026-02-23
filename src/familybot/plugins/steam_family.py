@@ -361,7 +361,7 @@ class steam_family(Extension):
             user_name_for_log = ctx.author.username  # Use Discord username for logging
 
             # Collect wishlist games for the calling user only
-            global_wishlist = []
+            global_wishlist: list[list] = []
 
             # Try to get cached wishlist first
             cached_wishlist = get_cached_wishlist(user_steam_id)

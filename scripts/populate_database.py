@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import random
 import json
 import argparse
@@ -16,7 +15,7 @@ from typing import Tuple
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,  # pylint: disable=wrong-import-position

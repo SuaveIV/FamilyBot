@@ -5,8 +5,6 @@ from typing import List
 # Import core interactions types that might be part of the protocol's methods' signatures
 from interactions import Client, Message
 
-from familybot.lib.constants import DISCORD_EMBED_LIMIT, DISCORD_MESSAGE_LIMIT
-
 
 class FamilyBotClient(Client):
     """

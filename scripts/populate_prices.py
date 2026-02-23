@@ -26,7 +26,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-from familybot.config import FAMILY_USER_DICT, ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_game_details_with_source,  # pylint: disable=wrong-import-position
@@ -34,7 +34,6 @@ from familybot.lib.database import (
     get_cached_game_details,  # pylint: disable=wrong-import-position
     get_cached_itad_price,
     get_cached_wishlist,  # pylint: disable=wrong-import-position
-    get_db_connection,
     init_db,  # pylint: disable=wrong-import-position
     load_family_members_from_db,
     migrate_database_phase1,  # pylint: disable=wrong-import-position
