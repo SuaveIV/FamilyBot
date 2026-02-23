@@ -3,6 +3,11 @@ import aiohttp
 from datetime import datetime
 
 from familybot.config import ADMIN_DISCORD_ID
+from familybot.lib.constants import (
+    HIGH_DISCOUNT_THRESHOLD,
+    HISTORICAL_LOW_BUFFER,
+    LOW_DISCOUNT_THRESHOLD,
+)
 from familybot.lib.database import cache_game_details, get_cached_game_details
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
@@ -10,11 +15,6 @@ from familybot.lib.utils import get_lowest_price
 from familybot.lib.steam_api_manager import SteamAPIManager
 
 logger = get_logger(__name__)
-
-# Deal threshold constants
-HIGH_DISCOUNT_THRESHOLD = 30
-LOW_DISCOUNT_THRESHOLD = 15
-HISTORICAL_LOW_BUFFER = 1.2
 
 
 async def send_admin_dm(bot: FamilyBotClient, message: str) -> None:

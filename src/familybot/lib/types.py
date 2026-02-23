@@ -5,11 +5,7 @@ from typing import List
 # Import core interactions types that might be part of the protocol's methods' signatures
 from interactions import Client, Message
 
-# Discord API Constants
-DISCORD_MESSAGE_LIMIT = (
-    1950  # Maximum characters allowed in a Discord message (with safety buffer)
-)
-DISCORD_EMBED_LIMIT = 6000  # Maximum characters allowed in a Discord embed
+from familybot.lib.constants import DISCORD_EMBED_LIMIT, DISCORD_MESSAGE_LIMIT
 
 
 class FamilyBotClient(Client):

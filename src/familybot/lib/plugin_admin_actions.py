@@ -12,6 +12,11 @@ import aiohttp
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from familybot.config import STEAMWORKS_API_KEY
+from familybot.lib.constants import (
+    FULL_SCAN_RATE_LIMIT,
+    STEAM_API_RATE_LIMIT,
+    STEAM_STORE_API_RATE_LIMIT,
+)
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,
@@ -34,11 +39,6 @@ from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal
 
 logger = get_logger("plugin_admin_actions")
-
-# --- Rate limiting constants (copied from steam_family.py for consistency) ---
-STEAM_API_RATE_LIMIT = 3.0
-STEAM_STORE_API_RATE_LIMIT = 2.0
-FULL_SCAN_RATE_LIMIT = 5.0
 
 # --- Global variables for rate limiting (per process, not shared across multiple processes) ---
 _last_steam_api_call = 0.0

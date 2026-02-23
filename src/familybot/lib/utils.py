@@ -7,6 +7,11 @@ from typing import List
 import requests
 
 from familybot.config import ITAD_API_KEY  # Import ITAD_API_KEY from config
+from familybot.lib.constants import (
+    DEFAULT_PROGRESS_INTERVAL,
+    MIN_ELAPSED_TIME_FOR_ESTIMATION,
+    SECONDS_PER_MINUTE,
+)
 from familybot.lib.database import cache_itad_price, get_cached_itad_price
 from familybot.lib.logging_config import get_logger
 
@@ -138,11 +143,6 @@ class ProgressTracker:
         progress_interval: Percentage interval for reporting (default: 10)
     """
 
-    # Constants
-    DEFAULT_PROGRESS_INTERVAL = 10
-    MIN_ELAPSED_TIME_FOR_ESTIMATION = 1  # Seconds
-    SECONDS_PER_MINUTE = 60
-
     def __init__(
         self, total_items: int, progress_interval: int = DEFAULT_PROGRESS_INTERVAL
     ) -> None:
@@ -186,7 +186,7 @@ class ProgressTracker:
         progress_msg += ")"
 
         # Add time estimation if we have meaningful progress
-        if current_percent > 0 and elapsed_time > self.MIN_ELAPSED_TIME_FOR_ESTIMATION:
+        if current_percent > 0 and elapsed_time > MIN_ELAPSED_TIME_FOR_ESTIMATION:
             time_msg = self._safe_time_calculation(elapsed_time, progress_ratio)
             progress_msg += time_msg
 
@@ -202,8 +202,8 @@ class ProgressTracker:
             estimated_total = elapsed_time / progress_ratio
             remaining = max(0, estimated_total - elapsed_time)
 
-            if remaining >= self.SECONDS_PER_MINUTE:
-                return f" | ⏱️ ~{int(remaining / self.SECONDS_PER_MINUTE)} min remaining"
+            if remaining >= SECONDS_PER_MINUTE:
+                return f" | ⏱️ ~{int(remaining / SECONDS_PER_MINUTE)} min remaining"
             elif remaining >= 1:
                 return f" | ⏱️ ~{int(remaining)} sec remaining"
             else:
