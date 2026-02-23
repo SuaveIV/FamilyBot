@@ -212,6 +212,11 @@ def init_db():
                     logger.info(
                         f"Database: Added '{column_name}' column to 'game_details_cache' table."
                     )
+                    # Set concrete value for existing rows
+                    cursor.execute(
+                        f"UPDATE game_details_cache SET {column_name} = 0 WHERE {column_name} IS NULL"
+                    )
+                    conn.commit()
                 except sqlite3.OperationalError as e:
                     logger.error(f"Database: Failed to add '{column_name}' column: {e}")
                 except Exception as e:

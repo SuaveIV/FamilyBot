@@ -22,7 +22,7 @@ from familybot.lib.logging_config import get_logger, log_private_profile_detecti
 from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import ProgressTracker, get_lowest_price, split_message
 from familybot.lib.steam_api_manager import SteamAPIManager
-from familybot.lib.steam_helpers import send_admin_dm
+from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
 logger = get_logger(__name__)
 
@@ -222,112 +222,39 @@ class steam_admin(Extension):
 
             await ctx.send(f"📊 **Checking {total_games} games for deals...**")
 
-            for index, item in enumerate(global_wishlist):
-                app_id = item[0]
-                interested_users = item[1]
-                games_checked += 1
+            async with aiohttp.ClientSession() as session:
+                for index, item in enumerate(global_wishlist):
+                    app_id = item[0]
+                    interested_users = item[1]
+                    games_checked += 1
 
-                # Report progress using ProgressTracker
-                if progress_tracker.should_report_progress(index + 1):
-                    context_info = f"games checked | {len(deals_found)} deals found"
-                    progress_msg = progress_tracker.get_progress_message(
-                        index + 1, context_info
-                    )
-                    await ctx.send(progress_msg)
-
-                try:
-                    # Get cached game details first
-                    cached_game = get_cached_game_details(app_id)
-                    if cached_game:
-                        game_data = cached_game
-                    else:
-                        # If not cached, fetch from API with enhanced retry logic
-                        await self.steam_api_manager.rate_limit_steam_store_api()
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        app_info_response = (
-                            await self.steam_api_manager.make_request_with_retry(
-                                game_url
-                            )
+                    # Report progress using ProgressTracker
+                    if progress_tracker.should_report_progress(index + 1):
+                        context_info = f"games checked | {len(deals_found)} deals found"
+                        progress_msg = progress_tracker.get_progress_message(
+                            index + 1, context_info
                         )
-                        if app_info_response is None:
-                            continue
-                        game_info_json = app_info_response.json()
-                        if not game_info_json:
-                            continue
+                        await ctx.send(progress_msg)
 
-                        game_data = game_info_json.get(str(app_id), {}).get("data")
-                        if not game_data:
-                            continue
+                    try:
+                        deal_info = await process_game_deal(
+                            app_id,
+                            self.steam_api_manager,
+                            session=session,
+                        )
 
-                        # Cache the game details
-                        cache_game_details(app_id, game_data, permanent=True)
+                        if deal_info:
+                            deal_info["interested_users"] = [
+                                current_family_members.get(uid, "Unknown")
+                                for uid in interested_users
+                            ]
+                            deals_found.append(deal_info)
 
-                    game_name = game_data.get("name", f"Unknown Game ({app_id})")
-                    # Handle both cached data (price_data) and fresh API data (price_overview)
-                    price_overview = game_data.get("price_overview") or game_data.get(
-                        "price_data"
-                    )
-
-                    if not price_overview:
-                        logger.debug(
-                            f"Force deals: No price data found for {app_id} ({game_name})"
+                    except Exception as e:
+                        logger.warning(
+                            f"Force deals: Error checking deals for game {app_id}: {e}"
                         )
                         continue
-
-                    # Check if game is on sale
-                    discount_percent = price_overview.get("discount_percent", 0)
-                    current_price = price_overview.get("final_formatted", "N/A")
-                    original_price = price_overview.get(
-                        "initial_formatted", current_price
-                    )
-
-                    # Get historical low price
-                    lowest_price = get_lowest_price(int(app_id))
-
-                    # Determine if this is a good deal (more lenient criteria for force command)
-                    is_good_deal = False
-                    deal_reason = ""
-
-                    if discount_percent >= 30:  # Lower threshold for force command
-                        is_good_deal = True
-                        deal_reason = f"🔥 **{discount_percent}% OFF**"
-                    elif discount_percent >= 15 and lowest_price != "N/A":
-                        # Check if current price is close to historical low
-                        try:
-                            current_price_num = (
-                                float(price_overview.get("final", 0)) / 100
-                            )
-                            lowest_price_num = float(lowest_price)
-                            if (
-                                current_price_num <= lowest_price_num * 1.2
-                            ):  # Within 20% of historical low
-                                is_good_deal = True
-                                deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
-                        except (ValueError, TypeError):
-                            pass
-
-                    if is_good_deal:
-                        user_names = [
-                            current_family_members.get(uid, "Unknown")
-                            for uid in interested_users
-                        ]
-                        deal_info = {
-                            "name": game_name,
-                            "app_id": app_id,
-                            "current_price": current_price,
-                            "original_price": original_price,
-                            "discount_percent": discount_percent,
-                            "lowest_price": lowest_price,
-                            "deal_reason": deal_reason,
-                            "interested_users": user_names,
-                        }
-                        deals_found.append(deal_info)
-
-                except Exception as e:
-                    logger.warning(
-                        f"Force deals: Error checking deals for game {app_id}: {e}"
-                    )
-                    continue
 
             # Format and send results to wishlist channel
             if deals_found:
@@ -698,7 +625,7 @@ class steam_admin(Extension):
                         )
 
                         # Process each game with rate limiting and progress updates
-                        for i, game in enumerate(games):
+                        for _, game in enumerate(games):
                             app_id = str(game.get("appid"))
                             if not app_id:
                                 continue

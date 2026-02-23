@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 from datetime import datetime
 
 from familybot.config import ADMIN_DISCORD_ID
@@ -9,6 +10,11 @@ from familybot.lib.utils import get_lowest_price
 from familybot.lib.steam_api_manager import SteamAPIManager
 
 logger = get_logger(__name__)
+
+# Deal threshold constants
+HIGH_DISCOUNT_THRESHOLD = 30
+LOW_DISCOUNT_THRESHOLD = 15
+HISTORICAL_LOW_BUFFER = 1.2
 
 
 async def send_admin_dm(bot: FamilyBotClient, message: str) -> None:
@@ -29,7 +35,9 @@ async def send_admin_dm(bot: FamilyBotClient, message: str) -> None:
 
 
 async def fetch_game_details(
-    app_id: str, steam_api_manager: SteamAPIManager
+    app_id: str,
+    steam_api_manager: SteamAPIManager,
+    session: aiohttp.ClientSession | None = None,
 ) -> dict | None:
     """
     Fetch game details from cache or Steam Store API.
@@ -46,7 +54,9 @@ async def fetch_game_details(
         game_url = (
             f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
         )
-        app_info_response = await steam_api_manager.make_request_with_retry(game_url)
+        app_info_response = await steam_api_manager.make_request_with_retry(
+            game_url, session=session
+        )
 
         if app_info_response is None:
             return None
@@ -71,16 +81,17 @@ async def fetch_game_details(
 async def process_game_deal(
     app_id: str,
     steam_api_manager: SteamAPIManager,
-    high_discount_threshold: int = 50,
-    low_discount_threshold: int = 25,
-    historical_low_buffer: float = 1.1,
+    session: aiohttp.ClientSession | None = None,
+    high_discount_threshold: int = HIGH_DISCOUNT_THRESHOLD,
+    low_discount_threshold: int = LOW_DISCOUNT_THRESHOLD,
+    historical_low_buffer: float = HISTORICAL_LOW_BUFFER,
 ) -> dict | None:
     """
     Process a game to check for deals.
     Returns a dict with deal info if found, else None.
     """
     try:
-        game_data = await fetch_game_details(app_id, steam_api_manager)
+        game_data = await fetch_game_details(app_id, steam_api_manager, session=session)
         if not game_data:
             return None
 
@@ -138,3 +149,4 @@ async def process_game_deal(
         return None
 
     return None
+

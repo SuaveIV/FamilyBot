@@ -51,14 +51,14 @@ async def force_deals_command(
         app_id = item[0]
         interested_users = item[1]
 
-        game_data = await fetch_game_details(app_id, self.steam_api_manager)
+        game_data = await fetch_game_details(app_id, self.steam_api_manager, session=session)
         if not game_data:
             continue
 
         if family_sharing_only and not game_data.get("is_family_shared"):
             continue
 
-        deal_info = await process_game_deal(app_id, self.steam_api_manager)
+        deal_info = await process_game_deal(app_id, self.steam_api_manager, session=session)
         if deal_info:
             deal_info["interested_users"] = [
                 current_family_members.get(uid, "Unknown") for uid in interested_users

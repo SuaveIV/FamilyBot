@@ -225,22 +225,23 @@ class common_games(Extension):
             return
 
         game_lists = []
-        for steam_id in steam_ids_to_check:
-            # Try to get cached games first
-            cached_games = get_cached_user_games(steam_id)
-            if cached_games is not None:
-                logger.info(
-                    f"Using cached games for Steam ID: {steam_id} ({len(cached_games)} games)"
-                )
-                game_lists.append([int(appid) for appid in cached_games])
-                continue
+        async with aiohttp.ClientSession() as session:
+            for steam_id in steam_ids_to_check:
+                # Try to get cached games first
+                cached_games = get_cached_user_games(steam_id)
+                if cached_games is not None:
+                    logger.info(
+                        f"Using cached games for Steam ID: {steam_id} ({len(cached_games)} games)"
+                    )
+                    game_lists.append([int(appid) for appid in cached_games])
+                    continue
 
-            # If not cached, fetch from API
-            temp_game_list = []
-            steam_get_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&format=json&include_appinfo=1"
-            logger.info(f"Fetching games from API for Steam ID: {steam_id}")
-            try:
-                async with aiohttp.ClientSession() as session:
+                # If not cached, fetch from API
+                temp_game_list = []
+                steam_get_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&format=json&include_appinfo=1"
+                logger.info(f"Fetching games from API for Steam ID: {steam_id}")
+                response_data = None
+                try:
                     async with session.get(
                         steam_get_games_url, timeout=aiohttp.ClientTimeout(total=10)
                     ) as answer:
@@ -269,36 +270,36 @@ class common_games(Extension):
                         cache_user_games(steam_id, temp_game_list, cache_hours=6)
                         game_lists.append(temp_game_list)
 
-            except aiohttp.ClientError as e:
-                logger.error(
-                    f"Request error fetching games for Steam ID {steam_id}: {e}"
-                )
-                await self.bot.send_dm(
-                    ctx.author_id,
-                    f"Error fetching games for Steam ID {steam_id}. Steam API issue. Check logs.",
-                )
-            except json.JSONDecodeError:
-                logger.error(f"JSON decode error for Steam ID {steam_id}.")
-                await self.bot.send_dm(
-                    ctx.author_id,
-                    f"Error processing Steam API response for Steam ID {steam_id}. Check logs.",
-                )
-            except KeyError as e:
-                logger.error(
-                    f"Missing key in Steam API response for Steam ID {steam_id}: {e}. Response: {response_data}"
-                )
-                await self.bot.send_dm(
-                    ctx.author_id,
-                    f"Unexpected response format from Steam API for Steam ID {steam_id}. Check logs.",
-                )
-            except Exception as e:
-                logger.critical(
-                    f"An unexpected error occurred during game fetching for Steam ID {steam_id}: {e}",
-                    exc_info=True,
-                )
-                await self._send_admin_dm(
-                    f"Critical error fetching games for {steam_id}: {e}"
-                )
+                except aiohttp.ClientError as e:
+                    logger.error(
+                        f"Request error fetching games for Steam ID {steam_id}: {e}"
+                    )
+                    await self.bot.send_dm(
+                        ctx.author_id,
+                        f"Error fetching games for Steam ID {steam_id}. Steam API issue. Check logs.",
+                    )
+                except json.JSONDecodeError:
+                    logger.error(f"JSON decode error for Steam ID {steam_id}.")
+                    await self.bot.send_dm(
+                        ctx.author_id,
+                        f"Error processing Steam API response for Steam ID {steam_id}. Check logs.",
+                    )
+                except KeyError as e:
+                    logger.error(
+                        f"Missing key in Steam API response for Steam ID {steam_id}: {e}. Response: {response_data if response_data is not None else '<no response>'}"
+                    )
+                    await self.bot.send_dm(
+                        ctx.author_id,
+                        f"Unexpected response format from Steam API for Steam ID {steam_id}. Check logs.",
+                    )
+                except Exception as e:
+                    logger.critical(
+                        f"An unexpected error occurred during game fetching for Steam ID {steam_id}: {e}",
+                        exc_info=True,
+                    )
+                    await self._send_admin_dm(
+                        f"Critical error fetching games for {steam_id}: {e}"
+                    )
 
         if not game_lists or len(game_lists) < len(steam_ids_to_check):
             if len(steam_ids_to_check) > 1:
@@ -323,21 +324,21 @@ class common_games(Extension):
         header = "Common Multiplayer Games:\n"
         game_entries = []
 
-        for game_appid in common_game_appids:
-            try:
-                # Try to get cached game details first
-                cached_game = get_cached_game_details(str(game_appid))
-                if cached_game:
-                    logger.info(f"Using cached game details for AppID: {game_appid}")
-                    game_data = cached_game
-                else:
-                    # If not cached, fetch from API
-                    game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
-                    logger.info(
-                        f"Fetching app details from API for AppID: {game_appid}"
-                    )
+        async with aiohttp.ClientSession() as session:
+            for game_appid in common_game_appids:
+                try:
+                    # Try to get cached game details first
+                    cached_game = get_cached_game_details(str(game_appid))
+                    if cached_game:
+                        logger.info(f"Using cached game details for AppID: {game_appid}")
+                        game_data = cached_game
+                    else:
+                        # If not cached, fetch from API
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
+                        logger.info(
+                            f"Fetching app details from API for AppID: {game_appid}"
+                        )
 
-                    async with aiohttp.ClientSession() as session:
                         async with session.get(
                             game_url, timeout=aiohttp.ClientTimeout(total=10)
                         ) as app_info_response:

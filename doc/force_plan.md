@@ -165,7 +165,7 @@ New timing:   2:15 PM, 3:15 PM, 4:15 PM...
 **Add these new helper functions at the top of the file:**
 
 ```python
-async def _fetch_family_library_from_api() -> list:
+async def _fetch_family_library_from_api(session: aiohttp.ClientSession) -> list:
     """
     Helper function to fetch family library from Steam API.
     Returns the game list or raises an exception.
@@ -175,8 +175,8 @@ async def _fetch_family_library_from_api() -> list:
     """
     await _rate_limit_steam_api()
     url_family_list = get_family_game_list_url()
-    answer = requests.get(url_family_list, timeout=15)
-    games_json = await _handle_api_response("GetFamilySharedApps", answer)
+    async with session.get(url_family_list, timeout=aiohttp.ClientTimeout(total=15)) as answer:
+        games_json = await _handle_api_response("GetFamilySharedApps", answer)
     
     if not games_json:
         raise Exception("Failed to get family shared apps from API")

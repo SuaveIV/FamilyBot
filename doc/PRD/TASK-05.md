@@ -27,4 +27,9 @@ Both files make two distinct types of HTTP calls:
 1. **Steam Web API calls** (e.g. `GetOwnedGames`) — these can go through `SteamAPIManager.make_request_with_retry` once TASK-04 is complete, so no additional work is needed for those call sites beyond removing the direct `requests` calls.
 2. **Steam Store API calls** (e.g. `appdetails`) — use `aiohttp.ClientSession` directly, following the pattern from TASK-02.
 
+**Session Lifecycle Guidance:**
+- Create a single `ClientSession` per command invocation (e.g., inside `coop_command` or `get_common_games`) and share it for all requests within that command.
+- Recommend passing the session into sub-functions like `common_game.py:get_common_games` (if called from elsewhere) or helpers when iterating many games.
+- Use `aiohttp.ClientTimeout`, centralized retry/exception handling (or `make_request_with_retry`), and ensure the session is gracefully closed on command completion. Avoid per-request session creation to leverage connection pooling.
+
 Verify that the progress messages and per-game error handling in `common_game.py:get_common_games` continue to work correctly after the refactor, as this command iterates over potentially hundreds of games.

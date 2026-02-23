@@ -30,6 +30,8 @@ from familybot.lib.family_utils import (
 )
 from familybot.lib.logging_config import get_logger, log_private_profile_detection
 from familybot.lib.utils import get_lowest_price
+from familybot.lib.steam_api_manager import SteamAPIManager
+from familybot.lib.steam_helpers import process_game_deal
 
 logger = get_logger("plugin_admin_actions")
 
@@ -100,15 +102,17 @@ async def _handle_api_response(
     """Helper to process API responses, handle errors, and return JSON data."""
     try:
         response.raise_for_status()
-        json_data = await response.json()
-        return json_data
+        body = await response.text()
+        try:
+            json_data = json.loads(body)
+            return json_data
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for {api_name}: {e}. Raw: {body[:200]}")
+            return None
     except aiohttp.ClientResponseError as e:
         logger.error(f"Request error for {api_name}: {e}. URL: {e.request_info.url}")
     except aiohttp.ClientError as e:
         logger.error(f"Client connection error for {api_name}: {e}")
-    except json.JSONDecodeError as e:
-        text = await response.text()
-        logger.error(f"JSON decode error for {api_name}: {e}. Raw: {text[:200]}")
     except Exception as e:
         logger.critical(
             f"An unexpected error occurred processing {api_name} response: {e}",
@@ -622,10 +626,9 @@ async def _process_wishlist_duplicates(
 
     # Now process the selected games and fetch their details
     duplicate_games_for_display = []
-    saved_game_appids = (
-        item[0]
-        for item in get_saved_games()  # Get saved game app IDs for comparison
-    )
+    saved_game_appids = {
+        item[0] for item in get_saved_games()  # Get saved game app IDs for comparison
+    }
 
     for item in games_to_process:
         app_id = item[0]
@@ -908,97 +911,26 @@ async def force_deals_action(
 
             logger.info(f"Force deals: Checking {total_games} games for deals")
 
+            steam_api_manager = SteamAPIManager()
+
             for item in global_wishlist[:max_games_to_check]:
                 app_id = item[0]
                 interested_users = item[1]
                 games_checked += 1
 
                 try:
-                    # Get cached game details first
-                    cached_game = get_cached_game_details(app_id)
-                    if cached_game:
-                        game_data = cached_game
-                    else:
-                        # If not cached, fetch from API
-                        await _rate_limit_steam_store_api()
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        async with session.get(
-                            game_url, timeout=aiohttp.ClientTimeout(total=10)
-                        ) as app_info_response:
-                            game_info_json = await _handle_api_response(
-                                "AppDetails (Force Deals)", app_info_response
-                            )
-                        if not game_info_json:
-                            continue
-
-                        game_data = game_info_json.get(str(app_id), {}).get("data")
-                        if not game_data:
-                            continue
-
-                        # Cache the game details
-                        cache_game_details(app_id, game_data, permanent=True)
-
-                    game_name = game_data.get("name", f"Unknown Game ({app_id})")
-                    # Handle both cached data (price_data) and fresh API data (price_overview)
-                    price_overview = game_data.get("price_overview") or game_data.get(
-                        "price_data"
+                    deal_info = await process_game_deal(
+                        app_id,
+                        steam_api_manager,
+                        session=session,
                     )
 
-                    if not price_overview:
-                        logger.debug(
-                            f"Force deals: No price data found for {app_id} ({game_name})"
-                        )
-                        continue
-
-                    # Check if game is on sale
-                    discount_percent = price_overview.get("discount_percent", 0)
-                    current_price = price_overview.get("final_formatted", "N/A")
-                    original_price = price_overview.get(
-                        "initial_formatted", current_price
-                    )
-
-                    # Get historical low price
-                    lowest_price = await asyncio.to_thread(
-                        get_lowest_price, int(app_id)
-                    )
-
-                    # Determine if this is a good deal (more lenient criteria for force command)
-                    is_good_deal = False
-                    deal_reason = ""
-
-                    if discount_percent >= 30:  # Lower threshold for force command
-                        is_good_deal = True
-                        deal_reason = f"🔥 **{discount_percent}% OFF**"
-                    elif discount_percent >= 15 and lowest_price != "N/A":
-                        # Check if current price is close to historical low
-                        try:
-                            current_price_num = (
-                                float(price_overview.get("final", 0)) / 100
-                            )
-                            lowest_price_num = float(lowest_price)
-                            if (
-                                current_price_num <= lowest_price_num * 1.2
-                            ):  # Within 20% of historical low
-                                is_good_deal = True
-                                deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
-                        except (ValueError, TypeError):
-                            pass
-
-                    if is_good_deal:
+                    if deal_info:
                         user_names = [
                             current_family_members.get(uid, "Unknown")
                             for uid in interested_users
                         ]
-                        deal_info = {
-                            "name": game_name,
-                            "app_id": app_id,
-                            "current_price": current_price,
-                            "original_price": original_price,
-                            "discount_percent": discount_percent,
-                            "lowest_price": lowest_price,
-                            "deal_reason": deal_reason,
-                            "interested_users": user_names,
-                        }
+                        deal_info["interested_users"] = user_names
                         deals_found.append(deal_info)
 
                 except Exception as e:
@@ -1023,7 +955,12 @@ async def force_deals_action(
                     if deal["discount_percent"] > 0:
                         message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal["lowest_price"] != "N/A":
-                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
+                        # Handle both formatted ($X.XX) and unformatted (X.XX) prices
+                        lowest_price = deal["lowest_price"]
+                        if lowest_price.startswith("$"):
+                            message_parts.append(f" | Lowest ever: {lowest_price}")
+                        else:
+                            message_parts.append(f" | Lowest ever: ${lowest_price}")
                     message_parts.append(
                         f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}"
                     )

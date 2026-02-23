@@ -35,4 +35,8 @@ async with aiohttp.ClientSession() as session:
         data = await response.json()
 ```
 
+**Session Reuse Patterns:**
+1.  **Function Scope:** Use a single `aiohttp.ClientSession` to make multiple requests within that function (e.g., `my_function` iterating over a list).
+2.  **Cross-Function Reuse:** Accept an `aiohttp.ClientSession` as a parameter so callers can share a session across functions (recommended for iterating many games across multiple helper calls).
+
 Reference the existing `aiohttp` usage in `free_games.py` for the project's established pattern including retry logic and timeout handling.

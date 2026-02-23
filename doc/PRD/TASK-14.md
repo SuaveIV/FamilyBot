@@ -13,7 +13,7 @@ The project targets Python 3.13, but many files still use the older `typing` mod
 
 ## Acceptance criteria
 
-- [ ] No `Optional`, `List`, `Dict`, or `Tuple` imports remain from `typing`, except where required for runtime use (e.g. `TypedDict`, `TYPE_CHECKING` guards, `Protocol`).
+- [ ] No `Optional`, `List`, `Dict`, or `Tuple` imports remain from `typing`, except where required for runtime use (e.g. `TypedDict`, `TYPE_CHECKING` guards, `Protocol`). **Note: `Any` (from `typing`) is explicitly allowed.**
 - [ ] All annotations use built-in generics: `str | None`, `list[str]`, `dict[str, Any]`, `tuple[str, ...]`.
 - [ ] `from __future__ import annotations` is added to any file that has forward references after the change.
 - [ ] `ruff check` passes on all modified files.
@@ -32,3 +32,10 @@ uv run ruff check --select UP006,UP007,UP035 --fix src/ scripts/
 - `UP035` — removes now-unnecessary `from typing import ...` lines
 
 Review the full diff before committing. Pay particular attention to any file that uses `dataclasses.fields()`, `get_type_hints()`, or Pydantic models, as these evaluate annotations at runtime and may behave differently without `from __future__ import annotations`.
+
+**Allowed Imports Example:**
+```python
+from typing import Any, Dict, List, Optional, Protocol, Tuple, TypedDict, TYPE_CHECKING
+from __future__ import annotations
+```
+Note: `Optional`, `List`, `Dict`, `Tuple` are listed here only to show they should be removed in favor of built-ins, while `Any` remains a valid import.
