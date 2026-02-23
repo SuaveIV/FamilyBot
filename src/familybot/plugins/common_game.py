@@ -330,7 +330,9 @@ class common_games(Extension):
                     # Try to get cached game details first
                     cached_game = get_cached_game_details(str(game_appid))
                     if cached_game:
-                        logger.info(f"Using cached game details for AppID: {game_appid}")
+                        logger.info(
+                            f"Using cached game details for AppID: {game_appid}"
+                        )
                         game_data = cached_game
                     else:
                         # If not cached, fetch from API
@@ -368,33 +370,34 @@ class common_games(Extension):
                                 str(game_appid), game_data, permanent=True
                             )
 
-                if game_data.get("type") == "game":
-                    # Use cached boolean fields for faster performance if available
-                    is_multiplayer = game_data.get("is_multiplayer")
+                    if game_data.get("type") == "game":
+                        # Use cached boolean fields for faster performance if available
+                        is_multiplayer = game_data.get("is_multiplayer")
 
-                    # Fallback to category analysis if boolean field not available
-                    if is_multiplayer is None:
-                        categories = game_data.get("categories", [])
-                        is_multiplayer = any(
-                            cat.get("id") in [1, 36, 38] for cat in categories
-                        )
+                        # Fallback to category analysis if boolean field not available
+                        if is_multiplayer is None:
+                            categories = game_data.get("categories", [])
+                            is_multiplayer = any(
+                                cat.get("id") in [1, 36, 38] for cat in categories
+                            )
 
-                    if is_multiplayer:
-                        game_name = game_data.get(
-                            "name", f"Unknown Game ({game_appid})"
-                        )
-                        game_entries.append(f"- {game_name}")
+                        if is_multiplayer:
+                            game_name = game_data.get(
+                                "name", f"Unknown Game ({game_appid})"
+                            )
+                            game_entries.append(f"- {game_name}")
 
-            except aiohttp.ClientError as e:
-                logger.error(
-                    f"Request error fetching app details for AppID {game_appid}: {e}"
-                )
-            except json.JSONDecodeError:
-                logger.error(f"JSON decode error for AppID {game_appid}.")
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error processing game {game_appid}: {e}", exc_info=True
-                )
+                except aiohttp.ClientError as e:
+                    logger.error(
+                        f"Request error fetching app details for AppID {game_appid}: {e}"
+                    )
+                except json.JSONDecodeError:
+                    logger.error(f"JSON decode error for AppID {game_appid}.")
+                except Exception as e:
+                    logger.error(
+                        f"Unexpected error processing game {game_appid}: {e}",
+                        exc_info=True,
+                    )
 
         if not game_entries:
             final_message = header + "None found."

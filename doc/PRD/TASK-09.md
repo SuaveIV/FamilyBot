@@ -11,12 +11,12 @@
 
 The logic for "is this game a good deal?" — discount threshold check, historical-low comparison, deal reason string formatting — is copy-pasted across four locations:
 
-| File | Location | Notes |
-|------|----------|-------|
-| `steam_helpers.py` | `process_game_deal` | Intended canonical location |
-| `steam_admin.py` | `force_deals_command` | ~60 lines inline, threshold 30%/15% |
-| `steam_admin.py` | `force_deals_unlimited_command` | Near-identical to above, no game limit |
-| `plugin_admin_actions.py` | `force_deals_action` | Another copy, threshold 30%/15% |
+| File                      | Location                        | Notes                                  |
+| ------------------------- | ------------------------------- | -------------------------------------- |
+| `steam_helpers.py`        | `process_game_deal`             | Intended canonical location            |
+| `steam_admin.py`          | `force_deals_command`           | ~60 lines inline, threshold 30%/15%    |
+| `steam_admin.py"          | `force_deals_unlimited_command` | Near-identical to above, no game limit |
+| `plugin_admin_actions.py` | `force_deals_action`            | Another copy, threshold 30%/15%        |
 
 The two admin commands differ only in game count limit and a family-sharing filter — not in deal detection logic. The magic numbers (30%, 15%, 1.2× buffer) appear independently in each copy.
 
@@ -26,9 +26,9 @@ The two admin commands differ only in game count limit and a family-sharing filt
 - [ ] `force_deals_command` and `force_deals_unlimited_command` in `steam_admin.py` call `process_game_deal`; they contain no inline discount calculation.
 - [ ] `force_deals_action` in `plugin_admin_actions.py` calls `process_game_deal`; it contains no inline discount calculation.
 - [ ] Deal thresholds are defined as named constants, not magic numbers:
-  - `HIGH_DISCOUNT_THRESHOLD = 30`
-  - `LOW_DISCOUNT_THRESHOLD = 15`
-  - `HISTORICAL_LOW_BUFFER = 1.2`
+    - `HIGH_DISCOUNT_THRESHOLD = 30`
+    - `LOW_DISCOUNT_THRESHOLD = 15`
+    - `HISTORICAL_LOW_BUFFER = 1.2`
 - [ ] `force_deals_unlimited_command` is either merged into `force_deals_command` as a parameter variant or kept as a thin wrapper — no duplicated logic either way.
 - [ ] Existing command behaviour (output format, which deals are shown, progress messages) is unchanged from the user's perspective.
 - [ ] `ruff check` passes on all modified files.

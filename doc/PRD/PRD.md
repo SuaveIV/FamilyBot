@@ -52,13 +52,13 @@ Several categories of problems have been identified:
 
 ## 5. User Stories
 
-| ID | As a… | I want… | So that… |
-| ---- | ------- | --------- | ---------- |
-| US-1 | New user | The bot to start after filling in `config-template.yml` | I don't waste time debugging a crash that shouldn't exist |
-| US-2 | Bot operator | Discord commands to respond promptly even while API calls are in flight | The bot doesn't appear frozen |
-| US-3 | Bot operator | A deal, wishlist, or game-check error to be isolated to that operation | One failed API call doesn't take down unrelated features |
-| US-4 | Contributor | To find each piece of logic in exactly one place | I know where to make a change and that it will apply everywhere |
-| US-5 | Contributor | Database migrations to be easy to read and extend | I can add a new column without fear of breaking existing installs |
+| ID   | As a…        | I want…                                                                 | So that…                                                          |
+| ---- | ------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| US-1 | New user     | The bot to start after filling in `config-template.yml`                 | I don't waste time debugging a crash that shouldn't exist         |
+| US-2 | Bot operator | Discord commands to respond promptly even while API calls are in flight | The bot doesn't appear frozen                                     |
+| US-3 | Bot operator | A deal, wishlist, or game-check error to be isolated to that operation  | One failed API call doesn't take down unrelated features          |
+| US-4 | Contributor  | To find each piece of logic in exactly one place                        | I know where to make a change and that it will apply everywhere   |
+| US-5 | Contributor  | Database migrations to be easy to read and extend                       | I can add a new column without fear of breaking existing installs |
 
 ---
 
@@ -141,12 +141,12 @@ Several categories of problems have been identified:
 
 ## 9. Risks & Mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-| ------ | ----------- | -------- | ------------ |
-| Async HTTP refactor introduces subtle bugs in retry/error handling logic | Medium | High | Refactor one file at a time; verify existing error paths are preserved |
-| Renaming `familly_game_manager.py` breaks an import somewhere not caught in review | Low | Medium | `grep -r familly_game_manager` before and after; run the bot to confirm startup |
-| Deduplication of family member loading changes behaviour for edge cases (invalid SteamIDs) | Low | Low | The canonical `database.py` version already handles SteamID validation via `steam.steamid.SteamID`; ensure all callers get that behaviour |
-| Migration refactor causes double-application of a column add on existing installs | Low | Medium | The `PRAGMA table_info` check is idempotent by design; verify this is preserved |
+| Risk                                                                                       | Likelihood | Impact | Mitigation                                                                                                                                |
+| ------------------------------------------------------------------------------------------ | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Async HTTP refactor introduces subtle bugs in retry/error handling logic                   | Medium     | High   | Refactor one file at a time; verify existing error paths are preserved                                                                    |
+| Renaming `familly_game_manager.py` breaks an import somewhere not caught in review         | Low        | Medium | `grep -r familly_game_manager` before and after; run the bot to confirm startup                                                           |
+| Deduplication of family member loading changes behaviour for edge cases (invalid SteamIDs) | Low        | Low    | The canonical `database.py` version already handles SteamID validation via `steam.steamid.SteamID`; ensure all callers get that behaviour |
+| Migration refactor causes double-application of a column add on existing installs          | Low        | Medium | The `PRAGMA table_info` check is idempotent by design; verify this is preserved                                                           |
 
 ---
 

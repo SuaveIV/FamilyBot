@@ -627,7 +627,8 @@ async def _process_wishlist_duplicates(
     # Now process the selected games and fetch their details
     duplicate_games_for_display = []
     saved_game_appids = {
-        item[0] for item in get_saved_games()  # Get saved game app IDs for comparison
+        item[0]
+        for item in get_saved_games()  # Get saved game app IDs for comparison
     }
 
     for item in games_to_process:

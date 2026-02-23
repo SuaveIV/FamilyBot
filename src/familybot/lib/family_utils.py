@@ -138,7 +138,9 @@ async def format_message(wishlist: list, short=False) -> str:
                             f" which is {price_per_person}$ per person \n"
                         )
                     try:
-                        lowest_price = await asyncio.to_thread(get_lowest_price, int(app_id))
+                        lowest_price = await asyncio.to_thread(
+                            get_lowest_price, int(app_id)
+                        )
                         message_parts.append(
                             f"   The lowest price ever was {lowest_price}$ \n"
                         )
@@ -153,14 +155,18 @@ async def format_message(wishlist: list, short=False) -> str:
                 )
                 message_parts.append(f"  The game is at {final_formatted} \n")
                 if not short:
-                    final_price = price_overview.get("final") if price_overview else None
+                    final_price = (
+                        price_overview.get("final") if price_overview else None
+                    )
                     if final_price is not None and item[1]:
                         price_per_person = round(final_price / 100 / len(item[1]), 2)
                         message_parts.append(
                             f" which is {price_per_person}$ per person \n"
                         )
                     try:
-                        lowest_price = await asyncio.to_thread(get_lowest_price, int(app_id))
+                        lowest_price = await asyncio.to_thread(
+                            get_lowest_price, int(app_id)
+                        )
                         message_parts.append(
                             f"   The lowest price ever was {lowest_price}$ \n"
                         )

@@ -236,7 +236,9 @@ class steam_family(Extension):
                     # Try to get cached game details first
                     cached_game = get_cached_game_details(game_appid)
                     if cached_game:
-                        logger.info(f"Using cached game details for AppID: {game_appid}")
+                        logger.info(
+                            f"Using cached game details for AppID: {game_appid}"
+                        )
                         game_data = cached_game
                     else:
                         # If not cached, fetch from API

@@ -56,9 +56,9 @@ Added the `token_sender` configuration block:
 
 ```yaml
 token_sender:
-  token_save_path: "tokens"
-  browser_profile_path: "FamilyBotBrowserProfile"
-  update_buffer_hours: 24
+    token_save_path: "tokens"
+    browser_profile_path: "FamilyBotBrowserProfile"
+    update_buffer_hours: 24
 ```
 
 These settings were previously baked into the plugin itself. Surfacing them in the config template makes the token refresh behavior adjustable without touching code.

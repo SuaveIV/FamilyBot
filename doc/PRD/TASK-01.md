@@ -23,7 +23,7 @@ Add the following to `config-template.yml`:
 
 ```yaml
 token_sender:
-  token_save_path: "tokens"                        # Directory where Steam tokens are saved
-  browser_profile_path: "FamilyBotBrowserProfile"  # Browser session for token extraction
-  update_buffer_hours: 24                           # Hours before token expiry to trigger a refresh
+    token_save_path: "tokens" # Directory where Steam tokens are saved
+    browser_profile_path: "FamilyBotBrowserProfile" # Browser session for token extraction
+    update_buffer_hours: 24 # Hours before token expiry to trigger a refresh
 ```

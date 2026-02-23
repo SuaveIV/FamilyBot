@@ -6,9 +6,9 @@
 
 ## TASK-01 — Fix startup crash: add missing `token_sender` keys to config template
 
-**Priority:** 🔴 Critical  
-**Effort:** XS (< 30 min)  
-**PRD reference:** §6.1  
+**Priority:** 🔴 Critical
+**Effort:** XS (< 30 min)
+**PRD reference:** §6.1
 
 ### Background
 
@@ -26,19 +26,19 @@ Add the following to `config-template.yml`:
 
 ```yaml
 token_sender:
-  token_save_path: "tokens"           # Directory where Steam tokens are saved
-  browser_profile_path: "FamilyBotBrowserProfile"  # Browser session for token extraction
-  update_buffer_hours: 24             # Hours before token expiry to trigger a refresh
+    token_save_path: "tokens" # Directory where Steam tokens are saved
+    browser_profile_path: "FamilyBotBrowserProfile" # Browser session for token extraction
+    update_buffer_hours: 24 # Hours before token expiry to trigger a refresh
 ```
 
 ---
 
 ## TASK-02 — Fix async event loop blocking: `plugin_admin_actions.py`
 
-**Priority:** 🔴 Critical  
-**Effort:** M (2–4 hrs)  
-**PRD reference:** §6.2  
-**Depends on:** Nothing  
+**Priority:** 🔴 Critical
+**Effort:** M (2–4 hrs)
+**PRD reference:** §6.2
+**Depends on:** Nothing
 
 ### Background
 
@@ -74,9 +74,9 @@ Reference the existing `aiohttp` usage in `free_games.py` for the project's esta
 
 ## TASK-03 — Fix async event loop blocking: `steam_admin.py`
 
-**Priority:** 🔴 Critical  
-**Effort:** M (2–4 hrs)  
-**PRD reference:** §6.2  
+**Priority:** 🔴 Critical
+**Effort:** M (2–4 hrs)
+**PRD reference:** §6.2
 **Depends on:** TASK-02 (use the same patterns established there)
 
 ### Background
@@ -95,10 +95,10 @@ Same problem as TASK-02. `steam_admin.py` contains `requests.get()` calls inside
 
 ## TASK-04 — Fix async event loop blocking: `SteamAPIManager.make_request_with_retry`
 
-**Priority:** 🔴 Critical  
-**Effort:** S (1–2 hrs)  
-**PRD reference:** §6.2  
-**Depends on:** TASK-02  
+**Priority:** 🔴 Critical
+**Effort:** S (1–2 hrs)
+**PRD reference:** §6.2
+**Depends on:** TASK-02
 
 ### Background
 
@@ -120,10 +120,10 @@ The method should either accept a session as a parameter (preferred for connecti
 
 ## TASK-05 — Fix async event loop blocking: `steam_family.py` and `common_game.py`
 
-**Priority:** 🟠 High  
-**Effort:** M (2–3 hrs)  
-**PRD reference:** §6.2  
-**Depends on:** TASK-04  
+**Priority:** 🟠 High
+**Effort:** M (2–3 hrs)
+**PRD reference:** §6.2
+**Depends on:** TASK-04
 
 ### Background
 
@@ -141,10 +141,10 @@ The method should either accept a session as a parameter (preferred for connecti
 
 ## TASK-06 — Fix async event loop blocking: `family_utils.py:format_message`
 
-**Priority:** 🟠 High  
-**Effort:** S (1–2 hrs)  
-**PRD reference:** §6.2  
-**Depends on:** TASK-02  
+**Priority:** 🟠 High
+**Effort:** S (1–2 hrs)
+**PRD reference:** §6.2
+**Depends on:** TASK-02
 
 ### Background
 
@@ -165,14 +165,15 @@ Converting to `async def` is the cleaner long-term choice. Wrapping with `asynci
 
 ## TASK-07 — Remove duplicated family member loading logic
 
-**Priority:** 🟠 High  
-**Effort:** S (1 hr)  
-**PRD reference:** §6.3  
-**Depends on:** Nothing  
+**Priority:** 🟠 High
+**Effort:** S (1 hr)
+**PRD reference:** §6.3
+**Depends on:** Nothing
 
 ### Background
 
 `load_family_members_from_db` exists in three places:
+
 - `database.py` — canonical, includes SteamID validation via `steam.steamid.SteamID`
 - `admin_commands.py` — named `load_family_members`, uses a manual string check instead of the `SteamID` class
 - `plugin_admin_actions.py` — named `_load_family_members_from_db`, also uses a manual string check
@@ -191,10 +192,10 @@ The two non-canonical implementations will silently allow invalid SteamIDs that 
 
 ## TASK-08 — Remove duplicated CLI argument parsing in `FamilyBot.py`
 
-**Priority:** 🟠 High  
-**Effort:** S (1 hr)  
-**PRD reference:** §6.3  
-**Depends on:** Nothing  
+**Priority:** 🟠 High
+**Effort:** S (1 hr)
+**PRD reference:** §6.3
+**Depends on:** Nothing
 
 ### Background
 
@@ -211,10 +212,10 @@ The `if __name__ == "__main__"` block and the `main()` entry-point function in `
 
 ## TASK-09 — Consolidate deal detection into `steam_helpers.py:process_game_deal`
 
-**Priority:** 🟠 High  
-**Effort:** L (4–6 hrs)  
-**PRD reference:** §6.3  
-**Depends on:** TASK-04, TASK-05  
+**Priority:** 🟠 High
+**Effort:** L (4–6 hrs)
+**PRD reference:** §6.3
+**Depends on:** TASK-04, TASK-05
 
 ### Background
 
@@ -262,10 +263,10 @@ async def force_deals_command(
 
 ## TASK-10 — Refactor database migrations to a declarative system
 
-**Priority:** 🟡 Medium  
-**Effort:** M (2–3 hrs)  
-**PRD reference:** §6.4  
-**Depends on:** Nothing  
+**Priority:** 🟡 Medium
+**Effort:** M (2–3 hrs)
+**PRD reference:** §6.4
+**Depends on:** Nothing
 
 ### Background
 
@@ -307,10 +308,10 @@ def _run_column_migrations(cursor: sqlite3.Cursor) -> None:
 
 ## TASK-11 — Fix `asyncio.Queue` instantiation in `web_logging.py`
 
-**Priority:** 🟡 Medium  
-**Effort:** XS (< 30 min)  
-**PRD reference:** §6.5  
-**Depends on:** Nothing  
+**Priority:** 🟡 Medium
+**Effort:** XS (< 30 min)
+**PRD reference:** §6.5
+**Depends on:** Nothing
 
 ### Background
 
@@ -344,10 +345,10 @@ class WebSocketQueueHandler(logging.Handler):
 
 ## TASK-12 — Guard `_migrate_gamelist_to_db` with a module-level flag
 
-**Priority:** 🟡 Medium  
-**Effort:** XS (< 30 min)  
-**PRD reference:** §6.5  
-**Depends on:** Nothing  
+**Priority:** 🟡 Medium
+**Effort:** XS (< 30 min)
+**PRD reference:** §6.5
+**Depends on:** Nothing
 
 ### Background
 
@@ -364,10 +365,10 @@ class WebSocketQueueHandler(logging.Handler):
 
 ## TASK-13 — Rename `familly_game_manager.py` to `family_game_manager.py`
 
-**Priority:** 🟢 Low  
-**Effort:** XS (< 30 min)  
-**PRD reference:** §6.5  
-**Depends on:** TASK-12 (do both in one commit to avoid two renames)  
+**Priority:** 🟢 Low
+**Effort:** XS (< 30 min)
+**PRD reference:** §6.5
+**Depends on:** TASK-12 (do both in one commit to avoid two renames)
 
 ### Background
 
@@ -390,10 +391,10 @@ The filename contains a double-l typo (`familly`). While harmless, it creates un
 
 ## TASK-14 — Standardise type annotations to Python 3.10+ syntax
 
-**Priority:** 🟢 Low  
-**Effort:** S (1–2 hrs)  
-**PRD reference:** §6.6  
-**Depends on:** All other tasks (do last to avoid conflicts)  
+**Priority:** 🟢 Low
+**Effort:** S (1–2 hrs)
+**PRD reference:** §6.6
+**Depends on:** All other tasks (do last to avoid conflicts)
 
 ### Background
 
@@ -421,21 +422,21 @@ Review the diff carefully before committing, especially in files that use Pydant
 
 ## Task Summary
 
-| Task | Description | Priority | Effort | Depends on |
-|------|-------------|----------|--------|-----------|
-| TASK-01 | Fix startup crash: add missing config keys | 🔴 Critical | XS | — |
-| TASK-02 | Async HTTP: `plugin_admin_actions.py` | 🔴 Critical | M | — |
-| TASK-03 | Async HTTP: `steam_admin.py` | 🔴 Critical | M | TASK-02 |
-| TASK-04 | Async HTTP: `SteamAPIManager.make_request_with_retry` | 🔴 Critical | S | TASK-02 |
-| TASK-05 | Async HTTP: `steam_family.py`, `common_game.py` | 🟠 High | M | TASK-04 |
-| TASK-06 | Async HTTP: `family_utils.py:format_message` | 🟠 High | S | TASK-02 |
-| TASK-07 | Remove duplicated family member loading | 🟠 High | S | — |
-| TASK-08 | Remove duplicated CLI argument parsing | 🟠 High | S | — |
-| TASK-09 | Consolidate deal detection logic | 🟠 High | L | TASK-04, TASK-05 |
-| TASK-10 | Declarative database migration system | 🟡 Medium | M | — |
-| TASK-11 | Fix `asyncio.Queue` in `web_logging.py` | 🟡 Medium | XS | — |
-| TASK-12 | Guard migration check with module-level flag | 🟡 Medium | XS | — |
-| TASK-13 | Rename `familly_game_manager.py` | 🟢 Low | XS | TASK-12 |
-| TASK-14 | Standardise type annotations | 🟢 Low | S | All others |
+| Task    | Description                                           | Priority    | Effort | Depends on       |
+| ------- | ----------------------------------------------------- | ----------- | ------ | ---------------- |
+| TASK-01 | Fix startup crash: add missing config keys            | 🔴 Critical | XS     | —                |
+| TASK-02 | Async HTTP: `plugin_admin_actions.py`                 | 🔴 Critical | M      | —                |
+| TASK-03 | Async HTTP: `steam_admin.py`                          | 🔴 Critical | M      | TASK-02          |
+| TASK-04 | Async HTTP: `SteamAPIManager.make_request_with_retry` | 🔴 Critical | S      | TASK-02          |
+| TASK-05 | Async HTTP: `steam_family.py`, `common_game.py`       | 🟠 High     | M      | TASK-04          |
+| TASK-06 | Async HTTP: `family_utils.py:format_message`          | 🟠 High     | S      | TASK-02          |
+| TASK-07 | Remove duplicated family member loading               | 🟠 High     | S      | —                |
+| TASK-08 | Remove duplicated CLI argument parsing                | 🟠 High     | S      | —                |
+| TASK-09 | Consolidate deal detection logic                      | 🟠 High     | L      | TASK-04, TASK-05 |
+| TASK-10 | Declarative database migration system                 | 🟡 Medium   | M      | —                |
+| TASK-11 | Fix `asyncio.Queue` in `web_logging.py`               | 🟡 Medium   | XS     | —                |
+| TASK-12 | Guard migration check with module-level flag          | 🟡 Medium   | XS     | —                |
+| TASK-13 | Rename `familly_game_manager.py`                      | 🟢 Low      | XS     | TASK-12          |
+| TASK-14 | Standardise type annotations                          | 🟢 Low      | S      | All others       |
 
 **Effort key:** XS < 30 min · S 1–2 hrs · M 2–4 hrs · L 4–6 hrs

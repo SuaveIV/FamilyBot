@@ -36,6 +36,7 @@ async with aiohttp.ClientSession() as session:
 ```
 
 **Session Reuse Patterns:**
+
 1.  **Function Scope:** Use a single `aiohttp.ClientSession` to make multiple requests within that function (e.g., `my_function` iterating over a list).
 2.  **Cross-Function Reuse:** Accept an `aiohttp.ClientSession` as a parameter so callers can share a session across functions (recommended for iterating many games across multiple helper calls).
 

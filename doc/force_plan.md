@@ -37,7 +37,7 @@ Transform your bot's task system from **unpredictable interval-based with unclea
 async def new_game_task(self):
     result = await force_new_game_action()  # Uses cache!
 
-# In steam_admin.py  
+# In steam_admin.py
 async def force_new_game_command(self, ctx):
     result = await force_new_game_action()  # Also uses cache!
 ```
@@ -139,14 +139,14 @@ New timing:   2:15 PM, 3:15 PM, 4:15 PM...
 
 ### Design Decision 3: Smart Cache Strategy
 
-| Data Type | Change Frequency | Automated Tasks | Force Commands | Cache TTL |
-|-----------|-----------------|-----------------|----------------|-----------|
-| Family Library | Slow (hours) | Use cache | Always fresh | 30 minutes |
-| Wishlist Data | Moderate (hours) | Use cache | Always fresh | 2 hours |
-| Game Details (prices) | Fast (minutes) | Always fresh* | Always fresh | Permanent** |
+| Data Type             | Change Frequency | Automated Tasks | Force Commands | Cache TTL     |
+| --------------------- | ---------------- | --------------- | -------------- | ------------- |
+| Family Library        | Slow (hours)     | Use cache       | Always fresh   | 30 minutes    |
+| Wishlist Data         | Moderate (hours) | Use cache       | Always fresh   | 2 hours       |
+| Game Details (prices) | Fast (minutes)   | Always fresh\*  | Always fresh   | Permanent\*\* |
 
-\* *In wishlist context, always fetch fresh prices*  
-\*\* *Game metadata cached permanently, but refetched when needed for price updates*
+\* _In wishlist context, always fetch fresh prices_
+\*\* _Game metadata cached permanently, but refetched when needed for price updates_
 
 **Rationale:**
 
@@ -169,7 +169,7 @@ async def _fetch_family_library_from_api(session: aiohttp.ClientSession) -> list
     """
     Helper function to fetch family library from Steam API.
     Returns the game list or raises an exception.
-    
+
     This centralizes API fetching logic and is used by both
     check and force functions.
     """
@@ -177,7 +177,7 @@ async def _fetch_family_library_from_api(session: aiohttp.ClientSession) -> list
     url_family_list = get_family_game_list_url()
     async with session.get(url_family_list, timeout=aiohttp.ClientTimeout(total=15)) as answer:
         games_json = await _handle_api_response("GetFamilySharedApps", answer)
-    
+
     if not games_json:
         raise Exception("Failed to get family shared apps from API")
 
@@ -193,11 +193,11 @@ async def _process_new_games(game_list: list, current_family_members: dict) -> D
     """
     Helper function to process game list and detect new games.
     Shared logic between check_new_game_action and force_new_game_action.
-    
+
     Args:
         game_list: List of games from family library
         current_family_members: Dict of {steam_id: friendly_name}
-    
+
     Returns:
         Dict with success status and message
     """
@@ -227,10 +227,10 @@ async def check_new_game_action() -> Dict[str, Any]:
     """
     Regular check for new games that respects cache (for scheduled tasks).
     Uses cached family library if available to minimize API calls.
-    
+
     This function is called by the hourly automated task.
     It will use cached data if available and valid.
-    
+
     Returns:
         Dict with success status and message
     """
@@ -248,7 +248,7 @@ async def check_new_game_action() -> Dict[str, Any]:
             # If not cached, fetch from API
             logger.info("No cached family library found, fetching from API...")
             game_list = await _fetch_family_library_from_api()
-            
+
             # Cache for next time (30 minute TTL)
             cache_family_library(game_list, cache_minutes=30)
             logger.info(f"Cached family library ({len(game_list)} games)")
@@ -258,7 +258,7 @@ async def check_new_game_action() -> Dict[str, Any]:
 
     except Exception as e:
         logger.critical(
-            f"An unexpected error occurred in check_new_game_action: {e}", 
+            f"An unexpected error occurred in check_new_game_action: {e}",
             exc_info=True
         )
         return {
@@ -273,21 +273,21 @@ async def check_new_game_action() -> Dict[str, Any]:
 async def check_wishlist_action() -> Dict[str, Any]:
     """
     Regular wishlist check that uses cached wishlist data (for scheduled tasks).
-    
+
     Cache strategy:
     - Uses cached wishlist data (2-hour TTL)
     - Always fetches fresh game details (prices change frequently)
-    
+
     This balances API efficiency with price accuracy.
     """
     logger.info("Running check_wishlist_action (cache-respecting for wishlists)...")
-    
+
     # For each family member:
     #   1. Check for cached wishlist
     #   2. If cached, use it
     #   3. If not cached, fetch from API and cache it
     #   4. For game details, always fetch fresh (prices!)
-    
+
     # [Implementation similar to existing force_wishlist_action
     #  but with cache checks before API calls for wishlist data]
 ```
@@ -301,10 +301,10 @@ async def force_new_game_action() -> Dict[str, Any]:
     """
     Force check for new games that always fetches fresh data (for admin commands).
     Bypasses cache to ensure the most up-to-date information.
-    
+
     This function is called by the !force admin command.
     It will always fetch fresh data from the Steam API.
-    
+
     Returns:
         Dict with success status and message
     """
@@ -314,7 +314,7 @@ async def force_new_game_action() -> Dict[str, Any]:
         # Always fetch fresh data from API (no cache check)
         logger.info("Force refresh: Fetching fresh family library from API...")
         game_list = await _fetch_family_library_from_api()
-        
+
         # Update cache with fresh data for next regular check
         cache_family_library(game_list, cache_minutes=30)
         logger.info(f"Updated family library cache with {len(game_list)} games")
@@ -324,7 +324,7 @@ async def force_new_game_action() -> Dict[str, Any]:
 
     except Exception as e:
         logger.critical(
-            f"An unexpected error occurred in force_new_game_action: {e}", 
+            f"An unexpected error occurred in force_new_game_action: {e}",
             exc_info=True
         )
         return {
@@ -345,21 +345,21 @@ async def force_new_game_action() -> Dict[str, Any]:
 async def force_wishlist_action() -> Dict[str, Any]:
     """
     Force wishlist refresh that always fetches fresh data (for admin commands).
-    
+
     Cache strategy:
     - Always fetches fresh wishlist data
     - Always fetches fresh game details
     - Updates cache for next regular check
-    
+
     This ensures complete accuracy when admin requests it.
     """
     logger.info("Running force_wishlist_action (bypassing cache)...")
-    
+
     # For each family member:
     #   1. Always fetch fresh wishlist from API
     #   2. Always fetch fresh game details
     #   3. Update cache with fresh data
-    
+
     # [Implementation that skips all cache checks]
 ```
 
@@ -424,7 +424,7 @@ async def new_game_task(self):
     logger.info("Running new game task...")
     try:
         from familybot.lib.plugin_admin_actions import force_new_game_action
-        
+
         result = await force_new_game_action()
         if result["success"] and "New games detected" in result["message"]:
             await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, result["message"])
@@ -443,7 +443,7 @@ async def new_game_task(self):
     logger.info("Running scheduled new game task (hourly at :15)...")
     try:
         from familybot.lib.plugin_admin_actions import check_new_game_action
-        
+
         result = await check_new_game_action()  # Uses cache
         if result["success"] and "New games detected" in result["message"]:
             await self.bot.send_to_channel(NEW_GAME_CHANNEL_ID, result["message"])
@@ -473,7 +473,7 @@ async def wishlist_task(self):
     logger.info("Running wishlist task...")
     try:
         from familybot.lib.plugin_admin_actions import force_wishlist_action
-        
+
         result = await force_wishlist_action()
         if result["success"] and "Details:" in result["message"]:
             wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
@@ -498,7 +498,7 @@ async def wishlist_task(self):
     logger.info("Running scheduled wishlist task (every 6 hours at :45)...")
     try:
         from familybot.lib.plugin_admin_actions import check_wishlist_action
-        
+
         result = await check_wishlist_action()  # Uses cache for wishlists
         if result["success"] and "Details:" in result["message"]:
             wishlist_channel = await self.bot.fetch_channel(WISHLIST_CHANNEL_ID)
@@ -576,7 +576,7 @@ async def force_new_game_command(self, ctx: PrefixedContext):
     if str(ctx.author_id) == str(ADMIN_DISCORD_ID) and ctx.guild is None:
         await ctx.send("Forcing new game notification check...")
         from familybot.lib.plugin_admin_actions import force_new_game_action
-        
+
         result = await force_new_game_action()  # ✅ Correct - uses force
         await ctx.send(result["message"])
         # ...
@@ -590,7 +590,7 @@ async def force_wishlist_command(self, ctx: PrefixedContext):
     if str(ctx.author_id) == str(ADMIN_DISCORD_ID) and ctx.guild is None:
         await ctx.send("Forcing wishlist refresh...")
         from familybot.lib.plugin_admin_actions import force_wishlist_action
-        
+
         result = await force_wishlist_action()  # ✅ Correct - uses force
         await ctx.send(result["message"])
         # ...
@@ -611,26 +611,26 @@ async def force_wishlist_command(self, ctx: PrefixedContext):
 1. Start the bot and note the time (e.g., 14:32)
 2. Check logs for startup confirmation:
 
-   ```text
-   --Steam Family background tasks started (scheduled timing)
-     - New games: Every hour at :15
-     - Wishlist: Every 6 hours at :45 (00:45, 06:45, 12:45, 18:45)
-   ```
+    ```text
+    --Steam Family background tasks started (scheduled timing)
+      - New games: Every hour at :15
+      - Wishlist: Every 6 hours at :45 (00:45, 06:45, 12:45, 18:45)
+    ```
 
 3. Wait until the next :15 (e.g., 15:15)
 4. Verify new game task runs:
 
-   ```log
-   [2024-01-29 15:15:00] Running scheduled new game task (hourly at :15)...
-   [2024-01-29 15:15:00] Running check_new_game_action (cache-respecting)...
-   ```
+    ```log
+    [2024-01-29 15:15:00] Running scheduled new game task (hourly at :15)...
+    [2024-01-29 15:15:00] Running check_new_game_action (cache-respecting)...
+    ```
 
 5. If it's a wishlist time (e.g., 18:45), verify wishlist task:
 
-   ```log
-   [2024-01-29 18:45:00] Running scheduled wishlist task (every 6 hours at :45)...
-   [2024-01-29 18:45:00] Running check_wishlist_action (cache-respecting for wishlists)...
-   ```
+    ```log
+    [2024-01-29 18:45:00] Running scheduled wishlist task (every 6 hours at :45)...
+    [2024-01-29 18:45:00] Running check_wishlist_action (cache-respecting for wishlists)...
+    ```
 
 **Expected Results:**
 
@@ -647,27 +647,27 @@ async def force_wishlist_command(self, ctx: PrefixedContext):
 1. Wait for new game task at :15
 2. Check logs for cache usage:
 
-   ```log
-   [15:15:00] Running check_new_game_action (cache-respecting)...
-   [15:15:00] No cached family library found, fetching from API...
-   [15:15:00] Cached family library (150 games)
-   ```
+    ```log
+    [15:15:00] Running check_new_game_action (cache-respecting)...
+    [15:15:00] No cached family library found, fetching from API...
+    [15:15:00] Cached family library (150 games)
+    ```
 
 3. Wait for next task at :45 (within 30-min cache window)
 4. Check logs again:
 
-   ```log
-   [15:45:00] Running check_new_game_action (cache-respecting)...
-   [15:45:00] Using cached family library for new game check (150 games)
-   ```
+    ```log
+    [15:45:00] Running check_new_game_action (cache-respecting)...
+    [15:45:00] Using cached family library for new game check (150 games)
+    ```
 
 5. Wait until cache expires (30 min after first fetch)
 6. Verify it fetches fresh:
 
-   ```log
-   [16:15:00] Running check_new_game_action (cache-respecting)...
-   [16:15:00] No cached family library found, fetching from API...
-   ```
+    ```log
+    [16:15:00] Running check_new_game_action (cache-respecting)...
+    [16:15:00] No cached family library found, fetching from API...
+    ```
 
 **Expected Results:**
 
@@ -686,19 +686,19 @@ async def force_wishlist_command(self, ctx: PrefixedContext):
 2. Immediately run `!force` command
 3. Check logs for bypass behavior:
 
-   ```lok
-   [15:16:00] Running force_new_game_action (bypassing cache)...
-   [15:16:00] Force refresh: Fetching fresh family library from API...
-   [15:16:00] Updated family library cache with 150 games
-   ```
+    ```lok
+    [15:16:00] Running force_new_game_action (bypassing cache)...
+    [15:16:00] Force refresh: Fetching fresh family library from API...
+    [15:16:00] Updated family library cache with 150 games
+    ```
 
 4. Run `!force` again 10 seconds later
 5. Verify it fetches fresh again (not using cache):
 
-   ```log
-   [15:16:10] Running force_new_game_action (bypassing cache)...
-   [15:16:10] Force refresh: Fetching fresh family library from API...
-   ```
+    ```log
+    [15:16:10] Running force_new_game_action (bypassing cache)...
+    [15:16:10] Force refresh: Fetching fresh family library from API...
+    ```
 
 **Expected Results:**
 
@@ -717,15 +717,15 @@ async def force_wishlist_command(self, ctx: PrefixedContext):
 2. Wait for scheduled wishlist task at :45
 3. Check logs for cache usage:
 
-   ```log
-   [18:45:00] Running check_wishlist_action (cache-respecting for wishlists)...
-   [18:45:00] Using cached wishlist for User1 (25 items)
-   [18:45:00] Fetching app details from API for AppID: 123456 for wishlist
-   ```
+    ```log
+    [18:45:00] Running check_wishlist_action (cache-respecting for wishlists)...
+    [18:45:00] Using cached wishlist for User1 (25 items)
+    [18:45:00] Fetching app details from API for AppID: 123456 for wishlist
+    ```
 
 4. Verify:
-   - Wishlist data uses cache
-   - Game details fetched fresh (for price updates)
+    - Wishlist data uses cache
+    - Game details fetched fresh (for price updates)
 
 **Expected Results:**
 
@@ -741,10 +741,10 @@ async def force_wishlist_command(self, ctx: PrefixedContext):
 
 1. Let bot run for 24 hours
 2. Monitor logs for:
-   - Task timing consistency
-   - Cache hit/miss rates
-   - API call frequency
-   - Any errors or issues
+    - Task timing consistency
+    - Cache hit/miss rates
+    - API call frequency
+    - Any errors or issues
 
 **Expected Results:**
 
@@ -759,13 +759,13 @@ async def force_wishlist_command(self, ctx: PrefixedContext):
 
 1. Start bot at 14:47
 2. Verify next tasks:
-   - 15:15 - New game check
-   - 18:45 - Wishlist check
+    - 15:15 - New game check
+    - 18:45 - Wishlist check
 3. Restart bot at 15:30
 4. Verify tasks continue at same times:
-   - 15:45 - Next new game check (if within hour)
-   - 16:15 - Next new game check
-   - 18:45 - Wishlist check
+    - 15:45 - Next new game check (if within hour)
+    - 16:15 - Next new game check
+    - 18:45 - Wishlist check
 
 **Test cache expiration edge cases:**
 
@@ -877,24 +877,24 @@ async def force_new_game_action() -> Dict:
 #### **Measure these metrics:**
 
 1. **Timing Consistency**
-   - ✅ Tasks run at expected times 100% of the time
-   - ✅ No timing drift over days
-   - ✅ Consistent across restarts
+    - ✅ Tasks run at expected times 100% of the time
+    - ✅ No timing drift over days
+    - ✅ Consistent across restarts
 
 2. **Cache Performance**
-   - ✅ Cache hit rate ~50% for automated tasks
-   - ✅ ~50% reduction in API calls
-   - ✅ No increase in stale data reports
+    - ✅ Cache hit rate ~50% for automated tasks
+    - ✅ ~50% reduction in API calls
+    - ✅ No increase in stale data reports
 
 3. **User Experience**
-   - ✅ Force commands feel responsive
-   - ✅ Automated updates arrive on time
-   - ✅ Data appears fresh and accurate
+    - ✅ Force commands feel responsive
+    - ✅ Automated updates arrive on time
+    - ✅ Data appears fresh and accurate
 
 4. **System Health**
-   - ✅ No increase in errors
-   - ✅ Lower API rate limiting
-   - ✅ Improved debuggability
+    - ✅ No increase in errors
+    - ✅ Lower API rate limiting
+    - ✅ Improved debuggability
 
 ### Success Criteria
 
@@ -963,36 +963,36 @@ Use these when you need the most up-to-date information immediately.
 ### Short-term (Next Month)
 
 1. **Cache Statistics**
-   - Track hit/miss rates
-   - Log cache performance
-   - Dashboard for monitoring
+    - Track hit/miss rates
+    - Log cache performance
+    - Dashboard for monitoring
 
 2. **Configurable Timing**
-   - Move timing to config.yml
-   - Allow admin to customize
-   - Per-guild timing support
+    - Move timing to config.yml
+    - Allow admin to customize
+    - Per-guild timing support
 
 3. **Cache Warming**
-   - Pre-populate cache on startup
-   - Reduce initial load time
-   - Improve first-run UX
+    - Pre-populate cache on startup
+    - Reduce initial load time
+    - Improve first-run UX
 
 ### Long-term (Next Quarter)
 
 1. **Adaptive Caching**
-   - Adjust TTL based on change frequency
-   - Learn optimal cache times
-   - Auto-tune performance
+    - Adjust TTL based on change frequency
+    - Learn optimal cache times
+    - Auto-tune performance
 
 2. **Multi-tier Cache**
-   - Redis for distributed caching
-   - Shared cache across instances
-   - Improved scalability
+    - Redis for distributed caching
+    - Shared cache across instances
+    - Improved scalability
 
 3. **Advanced Scheduling**
-   - Per-user notification preferences
-   - Quiet hours support
-   - Smart timing based on activity
+    - Per-user notification preferences
+    - Quiet hours support
+    - Smart timing based on activity
 
 ---
 

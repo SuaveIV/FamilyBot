@@ -11,11 +11,11 @@
 
 `load_family_members_from_db` exists in three places:
 
-| File | Function name | SteamID validation |
-|------|---------------|--------------------|
-| `database.py` | `load_family_members_from_db` | Via `steam.steamid.SteamID` class (correct) |
-| `admin_commands.py` | `load_family_members` | Manual string length/prefix check (weaker) |
-| `plugin_admin_actions.py` | `_load_family_members_from_db` | Manual string length/prefix check (weaker) |
+| File                      | Function name                  | SteamID validation                          |
+| ------------------------- | ------------------------------ | ------------------------------------------- |
+| `database.py`             | `load_family_members_from_db`  | Via `steam.steamid.SteamID` class (correct) |
+| `admin_commands.py`       | `load_family_members`          | Manual string length/prefix check (weaker)  |
+| `plugin_admin_actions.py` | `_load_family_members_from_db` | Manual string length/prefix check (weaker)  |
 
 The two non-canonical implementations will silently pass through invalid SteamIDs that the canonical version would reject. They have also drifted in their migration logic.
 

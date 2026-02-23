@@ -34,8 +34,10 @@ uv run ruff check --select UP006,UP007,UP035 --fix src/ scripts/
 Review the full diff before committing. Pay particular attention to any file that uses `dataclasses.fields()`, `get_type_hints()`, or Pydantic models, as these evaluate annotations at runtime and may behave differently without `from __future__ import annotations`.
 
 **Allowed Imports Example:**
+
 ```python
 from typing import Any, Dict, List, Optional, Protocol, Tuple, TypedDict, TYPE_CHECKING
 from __future__ import annotations
 ```
+
 Note: `Optional`, `List`, `Dict`, `Tuple` are listed here only to show they should be removed in favor of built-ins, while `Any` remains a valid import.
