@@ -1,6 +1,5 @@
 # In src/familybot/lib/types.py
 
-from typing import List
 
 # Import core interactions types that might be part of the protocol's methods' signatures
 from interactions import Client, Message
@@ -25,5 +24,5 @@ class FamilyBotClient(Client):
     async def edit_msg(self, chan_id: int, msg_id: int, message: str) -> None:
         raise NotImplementedError
 
-    async def get_pinned_message(self, chan_id: int) -> List[Message]:
+    async def get_pinned_message(self, chan_id: int) -> list[Message]:
         raise NotImplementedError

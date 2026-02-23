@@ -3,7 +3,7 @@
 import asyncio
 import json
 import time
-from typing import List, Optional
+from typing import Optional
 
 import requests
 
@@ -268,7 +268,7 @@ class TokenBucket:
                 self.tokens -= tokens
 
 
-def split_message(message: str, max_length: int = 1900) -> List[str]:
+def split_message(message: str, max_length: int = 1900) -> list[str]:
     """
     Split a message into multiple parts that fit within Discord's character limit.
 
@@ -328,7 +328,7 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
 
 
 def truncate_message_list(
-    items: List[str],
+    items: list[str],
     header: str = "",
     footer_template: str = "\n... and {count} more items!",
     max_length: int = 1900,

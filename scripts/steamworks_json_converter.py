@@ -21,12 +21,12 @@ import argparse
 import json
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
 def convert_owned_games(
-    data: Dict[str, Any], steam_id: Optional[str] = None
-) -> Dict[str, Any]:
+    data: dict[str, Any], steam_id: Optional[str] = None
+) -> dict[str, Any]:
     """Convert GetOwnedGames API response to FamilyBot format."""
     response = data.get("response", {})
     games = response.get("games", [])
@@ -40,7 +40,7 @@ def convert_owned_games(
             "Steam ID is required for owned games conversion. Use --steam-id parameter."
         )
 
-    converted_games: list[Dict[str, Any]] = []
+    converted_games: list[dict[str, Any]] = []
     for game in games:
         appid = str(game.get("appid"))
         if appid:
@@ -68,12 +68,12 @@ def convert_owned_games(
     return {"type": "batch", "data": converted_games}
 
 
-def convert_player_summaries(data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_player_summaries(data: dict[str, Any]) -> dict[str, Any]:
     """Convert GetPlayerSummaries API response to FamilyBot format."""
     response = data.get("response", {})
     players = response.get("players", [])
 
-    converted_users: list[Dict[str, Any]] = []
+    converted_users: list[dict[str, Any]] = []
     for player in players:
         steam_id = player.get("steamid")
         persona_name = player.get("personaname")
@@ -93,8 +93,8 @@ def convert_player_summaries(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def convert_wishlist(
-    data: Dict[str, Any], steam_id: Optional[str] = None
-) -> Dict[str, Any]:
+    data: dict[str, Any], steam_id: Optional[str] = None
+) -> dict[str, Any]:
     """Convert GetWishlist API response to FamilyBot format."""
     response = data.get("response", {})
     items = response.get("items", [])
@@ -104,7 +104,7 @@ def convert_wishlist(
             "Steam ID is required for wishlist conversion. Use --steam-id parameter."
         )
 
-    converted_items: list[Dict[str, Any]] = []
+    converted_items: list[dict[str, Any]] = []
     for item in items:
         appid = str(item.get("appid"))
         if appid:
@@ -120,9 +120,9 @@ def convert_wishlist(
     return {"type": "batch", "data": converted_items}
 
 
-def convert_app_details(data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_app_details(data: dict[str, Any]) -> dict[str, Any]:
     """Convert Steam Store API appdetails response to FamilyBot format."""
-    converted_games: list[Dict[str, Any]] = []
+    converted_games: list[dict[str, Any]] = []
 
     # Steam Store API returns data keyed by appid
     for appid, app_data in data.items():
@@ -148,12 +148,12 @@ def convert_app_details(data: Dict[str, Any]) -> Dict[str, Any]:
     return {"type": "batch", "data": converted_games}
 
 
-def convert_family_library(data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_family_library(data: dict[str, Any]) -> dict[str, Any]:
     """Convert GetSharedLibraryApps API response to FamilyBot format."""
     response = data.get("response", {})
     apps = response.get("apps", [])
 
-    converted_games: list[Dict[str, Any]] = []
+    converted_games: list[dict[str, Any]] = []
     for app in apps:
         appid = str(app.get("appid"))
         if appid:

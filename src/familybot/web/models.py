@@ -1,7 +1,7 @@
 # Pydantic models for FamilyBot Web API
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -24,8 +24,8 @@ class GameDetails(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     is_free: bool = False
-    categories: List[Dict[str, Any]] = []
-    price_data: Optional[Dict[str, Any]] = None
+    categories: list[dict[str, Any]] = []
+    price_data: Optional[dict[str, Any]] = None
     is_multiplayer: bool = False
     is_coop: bool = False
     is_family_shared: bool = False
@@ -63,7 +63,7 @@ class CommandRequest(BaseModel):
     """Request to execute a bot command"""
 
     command: str
-    parameters: Optional[Dict[str, Any]] = None
+    parameters: Optional[dict[str, Any]] = None
 
 
 class CommandResponse(BaseModel):
@@ -71,7 +71,7 @@ class CommandResponse(BaseModel):
 
     success: bool
     message: str
-    data: Optional[Dict[str, Any]] = None
+    data: Optional[dict[str, Any]] = None
 
 
 class ConfigData(BaseModel):
@@ -91,7 +91,7 @@ class WishlistItem(BaseModel):
     appid: str
     steam_id: str
     game_name: Optional[str] = None
-    price_data: Optional[Dict[str, Any]] = None
+    price_data: Optional[dict[str, Any]] = None
 
 
 class RecentActivity(BaseModel):
@@ -100,4 +100,4 @@ class RecentActivity(BaseModel):
     timestamp: datetime
     activity_type: str  # 'game_added', 'wishlist_update', 'command_executed', etc.
     description: str
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[dict[str, Any]] = None

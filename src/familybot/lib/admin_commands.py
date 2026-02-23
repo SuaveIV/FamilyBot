@@ -4,7 +4,7 @@ import logging
 import os
 import random
 import sys
-from typing import Dict, Optional
+from typing import Optional
 
 import httpx
 
@@ -179,7 +179,7 @@ class DatabasePopulator:
             return 0
 
     async def populate_family_libraries(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with all family member game libraries."""
         logger.info("Starting family library population...")
@@ -310,7 +310,7 @@ class DatabasePopulator:
         return total_cached
 
     async def populate_wishlists(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with family member wishlists."""
         logger.info("Starting wishlist population...")

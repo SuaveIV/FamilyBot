@@ -6,7 +6,7 @@ import random
 import sys
 import time
 from datetime import datetime
-from typing import Dict, Optional, Set
+from typing import Optional
 
 import httpx
 
@@ -174,11 +174,11 @@ class PricePopulator:
             logger.error("Unexpected error for %s: %s", api_name, e)
             return None
 
-    def load_family_members(self) -> Dict[str, str]:
+    def load_family_members(self) -> dict[str, str]:
         """Load family members from database."""
         return load_family_members_from_db()
 
-    def collect_all_game_ids(self, family_members: Dict[str, str]) -> Set[str]:
+    def collect_all_game_ids(self, family_members: dict[str, str]) -> set[str]:
         all_game_ids = set()
         print("\n📊 Collecting game IDs from family wishlists...")
         for steam_id, name in family_members.items():
@@ -322,7 +322,7 @@ class PricePopulator:
         return success, "store_api"
 
     def populate_steam_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         print("\n💰 Starting Steam price population...")
         if not game_ids:
@@ -625,7 +625,7 @@ class PricePopulator:
         return self.fetch_itad_price_enhanced(app_id)
 
     def populate_itad_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         print("\n📈 Starting ITAD price population...")
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
@@ -687,7 +687,7 @@ class PricePopulator:
         )
         return itad_prices_cached
 
-    def refresh_current_prices(self, game_ids: Set[str], dry_run: bool = False) -> int:
+    def refresh_current_prices(self, game_ids: set[str], dry_run: bool = False) -> int:
         print("\n🔄 Refreshing current Steam prices...")
         if not game_ids:
             print("❌ No game IDs to process")

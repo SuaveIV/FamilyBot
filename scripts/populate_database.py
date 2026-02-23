@@ -6,11 +6,10 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 import httpx
 
 from steam.webapi import WebAPI
-from typing import Tuple
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -164,7 +163,7 @@ class DatabasePopulator:
             logger.error("Unexpected error for %s: %s", api_name, e)
             return None
 
-    def batch_write_games(self, games_data: Dict[str, Dict]) -> int:
+    def batch_write_games(self, games_data: dict[str, dict]) -> int:
         """Write a batch of game details to the database in a single transaction."""
         if not games_data:
             return 0
@@ -266,7 +265,7 @@ class DatabasePopulator:
 
         return await asyncio.to_thread(get_app_info)
 
-    def load_family_members(self) -> Dict[str, str]:
+    def load_family_members(self) -> dict[str, str]:
         """Load family members from database."""
         return load_family_members_from_db()
 
@@ -358,7 +357,7 @@ class DatabasePopulator:
         return wishlist_data
 
     async def populate_family_libraries(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with all family member game libraries."""
         print("\n🎮 Starting family library population...")
@@ -390,7 +389,7 @@ class DatabasePopulator:
 
     async def _populate_libraries_with_tqdm(
         self,
-        family_members: Dict[str, str],
+        family_members: dict[str, str],
         dry_run: bool,
         total_processed: int,
         total_cached: int,
@@ -452,7 +451,7 @@ class DatabasePopulator:
 
     async def _populate_libraries_without_tqdm(
         self,
-        family_members: Dict[str, str],
+        family_members: dict[str, str],
         dry_run: bool,
         total_processed: int,
         total_cached: int,
@@ -540,7 +539,7 @@ class DatabasePopulator:
         )
         total_cached = 0
 
-        async def fetch_game_with_progress(app_id: str) -> Optional[Tuple[str, Dict]]:
+        async def fetch_game_with_progress(app_id: str) -> Optional[tuple[str, dict]]:
             nonlocal user_cached, user_skipped, total_cached
             game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
             try:
@@ -693,7 +692,7 @@ class DatabasePopulator:
         return total_cached
 
     async def populate_wishlists(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with family member wishlists."""
         print("\n🎯 Starting wishlist population...")

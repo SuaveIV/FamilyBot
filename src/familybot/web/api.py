@@ -5,7 +5,7 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -221,7 +221,7 @@ async def get_cache_stats(conn=Depends(get_db)):
     return CacheStats(**stats)
 
 
-@app.get("/api/family-members", response_model=List[FamilyMember])
+@app.get("/api/family-members", response_model=list[FamilyMember])
 async def get_family_members(conn=Depends(get_db)):
     """Get family members list"""
     cursor = conn.cursor()
@@ -242,7 +242,7 @@ async def get_family_members(conn=Depends(get_db)):
         return []
 
 
-@app.get("/api/family-library", response_model=List[GameDetails])
+@app.get("/api/family-library", response_model=list[GameDetails])
 async def get_family_library(limit: int = 50, conn=Depends(get_db)):
     """Get family library games with details"""
     family_apps = get_cached_family_library()
@@ -355,7 +355,7 @@ async def get_wishlist_summary(
         return {"items": [], "total_items": 0}
 
 
-@app.get("/api/recent-games", response_model=List[GameDetails])
+@app.get("/api/recent-games", response_model=list[GameDetails])
 async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
     """Get recently added games"""
     cursor = conn.cursor()
@@ -616,7 +616,7 @@ async def purge_cache(cache_type: str = "all"):
         return CommandResponse(success=False, message=f"Error purging cache: {str(e)}")
 
 
-@app.get("/api/logs", response_model=List[LogEntry])
+@app.get("/api/logs", response_model=list[LogEntry])
 async def get_logs(limit: int = 100, level: Optional[str] = None):
     """Get recent log entries"""
     # This is a simplified implementation

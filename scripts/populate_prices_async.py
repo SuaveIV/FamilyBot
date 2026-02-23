@@ -7,7 +7,7 @@ import sys
 import time
 import asyncio
 from datetime import datetime
-from typing import Dict, Optional, Set, Tuple
+from typing import Optional
 
 import httpx
 
@@ -254,11 +254,11 @@ class AsyncPricePopulator:
             logger.debug("Error for %s: %s", api_name, e)
             return None
 
-    def load_family_members(self) -> Dict[str, str]:
+    def load_family_members(self) -> dict[str, str]:
         """Load family members from database."""
         return load_family_members_from_db()
 
-    def collect_all_game_ids(self, family_members: Dict[str, str]) -> Set[str]:
+    def collect_all_game_ids(self, family_members: dict[str, str]) -> set[str]:
         """Collect all unique game IDs from family wishlists."""
         all_game_ids = set()
         print("\n📊 Collecting game IDs from family wishlists...")
@@ -274,7 +274,7 @@ class AsyncPricePopulator:
 
     async def fetch_steam_price_single(
         self, app_id: str
-    ) -> Tuple[str, bool, dict, str]:
+    ) -> tuple[str, bool, dict, str]:
         """Fetch Steam price for a single game with multiple strategies. Returns data instead of writing to DB."""
         async with self.semaphore:  # Control concurrency
             # Strategy 1: Steam Store API
@@ -319,7 +319,7 @@ class AsyncPricePopulator:
 
             return app_id, False, {}, "failed"
 
-    async def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str, dict, str]:
+    async def fetch_itad_price_single(self, app_id: str) -> tuple[str, str, dict, str]:
         """Fetch ITAD price for a single game with multiple strategies. Returns data instead of writing to DB."""
         async with self.semaphore:  # Control concurrency
             # Strategy 1: ITAD App ID lookup
@@ -440,7 +440,7 @@ class AsyncPricePopulator:
             return app_id, "not_found", {}, "failed"
 
     def batch_write_steam_data(
-        self, steam_data: Dict[str, Dict], batch_size: int = 100
+        self, steam_data: dict[str, dict], batch_size: int = 100
     ) -> int:
         """Write Steam data to database in safe batches with proper error handling."""
         if not steam_data:
@@ -501,7 +501,7 @@ class AsyncPricePopulator:
         return written_count
 
     def batch_write_itad_data(
-        self, itad_data: Dict[str, Dict], batch_size: int = 100
+        self, itad_data: dict[str, dict], batch_size: int = 100
     ) -> int:
         """Write ITAD data to database in safe batches with proper error handling."""
         if not itad_data:
@@ -567,7 +567,7 @@ class AsyncPricePopulator:
         return written_count
 
     async def populate_steam_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         """Populate Steam prices with async processing using cache-then-write pattern."""
         print("\n💰 Starting async Steam price population...")
@@ -648,7 +648,7 @@ class AsyncPricePopulator:
         return steam_prices_cached
 
     async def populate_itad_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         """Populate ITAD prices with async processing using cache-then-write pattern."""
         print("\n📈 Starting async ITAD price population...")
@@ -755,7 +755,7 @@ class AsyncPricePopulator:
         return itad_prices_cached
 
     async def refresh_current_prices(
-        self, game_ids: Set[str], dry_run: bool = False
+        self, game_ids: set[str], dry_run: bool = False
     ) -> int:
         """Refresh current Steam prices with force refresh."""
         print("\n🔄 Refreshing current Steam prices with async optimization...")

@@ -4,7 +4,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import aiohttp
 
@@ -117,7 +117,7 @@ async def _handle_api_response(
     return None
 
 
-async def purge_game_details_cache_action() -> Dict[str, Any]:
+async def purge_game_details_cache_action() -> dict[str, Any]:
     """
     Purges the game details cache table.
     """
@@ -175,7 +175,7 @@ async def _process_new_games(
     game_list: list,
     current_family_members: dict,
     session: aiohttp.ClientSession,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Helper function to process game list and detect new games.
     Shared logic between check_new_game_action and force_new_game_action.
@@ -337,7 +337,7 @@ async def _process_new_games(
 # ==================== NEW GAME ACTIONS ====================
 
 
-async def check_new_game_action() -> Dict[str, Any]:
+async def check_new_game_action() -> dict[str, Any]:
     """
     Regular check for new games that respects cache (for scheduled tasks).
     Uses cached family library if available to minimize API calls.
@@ -381,7 +381,7 @@ async def check_new_game_action() -> Dict[str, Any]:
         }
 
 
-async def force_new_game_action() -> Dict[str, Any]:
+async def force_new_game_action() -> dict[str, Any]:
     """
     Force check for new games that always fetches fresh data (for admin commands).
     Bypasses cache to ensure the most up-to-date information.
@@ -510,7 +510,7 @@ async def _collect_wishlists(
 
 async def _process_wishlist_duplicates(
     global_wishlist: list[list], session: aiohttp.ClientSession
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Helper to process duplicate games in the global wishlist.
     """
@@ -612,7 +612,7 @@ async def _process_wishlist_duplicates(
         }
 
 
-async def check_wishlist_action() -> Dict[str, Any]:
+async def check_wishlist_action() -> dict[str, Any]:
     """
     Regular wishlist check that uses cached wishlist data (for scheduled tasks).
 
@@ -641,7 +641,7 @@ async def check_wishlist_action() -> Dict[str, Any]:
         }
 
 
-async def force_wishlist_action() -> Dict[str, Any]:
+async def force_wishlist_action() -> dict[str, Any]:
     """
     Force wishlist refresh that always fetches fresh data (for admin commands).
 
@@ -673,7 +673,7 @@ async def force_wishlist_action() -> Dict[str, Any]:
 
 async def force_deals_action(
     target_friendly_name: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Forces a check for deals on wishlist games and returns results.
     If target_friendly_name is provided, checks only that user's wishlist.

@@ -24,7 +24,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -61,9 +61,9 @@ class JSONDatabaseImporter:
         elif level == "error":
             logger.error(message)
 
-    def get_existing_users(self) -> Dict[str, Any]:
+    def get_existing_users(self) -> dict[str, Any]:
         """Get all existing users from the database."""
-        users: Dict[str, Any] = {"discord_ids": {}, "steam_ids": {}}
+        users: dict[str, Any] = {"discord_ids": {}, "steam_ids": {}}
 
         try:
             conn = get_db_connection()
@@ -99,7 +99,7 @@ class JSONDatabaseImporter:
 
         return users
 
-    def validate_user_data(self, data: Dict[str, Any]) -> bool:
+    def validate_user_data(self, data: dict[str, Any]) -> bool:
         """Validate user data structure."""
         required_fields = ["discord_id", "steam_id"]
         for field in required_fields:
@@ -127,7 +127,7 @@ class JSONDatabaseImporter:
 
         return True
 
-    def validate_family_member_data(self, data: Dict[str, Any]) -> bool:
+    def validate_family_member_data(self, data: dict[str, Any]) -> bool:
         """Validate family member data structure."""
         required_fields = ["steam_id", "friendly_name"]
         for field in required_fields:
@@ -139,7 +139,7 @@ class JSONDatabaseImporter:
 
         return True
 
-    def validate_saved_game_data(self, data: Dict[str, Any]) -> bool:
+    def validate_saved_game_data(self, data: dict[str, Any]) -> bool:
         """Validate saved game data structure."""
         if "appid" not in data:
             self.log_action(
@@ -149,7 +149,7 @@ class JSONDatabaseImporter:
 
         return True
 
-    def validate_game_details_data(self, data: Dict[str, Any]) -> bool:
+    def validate_game_details_data(self, data: dict[str, Any]) -> bool:
         """Validate game details data structure."""
         required_fields = ["appid", "name"]
         for field in required_fields:
@@ -161,7 +161,7 @@ class JSONDatabaseImporter:
 
         return True
 
-    def import_user(self, data: Dict[str, Any], existing_users: Dict[str, Any]) -> bool:
+    def import_user(self, data: dict[str, Any], existing_users: dict[str, Any]) -> bool:
         """Import a single user record."""
         if not self.validate_user_data(data):
             return False
@@ -225,7 +225,7 @@ class JSONDatabaseImporter:
         return True
 
     def import_family_member(
-        self, data: Dict[str, Any], existing_users: Dict[str, Any]
+        self, data: dict[str, Any], existing_users: dict[str, Any]
     ) -> bool:
         """Import a single family member record."""
         if not self.validate_family_member_data(data):
@@ -282,7 +282,7 @@ class JSONDatabaseImporter:
         return True
 
     def import_saved_game(
-        self, data: Dict[str, Any], existing_users: Dict[str, Any]
+        self, data: dict[str, Any], existing_users: dict[str, Any]
     ) -> bool:
         """Import a saved game record."""
         if not self.validate_saved_game_data(data):
@@ -314,7 +314,7 @@ class JSONDatabaseImporter:
         return True
 
     def import_game_details(
-        self, data: Dict[str, Any], existing_users: Dict[str, Any]
+        self, data: dict[str, Any], existing_users: dict[str, Any]
     ) -> bool:
         """Import game details using the existing cache system."""
         if not self.validate_game_details_data(data):
@@ -349,7 +349,7 @@ class JSONDatabaseImporter:
         return True
 
     def import_single_record(
-        self, data: Dict[str, Any], existing_users: Dict[str, Any]
+        self, data: dict[str, Any], existing_users: dict[str, Any]
     ) -> bool:
         """Import a single record based on its type."""
         self.stats["processed"] += 1

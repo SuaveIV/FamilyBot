@@ -6,7 +6,7 @@ import random
 import sys
 import time
 from datetime import datetime
-from typing import Dict, Optional, Set, List, Tuple
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
@@ -257,11 +257,11 @@ class OptimizedPricePopulator:
             logger.debug("Error for %s: %s", api_name, e)
             return None
 
-    def load_family_members(self) -> Dict[str, str]:
+    def load_family_members(self) -> dict[str, str]:
         """Load family members from database."""
         return load_family_members_from_db()
 
-    def collect_all_game_ids(self, family_members: Dict[str, str]) -> Set[str]:
+    def collect_all_game_ids(self, family_members: dict[str, str]) -> set[str]:
         """Collect all unique game IDs from family wishlists."""
         all_game_ids = set()
         print("\n📊 Collecting game IDs from family wishlists...")
@@ -276,8 +276,8 @@ class OptimizedPricePopulator:
         return all_game_ids
 
     def fetch_steam_price_batch(
-        self, app_ids: List[str]
-    ) -> List[Tuple[str, bool, dict, str]]:
+        self, app_ids: list[str]
+    ) -> list[tuple[str, bool, dict, str]]:
         """Fetch Steam prices for a batch of games concurrently."""
         results = []
 
@@ -300,7 +300,7 @@ class OptimizedPricePopulator:
 
         return results
 
-    def fetch_steam_price_single(self, app_id: str) -> Tuple[str, bool, dict, str]:
+    def fetch_steam_price_single(self, app_id: str) -> tuple[str, bool, dict, str]:
         """Fetch Steam price for a single game with multiple strategies. Returns data instead of writing."""
 
         # Strategy 1: Steam Store API
@@ -341,8 +341,8 @@ class OptimizedPricePopulator:
         return app_id, False, {}, "failed"
 
     def fetch_itad_price_batch(
-        self, app_ids: List[str]
-    ) -> List[Tuple[str, str, dict, str]]:
+        self, app_ids: list[str]
+    ) -> list[tuple[str, str, dict, str]]:
         """Fetch ITAD prices for a batch of games concurrently."""
         results = []
 
@@ -365,7 +365,7 @@ class OptimizedPricePopulator:
 
         return results
 
-    def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str, dict, str]:
+    def fetch_itad_price_single(self, app_id: str) -> tuple[str, str, dict, str]:
         """Fetch ITAD price for a single game with multiple strategies. Returns data instead of writing."""
 
         # Strategy 1: ITAD App ID lookup
@@ -479,7 +479,7 @@ class OptimizedPricePopulator:
         return app_id, "not_found", {}, "failed"
 
     def batch_write_steam_data(
-        self, steam_data: Dict[str, Dict], batch_size: int = 100
+        self, steam_data: dict[str, dict], batch_size: int = 100
     ) -> int:
         """Write Steam data to database in safe batches with proper error handling."""
         if not steam_data:
@@ -529,7 +529,7 @@ class OptimizedPricePopulator:
         return written_count
 
     def batch_write_itad_data(
-        self, itad_data: Dict[str, Dict], batch_size: int = 100
+        self, itad_data: dict[str, dict], batch_size: int = 100
     ) -> int:
         """Write ITAD data to database in safe batches with proper error handling."""
         if not itad_data:
@@ -586,7 +586,7 @@ class OptimizedPricePopulator:
 
     def populate_steam_prices(
         self,
-        game_ids: Set[str],
+        game_ids: set[str],
         dry_run: bool = False,
         force_refresh: bool = False,
         batch_size: int = 50,
@@ -674,7 +674,7 @@ class OptimizedPricePopulator:
 
     def populate_itad_prices(
         self,
-        game_ids: Set[str],
+        game_ids: set[str],
         dry_run: bool = False,
         force_refresh: bool = False,
         batch_size: int = 30,
@@ -772,7 +772,7 @@ class OptimizedPricePopulator:
 
         return itad_prices_cached
 
-    def refresh_current_prices(self, game_ids: Set[str], dry_run: bool = False) -> int:
+    def refresh_current_prices(self, game_ids: set[str], dry_run: bool = False) -> int:
         """Refresh current Steam prices with force refresh."""
         print("\n🔄 Refreshing current Steam prices with optimization...")
         if not game_ids:

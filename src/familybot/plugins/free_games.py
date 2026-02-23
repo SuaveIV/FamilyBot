@@ -1,7 +1,6 @@
 import asyncio
 import re
 from datetime import datetime
-from typing import Set
 from urllib.parse import urlparse
 
 import aiohttp
@@ -32,7 +31,7 @@ class FreeGames(Extension):
         logger.info("Free Games Plugin loaded")
 
         # Bluesky state
-        self._seen_bsky_posts: Set[str] = set()
+        self._seen_bsky_posts: set[str] = set()
         self._first_bsky_run = True
 
     async def _send_admin_dm(self, message: str) -> None:
