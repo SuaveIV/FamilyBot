@@ -20,6 +20,7 @@ from familybot.lib.database import (
     get_cached_family_library,
     get_cached_game_details,
     get_db_connection,
+    load_family_members_from_db,
     purge_family_library_cache,
     purge_wishlist_cache,
 )
@@ -471,7 +472,7 @@ async def populate_database_api(
     """Trigger database population for libraries and/or wishlists."""
     try:
         populator = DatabasePopulator(rate_limit_mode)
-        family_members = populator.load_family_members()
+        family_members = load_family_members_from_db()
 
         total_cached = 0
         if not family_members:

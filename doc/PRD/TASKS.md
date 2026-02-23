@@ -423,14 +423,14 @@ Review the diff carefully before committing, especially in files that use Pydant
 ## Task Summary
 
 | Task    | Description                                           | Priority    | Effort | Depends on       | Done |
-| ------- | ----------------------------------------------------- | ----------- | ------ | ---------------- | ---  |
+| ------- | ----------------------------------------------------- | ----------- | ------ | ---------------- | ---- |
 | TASK-01 | Fix startup crash: add missing config keys            | 🔴 Critical | XS     | —                | [x]  |
 | TASK-02 | Async HTTP: `plugin_admin_actions.py`                 | 🔴 Critical | M      | —                | [x]  |
 | TASK-03 | Async HTTP: `steam_admin.py`                          | 🔴 Critical | M      | TASK-02          | [x]  |
 | TASK-04 | Async HTTP: `SteamAPIManager.make_request_with_retry` | 🔴 Critical | S      | TASK-02          | [x]  |
 | TASK-05 | Async HTTP: `steam_family.py`, `common_game.py`       | 🟠 High     | M      | TASK-04          | [x]  |
 | TASK-06 | Async HTTP: `family_utils.py:format_message`          | 🟠 High     | S      | TASK-02          | [x]  |
-| TASK-07 | Remove duplicated family member loading               | 🟠 High     | S      | —                | [ ]  |
+| TASK-07 | Remove duplicated family member loading               | 🟠 High     | S      | —                | [x]  |
 | TASK-08 | Remove duplicated CLI argument parsing                | 🟠 High     | S      | —                | [ ]  |
 | TASK-09 | Consolidate deal detection logic                      | 🟠 High     | L      | TASK-04, TASK-05 | [ ]  |
 | TASK-10 | Declarative database migration system                 | 🟡 Medium   | M      | —                | [ ]  |

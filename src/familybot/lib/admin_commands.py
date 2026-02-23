@@ -14,7 +14,7 @@ import httpx
 # but included here for potential standalone testing or clarity.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
+from familybot.config import STEAMWORKS_API_KEY
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,
@@ -22,7 +22,6 @@ from familybot.lib.database import (
     cache_wishlist,
     get_cached_game_details,
     get_cached_wishlist,
-    get_db_connection,
 )
 from familybot.lib.family_utils import find_in_2d_list, get_family_game_list_url
 from familybot.lib.logging_config import setup_script_logging
@@ -180,40 +179,6 @@ class DatabasePopulator:
         except Exception as e:
             logger.error(f"Unexpected error for {api_name}: {e}")
             return None
-
-    def load_family_members(self) -> Dict[str, str]:
-        """Load family members from database or config."""
-        members = {}
-
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Check if we have family members in database
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                logger.info("Migrating family members from config to database...")
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None),
-                    )
-                conn.commit()
-                logger.info(f"Migrated {len(FAMILY_USER_DICT)} family members")
-
-            # Load family members
-            cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-            for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-
-            conn.close()
-            logger.info(f"Loaded {len(members)} family members")
-
-        except Exception as e:
-            logger.error(f"Error loading family members: {e}")
-            return {}
-
-        return members
 
     async def populate_family_library(self, dry_run: bool = False) -> int:
         """Populate the shared family library cache."""

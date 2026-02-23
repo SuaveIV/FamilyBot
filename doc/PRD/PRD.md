@@ -154,7 +154,7 @@ Several categories of problems have been identified:
 
 - [x] A fresh install following `config-template.yml` starts the bot without errors.
 - [x] No `requests.get` or `requests.post` calls appear in `async def` function bodies (verifiable via `grep`).
-- [ ] `load_family_members_from_db` appears in exactly one file (`database.py`).
+- [x] `load_family_members_from_db` appears in exactly one file (`database.py`).
 - [ ] CLI argument definitions appear in exactly one function in `FamilyBot.py`.
 - [ ] Deal detection logic lives in `steam_helpers.py:process_game_deal`; all callers use it.
 - [ ] `init_db` migration logic is driven by a declarative list; no `ALTER TABLE` strings appear outside it.

@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import sqlite3
 import sys
 import time
 from datetime import datetime
@@ -12,7 +11,7 @@ import aiohttp
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
+from familybot.config import STEAMWORKS_API_KEY
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,
@@ -21,6 +20,7 @@ from familybot.lib.database import (
     get_cached_game_details,
     get_cached_wishlist,
     get_db_connection,
+    load_family_members_from_db,
 )
 from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_utils import (
@@ -43,9 +43,6 @@ FULL_SCAN_RATE_LIMIT = 5.0
 # --- Global variables for rate limiting (per process, not shared across multiple processes) ---
 _last_steam_api_call = 0.0
 _last_steam_store_api_call = 0.0
-
-# --- Migration Flag for Family Members (copied from steam_family.py) ---
-_family_members_migrated_this_run = False
 
 
 async def _rate_limit_steam_api() -> None:
@@ -119,78 +116,6 @@ async def _handle_api_response(
             exc_info=True,
         )
     return None
-
-
-async def _load_family_members_from_db() -> dict:
-    """
-    Loads family member data (steam_id: friendly_name) from the database,
-    performing a one-time migration from config.yml if necessary.
-    """
-    global _family_members_migrated_this_run
-    members = {}
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        if not _family_members_migrated_this_run:
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                logger.info(
-                    "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
-                )
-                config_members_to_insert = []
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    config_members_to_insert.append((steam_id, name, None))
-
-                try:
-                    if config_members_to_insert:
-                        cursor.executemany(
-                            "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                            config_members_to_insert,
-                        )
-                        conn.commit()
-                        logger.info(
-                            f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
-                        )
-                        _family_members_migrated_this_run = True
-                    else:
-                        logger.info(
-                            "Database: No family members found in config.yml for migration."
-                        )
-                        _family_members_migrated_this_run = True
-                except sqlite3.Error as e:
-                    logger.error(
-                        f"Database: Error during family_members migration from config.yml: {e}"
-                    )
-            else:
-                logger.debug(
-                    "Database: 'family_members' table already has data or config.yml is empty. Skipping config.yml migration."
-                )
-                _family_members_migrated_this_run = True
-
-        cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-        for row in cursor.fetchall():
-            steam_id = row["steam_id"]
-            friendly_name = row["friendly_name"]
-            # Basic validation for SteamID64: must be 17 digits and start with '7656119'
-            if (
-                isinstance(steam_id, str)
-                and len(steam_id) == 17
-                and steam_id.startswith("7656119")
-            ):
-                members[steam_id] = friendly_name
-            else:
-                logger.warning(
-                    f"Database: Invalid SteamID '{steam_id}' found for user '{friendly_name}'. Skipping this entry."
-                )
-        logger.debug(f"Loaded {len(members)} valid family members from database.")
-    except sqlite3.Error as e:
-        logger.error(f"Error reading family members from DB: {e}")
-    finally:
-        if conn:
-            conn.close()
-    return members
 
 
 async def purge_game_details_cache_action() -> Dict[str, Any]:
@@ -444,7 +369,7 @@ async def check_new_game_action() -> Dict[str, Any]:
                 cache_family_library(game_list)
                 logger.info(f"Cached family library ({len(game_list)} games)")
 
-            current_family_members = await _load_family_members_from_db()
+            current_family_members = load_family_members_from_db()
             return await _process_new_games(game_list, current_family_members, session)
 
     except Exception as e:
@@ -480,7 +405,7 @@ async def force_new_game_action() -> Dict[str, Any]:
             cache_family_library(game_list)
             logger.info(f"Updated family library cache with {len(game_list)} games")
 
-            current_family_members = await _load_family_members_from_db()
+            current_family_members = load_family_members_from_db()
             return await _process_new_games(game_list, current_family_members, session)
 
     except Exception as e:
@@ -709,7 +634,7 @@ async def check_wishlist_action() -> Dict[str, Any]:
     logger.info("Running check_wishlist_action (cache-respecting for wishlists)...")
     try:
         async with aiohttp.ClientSession() as session:
-            current_family_members = await _load_family_members_from_db()
+            current_family_members = load_family_members_from_db()
             global_wishlist = await _collect_wishlists(
                 current_family_members, force_fresh=False, session=session
             )
@@ -739,7 +664,7 @@ async def force_wishlist_action() -> Dict[str, Any]:
     logger.info("Running force_wishlist_action (bypassing cache)...")
     try:
         async with aiohttp.ClientSession() as session:
-            current_family_members = await _load_family_members_from_db()
+            current_family_members = load_family_members_from_db()
             global_wishlist = await _collect_wishlists(
                 current_family_members, force_fresh=True, session=session
             )
@@ -767,7 +692,7 @@ async def force_deals_action(
 
     try:
         async with aiohttp.ClientSession() as session:
-            current_family_members = await _load_family_members_from_db()
+            current_family_members = load_family_members_from_db()
 
             target_user_steam_ids = []
             if target_friendly_name:
