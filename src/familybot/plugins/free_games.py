@@ -421,7 +421,9 @@ class FreeGames(Extension):
         if is_steam:
             steam_id = self._extract_steam_id(game_details["url"])
             if steam_id:
-                steam_data = await fetch_game_details(steam_id, self.steam_api_manager)
+                steam_data = await fetch_game_details(
+                    steam_id, self.steam_api_manager, session=session
+                )
 
                 if steam_data:
                     # Steam Embed

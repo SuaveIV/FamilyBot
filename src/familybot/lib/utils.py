@@ -257,15 +257,17 @@ class TokenBucket:
             # Add tokens based on elapsed time
             elapsed = now - self.last_update
             self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
-            self.last_update = now
 
             # If we don't have enough tokens, wait
             if self.tokens < tokens:
                 wait_time = (tokens - self.tokens) / self.rate
                 await asyncio.sleep(wait_time)
-                self.tokens = 0
+                # After sleep, we have consumed the tokens we waited for
+                self.tokens = 0.0
+                self.last_update = time.time()
             else:
                 self.tokens -= tokens
+                self.last_update = now
 
 
 def split_message(message: str, max_length: int = 1900) -> list[str]:

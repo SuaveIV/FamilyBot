@@ -409,9 +409,10 @@ class steam_family(Extension):
                     # Extract app IDs and add to global wishlist
                     user_wishlist_appids = []
                     for game_item in wishlist_items:
-                        app_id = str(game_item.get("appid"))
-                        if not app_id:
+                        raw_app_id = game_item.get("appid")
+                        if raw_app_id is None:
                             continue
+                        app_id = str(raw_app_id)
                         user_wishlist_appids.append(app_id)
                         add_to_wishlist(global_wishlist, app_id, user_steam_id)
 

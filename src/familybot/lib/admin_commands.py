@@ -80,9 +80,10 @@ class DatabasePopulator:
                 # Acquire token from bucket
                 await bucket.acquire()
 
-                # Add jitter to prevent synchronized requests
-                jitter = random.uniform(0, 0.1)
-                await asyncio.sleep(jitter)
+                # Add jitter to prevent synchronized requests on retries
+                if attempt > 0:
+                    jitter = random.uniform(0, 0.1)
+                    await asyncio.sleep(jitter)
 
                 # Make the request
                 response = await self.client.get(url)
@@ -152,12 +153,14 @@ class DatabasePopulator:
             return 0
 
         try:
-            # We need to use requests here because get_family_game_list_url
-            # is typically used with requests in this codebase, but we could
-            # use our async client if we wanted. For consistency with
-            # plugin_admin_actions, we'll fetch then cache.
+            # Fetch the family game list using the retry wrapper for reliability and rate limiting.
             url = get_family_game_list_url()
-            response = await self.client.get(url)
+            response = await self.make_request_with_retry(url, api_type="steam")
+
+            if response is None:
+                logger.error("Failed to fetch family shared library apps (no response)")
+                return 0
+
             games_json = self.handle_api_response("GetSharedLibraryApps", response)
 
             if not games_json:

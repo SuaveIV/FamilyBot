@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import aiohttp
@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from familybot.config import STEAMWORKS_API_KEY
 from familybot.lib.constants import (
     FULL_SCAN_RATE_LIMIT,
+    MAX_WISHLIST_GAMES_TO_PROCESS,
     STEAM_API_RATE_LIMIT,
     STEAM_STORE_API_RATE_LIMIT,
 )
@@ -205,7 +206,9 @@ async def _process_new_games(
     new_appids = set(game_array) - saved_appids
 
     all_games_for_db_update = []
-    current_utc_iso = datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    current_utc_iso = (
+        datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    )
 
     for appid in game_array:
         if appid in new_appids:
@@ -558,9 +561,6 @@ async def _process_wishlist_duplicates(
         potential_duplicate_games, key=lambda x: x[0], reverse=True
     )
 
-    MAX_WISHLIST_GAMES_TO_PROCESS = (
-        100  # This constant should be defined centrally if possible
-    )
     if len(sorted_duplicate_games) > MAX_WISHLIST_GAMES_TO_PROCESS:
         logger.warning(
             f"Detected {len(sorted_duplicate_games)} common wishlist games. Processing only the latest {MAX_WISHLIST_GAMES_TO_PROCESS} to avoid rate limits."
