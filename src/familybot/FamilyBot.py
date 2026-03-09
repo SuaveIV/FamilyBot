@@ -552,9 +552,8 @@ def purge_all_cache() -> None:
         )
 
 
-# --- Main Bot Execution ---
-if __name__ == "__main__":
-    # Parse command line arguments
+def _parse_and_dispatch() -> None:
+    """Defines, parses, and dispatches command-line arguments."""
     parser = argparse.ArgumentParser(
         description="FamilyBot - Discord bot for Steam family management"
     )
@@ -628,78 +627,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
+# --- Main Bot Execution ---
+if __name__ == "__main__":
+    _parse_and_dispatch()
+
+
 def main():
     """Entry point for the familybot script alias."""
     # This function allows the bot to be run via 'uv run familybot'
-    # Parse command line arguments
-    main_parser = argparse.ArgumentParser(
-        description="FamilyBot - Discord bot for Steam family management"
-    )
-    main_parser.add_argument(
-        "--purge-cache",
-        action="store_true",
-        help="Purge game details cache to force fresh USD pricing and new boolean fields",
-    )
-    main_parser.add_argument(
-        "--purge-wishlist",
-        action="store_true",
-        help="Purge wishlist cache to force fresh wishlist data",
-    )
-    main_parser.add_argument(
-        "--purge-family-library",
-        action="store_true",
-        help="Purge family library cache to force fresh family game data",
-    )
-    main_parser.add_argument(
-        "--purge-all",
-        action="store_true",
-        help="Purge all cache data (game details, wishlist, family library, etc.)",
-    )
-    main_parser.add_argument(
-        "--full-library-scan",
-        action="store_true",
-        help="Scan all family members' complete game libraries and cache game details",
-    )
-    main_parser.add_argument(
-        "--full-wishlist-scan",
-        action="store_true",
-        help="Perform comprehensive scan of ALL common wishlist games",
-    )
-
-    main_args = main_parser.parse_args()
-
-    # Handle command line operations
-    if main_args.purge_cache:
-        print("🗑️ Purging game details cache...")
-        purge_game_cache()
-        sys.exit(0)
-    elif main_args.purge_wishlist:
-        print("🗑️ Purging wishlist cache...")
-        purge_wishlist_cache()
-        sys.exit(0)
-    elif main_args.purge_family_library:
-        print("🗑️ Purging family library cache...")
-        purge_family_library_cache()
-        sys.exit(0)
-    elif main_args.purge_all:
-        print("🗑️ Purging all cache data...")
-        purge_all_cache()
-        sys.exit(0)
-    elif main_args.full_library_scan:
-        print("❌ Full library scan requires the bot to be running.")
-        print("Please start the bot and use the Discord command: !full_library_scan")
-        print(
-            "This command requires Discord interaction for progress updates and admin verification."
-        )
-        sys.exit(1)
-
-    # Normal bot startup with proper signal handling
-    logger.info("Starting FamilyBot client...")
-    try:
-        asyncio.run(run_application())
-    except KeyboardInterrupt:
-        logger.info("Received keyboard interrupt, shutting down gracefully...")
-    except Exception as e:  # pylint: disable=broad-except
-        # General catch is justified here to ensure any unexpected errors during startup are logged and the process exits cleanly.
-        logger.error("Unexpected error during startup: %s", e, exc_info=True)
-        sys.exit(1)
+    _parse_and_dispatch()
