@@ -401,7 +401,9 @@ class steam_admin(Extension):
                         original_price = price_overview.get(
                             "initial_formatted", current_price
                         )
-                        lowest_price = get_lowest_price(int(app_id))
+                        lowest_price = await asyncio.to_thread(
+                            get_lowest_price, int(app_id)
+                        )
                         is_good_deal = False
                         deal_reason = ""
                         if discount_percent >= 30:

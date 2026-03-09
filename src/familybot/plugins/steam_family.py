@@ -269,41 +269,43 @@ class steam_family(Extension):
                         # Cache the game details permanently (game details rarely change)
                         cache_game_details(game_appid, game_data, permanent=True)
 
-                if game_data.get("type") == "game" and not game_data.get("is_free"):
-                    # Use cached boolean fields for faster performance
-                    is_family_shared = game_data.get("is_family_shared", False)
-                    is_multiplayer = game_data.get("is_multiplayer", False)
+                    if game_data.get("type") == "game" and not game_data.get("is_free"):
+                        # Use cached boolean fields for faster performance
+                        is_family_shared = game_data.get("is_family_shared", False)
+                        is_multiplayer = game_data.get("is_multiplayer", False)
 
-                    if is_family_shared and is_multiplayer:
-                        game_name = game_data.get(
-                            "name", f"Unknown Game ({game_appid})"
-                        )
-
-                        # Add pricing information if available
-                        try:
-                            current_price = game_data.get("price_overview", {}).get(
-                                "final_formatted", "N/A"
-                            )
-                            lowest_price = get_lowest_price(int(game_appid))
-
-                            price_info = []
-                            if current_price != "N/A":
-                                price_info.append(f"Current: {current_price}")
-                            if lowest_price != "N/A":
-                                price_info.append(f"Lowest: ${lowest_price}")
-
-                            if price_info:
-                                game_name += f" ({' | '.join(price_info)})"
-                        except Exception as e:
-                            logger.warning(
-                                f"Could not get pricing info for coop game {game_appid}: {e}"
+                        if is_family_shared and is_multiplayer:
+                            game_name = game_data.get(
+                                "name", f"Unknown Game ({game_appid})"
                             )
 
-                        coop_game_names.append(game_name)
-                    else:
-                        logger.debug(
-                            f"Game {game_appid} is not categorized as family shared (ID 62)."
-                        )
+                            # Add pricing information if available
+                            try:
+                                current_price = game_data.get("price_overview", {}).get(
+                                    "final_formatted", "N/A"
+                                )
+                                lowest_price = await asyncio.to_thread(
+                                    get_lowest_price, int(game_appid)
+                                )
+
+                                price_info = []
+                                if current_price != "N/A":
+                                    price_info.append(f"Current: {current_price}")
+                                if lowest_price != "N/A":
+                                    price_info.append(f"Lowest: ${lowest_price}")
+
+                                if price_info:
+                                    game_name += f" ({' | '.join(price_info)})"
+                            except Exception as e:
+                                logger.warning(
+                                    f"Could not get pricing info for coop game {game_appid}: {e}"
+                                )
+
+                            coop_game_names.append(game_name)
+                        else:
+                            logger.debug(
+                                f"Game {game_appid} is not categorized as family shared (ID 62)."
+                            )
 
             if coop_game_names:
                 # Use the utility function to handle message truncation
