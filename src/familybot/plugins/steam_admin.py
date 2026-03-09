@@ -365,76 +365,19 @@ class steam_admin(Extension):
                     interested_users = item[1]
                     games_checked += 1
                     try:
-                        cached_game = get_cached_game_details(app_id)
-                        if cached_game:
-                            game_data = cached_game
-                        else:
-                            await self.steam_api_manager.rate_limit_steam_store_api()
-                            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                            async with session.get(
-                                game_url, timeout=aiohttp.ClientTimeout(total=10)
-                            ) as response:
-                                if response.status != 200:
-                                    continue
-                                game_info_json = await response.json()
-                            if not game_info_json:
-                                continue
-                            game_data = game_info_json.get(str(app_id), {}).get("data")
-                            if not game_data:
-                                continue
-                            cache_game_details(app_id, game_data, permanent=True)
-                        # Only include games that are family sharing enabled
-                        if not game_data.get("is_family_shared", False):
-                            continue
-                        game_name = game_data.get("name", f"Unknown Game ({app_id})")
-                        # Handle both cached data (price_data) and fresh API data (price_overview)
-                        price_overview = game_data.get(
-                            "price_overview"
-                        ) or game_data.get("price_data")
-                        if not price_overview:
-                            logger.debug(
-                                f"Force deals unlimited: No price data found for {app_id} ({game_name})"
-                            )
-                            continue
-                        discount_percent = price_overview.get("discount_percent", 0)
-                        current_price = price_overview.get("final_formatted", "N/A")
-                        original_price = price_overview.get(
-                            "initial_formatted", current_price
+                        deal_info = await process_game_deal(
+                            app_id,
+                            self.steam_api_manager,
+                            session=session,
+                            require_family_shared=True,
                         )
-                        lowest_price = await asyncio.to_thread(
-                            get_lowest_price, int(app_id)
-                        )
-                        is_good_deal = False
-                        deal_reason = ""
-                        if discount_percent >= 30:
-                            is_good_deal = True
-                            deal_reason = f"🔥 **{discount_percent}% OFF**"
-                        elif discount_percent >= 15 and lowest_price != "N/A":
-                            try:
-                                current_price_num = (
-                                    float(price_overview.get("final", 0)) / 100
-                                )
-                                lowest_price_num = float(lowest_price)
-                                if current_price_num <= lowest_price_num * 1.2:
-                                    is_good_deal = True
-                                    deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
-                            except (ValueError, TypeError):
-                                pass
-                        if is_good_deal:
+
+                        if deal_info:
                             user_names = [
                                 current_family_members.get(uid, "Unknown")
                                 for uid in interested_users
                             ]
-                            deal_info = {
-                                "name": game_name,
-                                "app_id": app_id,
-                                "current_price": current_price,
-                                "original_price": original_price,
-                                "discount_percent": discount_percent,
-                                "lowest_price": lowest_price,
-                                "deal_reason": deal_reason,
-                                "interested_users": user_names,
-                            }
+                            deal_info["interested_users"] = user_names
                             deals_found.append(deal_info)
                     except Exception as e:
                         logger.warning(

@@ -85,6 +85,7 @@ async def process_game_deal(
     high_discount_threshold: int = HIGH_DISCOUNT_THRESHOLD,
     low_discount_threshold: int = LOW_DISCOUNT_THRESHOLD,
     historical_low_buffer: float = HISTORICAL_LOW_BUFFER,
+    require_family_shared: bool = False,
 ) -> dict | None:
     """
     Process a game to check for deals.
@@ -93,6 +94,10 @@ async def process_game_deal(
     try:
         game_data = await fetch_game_details(app_id, steam_api_manager, session=session)
         if not game_data:
+            return None
+
+        # Check family sharing if required
+        if require_family_shared and not game_data.get("is_family_shared", False):
             return None
 
         game_name = game_data.get("name", f"Unknown Game ({app_id})")
