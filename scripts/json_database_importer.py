@@ -289,7 +289,9 @@ class JSONDatabaseImporter:
             return False
 
         appid = str(data["appid"])
-        detected_at = data.get("detected_at", datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+        detected_at = data.get(
+            "detected_at", datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        )
 
         # Add the saved game
         if self.dry_run:

@@ -49,7 +49,9 @@ def convert_owned_games(
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "detected_at": datetime.now(timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
                 }
             )
 
@@ -113,7 +115,9 @@ def convert_wishlist(
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "detected_at": datetime.now(timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
                 }
             )
 
@@ -161,7 +165,9 @@ def convert_family_library(data: dict[str, Any]) -> dict[str, Any]:
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "detected_at": datetime.now(timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
                 }
             )
 

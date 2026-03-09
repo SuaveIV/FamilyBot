@@ -544,7 +544,7 @@ async def purge_game_details_cache_api():
 
 
 @app.post("/api/admin/plugin-action", response_model=CommandResponse)
-async def plugin_admin_action_api(command_name: str, target_user: Optional[str] = None):
+async def plugin_admin_action_api(command_name: str, target_user: str | None = None):
     """
     Triggers an admin action from a plugin.
     """

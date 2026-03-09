@@ -157,11 +157,21 @@ def init_db():
         # List of (table_name, column_name, column_definition, default_value_for_update)
         # default_value_for_update is used to populate existing rows if not NULL.
         COLUMN_MIGRATIONS = [
-            ("saved_games", "detected_at", "TEXT", "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"),
+            (
+                "saved_games",
+                "detected_at",
+                "TEXT",
+                "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')",
+            ),
             ("game_details_cache", "is_multiplayer", "BOOLEAN DEFAULT 0", "0"),
             ("game_details_cache", "is_coop", "BOOLEAN DEFAULT 0", "0"),
             ("game_details_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
-            ("game_details_cache", "price_source", "TEXT DEFAULT 'store_api'", "'store_api'"),
+            (
+                "game_details_cache",
+                "price_source",
+                "TEXT DEFAULT 'store_api'",
+                "'store_api'",
+            ),
             ("itad_price_cache", "permanent", "BOOLEAN DEFAULT 1", "1"),
             ("itad_price_cache", "lookup_method", "TEXT DEFAULT 'appid'", "'appid'"),
             ("itad_price_cache", "steam_game_name", "TEXT", None),
@@ -173,14 +183,24 @@ def init_db():
                 columns = [col[1] for col in cursor.fetchall()]
 
                 if column not in columns:
-                    logger.info(f"Database: Adding column '{column}' to table '{table}'.")
+                    logger.info(
+                        f"Database: Adding column '{column}' to table '{table}'."
+                    )
                     try:
-                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+                        cursor.execute(
+                            f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+                        )
                         if update_val is not None:
-                            cursor.execute(f"UPDATE {table} SET {column} = {update_val} WHERE {column} IS NULL")
-                        logger.info(f"Database: Successfully added '{column}' to '{table}'.")
+                            cursor.execute(
+                                f"UPDATE {table} SET {column} = {update_val} WHERE {column} IS NULL"
+                            )
+                        logger.info(
+                            f"Database: Successfully added '{column}' to '{table}'."
+                        )
                     except sqlite3.OperationalError as e:
-                        logger.error(f"Database: Failed to add '{column}' to '{table}': {e}")
+                        logger.error(
+                            f"Database: Failed to add '{column}' to '{table}': {e}"
+                        )
 
         _run_column_migrations(cursor)
 

@@ -207,7 +207,9 @@ async def _process_new_games(
 
     all_games_for_db_update = []
     current_utc_iso = (
-        datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
     )
 
     for appid in game_array:

@@ -101,7 +101,9 @@ async def format_message(
                     logger.error(
                         f"Missing key in app details for {app_id} in format_message: {e}. Response: {game_info_json}"
                     )
-                    message_parts.append(f"**Unknown Game ({app_id})** (Format Error) \n")
+                    message_parts.append(
+                        f"**Unknown Game ({app_id})** (Format Error) \n"
+                    )
                     continue
                 except Exception as e:
                     logger.critical(

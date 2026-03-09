@@ -41,8 +41,6 @@ from familybot.lib.database import (
     get_db_connection,
     init_db,  # pylint: disable=wrong-import-position
     load_family_members_from_db,
-    migrate_database_phase1,  # pylint: disable=wrong-import-position
-    migrate_database_phase2,
 )  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
 
@@ -840,8 +838,6 @@ def main():
     try:
         init_db()
         print("✅ Database initialized")
-        migrate_database_phase1()
-        migrate_database_phase2()
     except (ValueError, TypeError, OSError) as e:
         print(f"❌ Failed to initialize database or run migrations: {e}")
         return 1

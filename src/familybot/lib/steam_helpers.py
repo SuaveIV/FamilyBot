@@ -121,9 +121,7 @@ async def process_game_deal(
         if lowest_price_raw != "N/A":
             try:
                 # Strip currency symbols and commas
-                clean_price = (
-                    lowest_price_raw.replace("$", "").replace(",", "").strip()
-                )
+                clean_price = lowest_price_raw.replace("$", "").replace(",", "").strip()
                 lowest_price_num = float(clean_price)
             except (ValueError, TypeError):
                 logger.warning(
@@ -137,7 +135,9 @@ async def process_game_deal(
         if discount_percent >= high_discount_threshold:
             is_good_deal = True
             deal_reason = f"🔥 **{discount_percent}% OFF**"
-        elif discount_percent >= low_discount_threshold and lowest_price_num is not None:
+        elif (
+            discount_percent >= low_discount_threshold and lowest_price_num is not None
+        ):
             # Check if current price is close to historical low
             try:
                 current_price_num = float(price_overview.get("final", 0)) / 100

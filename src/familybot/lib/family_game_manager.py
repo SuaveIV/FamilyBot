@@ -77,7 +77,9 @@ def get_saved_games() -> list:
     try:
         conn = get_db_connection()
         if not _migration_checked:
-            _migrate_gamelist_to_db(conn)  # Attempt migration if file exists on first read
+            _migrate_gamelist_to_db(
+                conn
+            )  # Attempt migration if file exists on first read
             _migration_checked = True
         cursor = conn.cursor()
         # Select both appid and detected_at for sorting later
@@ -114,7 +116,9 @@ def set_saved_games(game_data_list: list) -> None:  # Renamed parameter for clar
                 appids_to_insert.append(
                     (
                         str(item),
-                        datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+                        datetime.now(timezone.utc)
+                        .isoformat(timespec="milliseconds")
+                        .replace("+00:00", "Z"),
                     )
                 )
 

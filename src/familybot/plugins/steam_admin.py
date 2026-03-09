@@ -23,7 +23,6 @@ from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import (
     ProgressTracker,
     add_to_wishlist,
-    get_lowest_price,
     split_message,
 )
 from familybot.lib.steam_api_manager import SteamAPIManager
