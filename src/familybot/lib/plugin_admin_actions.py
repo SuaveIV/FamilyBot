@@ -99,22 +99,25 @@ async def _handle_api_response(
     try:
         response.raise_for_status()
         body = await response.text()
-        try:
-            json_data = json.loads(body)
-            return json_data
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error for {api_name}: {e}. Raw: {body[:200]}")
-            return None
     except aiohttp.ClientResponseError as e:
         logger.error(f"Request error for {api_name}: {e}. URL: {e.request_info.url}")
+        return None
     except aiohttp.ClientError as e:
         logger.error(f"Client connection error for {api_name}: {e}")
+        return None
     except Exception as e:
         logger.critical(
             f"An unexpected error occurred processing {api_name} response: {e}",
             exc_info=True,
         )
-    return None
+        return None
+
+    try:
+        json_data = json.loads(body)
+        return json_data
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error for {api_name}: {e}. Raw: {body[:200]}")
+        return None
 
 
 async def purge_game_details_cache_action() -> dict[str, Any]:
@@ -385,12 +388,16 @@ async def check_new_game_action() -> dict[str, Any]:
                 game_list = cached_family_library
             else:
                 # If not cached, fetch from API
-                logger.info("No cached family library found (or cache expired), fetching from API...")
+                logger.info(
+                    "No cached family library found (or cache expired), fetching from API..."
+                )
                 game_list = await _fetch_family_library_from_api(session)
 
                 # Cache for next time
                 cache_family_library(game_list)
-                logger.info(f"Updated family library cache with {len(game_list)} games.")
+                logger.info(
+                    f"Updated family library cache with {len(game_list)} games."
+                )
 
             current_family_members = load_family_members_from_db()
             return await _process_new_games(game_list, current_family_members, session)
@@ -805,9 +812,9 @@ async def force_deals_action(
                         user_wishlist_appids = []
                         for game_item in wishlist_items:
                             app_id = str(game_item.get("appid"))
-                            if not app_id:
+                            if not app_id or app_id == "None":
                                 logger.warning(
-                                    f"Force deals: Skipping wishlist item due to missing appid: {game_item}"
+                                    f"Force deals: Skipping wishlist item due to missing or invalid appid: {game_item}"
                                 )
                                 continue
 

@@ -40,15 +40,18 @@ def get_family_game_list_url() -> str:
     return url_family_list
 
 
-async def format_message(wishlist: list, short=False) -> str:
+async def format_message(
+    wishlist: list, *, short: bool = False, cached_data: dict | None = None
+) -> str:
     """Formats a list of wishlist items into a Discord message."""
     message_parts = ["# 📝 Family Wishlist \n"]
     if not wishlist:
         return "# 📝 Family Wishlist \nNo common wishlist items found to display."
 
+    new_cached_data = cached_data or {}
     async with aiohttp.ClientSession() as session:
         for item in wishlist:
-            app_id = item[0]
+            app_id = str(item[0])
             users_wanting = ", ".join(
                 FAMILY_USER_DICT.get(user_steam_id, f"Unknown User({user_steam_id})")
                 for user_steam_id in item[1]
@@ -56,54 +59,59 @@ async def format_message(wishlist: list, short=False) -> str:
 
             message_parts.append(f"- {users_wanting} want ")
 
-            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=fr"
-            game_info_data = None
-            try:
-                async with session.get(
-                    game_url, timeout=aiohttp.ClientTimeout(total=10)
-                ) as game_info_response:
-                    game_info_response.raise_for_status()
-                    text_response = await game_info_response.text()
-                    game_info_json = json.loads(text_response)
+            # Use cached data if available
+            if app_id in new_cached_data:
+                game_info_data = new_cached_data[app_id]
+            else:
+                game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=fr"
+                game_info_data = None
+                try:
+                    async with session.get(
+                        game_url, timeout=aiohttp.ClientTimeout(total=10)
+                    ) as game_info_response:
+                        game_info_response.raise_for_status()
+                        text_response = await game_info_response.text()
+                        game_info_json = json.loads(text_response)
 
-                if game_info_json.get(str(app_id), {}).get("success"):
-                    game_info_data = game_info_json[str(app_id)]["data"]
-                else:
-                    logger.warning(
-                        f"App details success false for AppID {app_id} in format_message. Response: {game_info_json}"
+                    if game_info_json.get(app_id, {}).get("success"):
+                        game_info_data = game_info_json[app_id]["data"]
+                        new_cached_data[app_id] = game_info_data
+                    else:
+                        logger.warning(
+                            f"App details success false for AppID {app_id} in format_message. Response: {game_info_json}"
+                        )
+                        message_parts.append(
+                            f"**Unknown Game ({app_id})** (Details Unavailable) \n"
+                        )
+                        continue
+
+                except aiohttp.ClientError as e:
+                    logger.error(
+                        f"Request error fetching app details for {app_id} in format_message: {e}"
+                    )
+                    message_parts.append(f"**Unknown Game ({app_id})** (API Error) \n")
+                    continue
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        f"JSON decode error for app details {app_id} in format_message: {e}."
+                    )
+                    message_parts.append(f"**Unknown Game ({app_id})** (Data Error) \n")
+                    continue
+                except KeyError as e:
+                    logger.error(
+                        f"Missing key in app details for {app_id} in format_message: {e}. Response: {game_info_json}"
+                    )
+                    message_parts.append(f"**Unknown Game ({app_id})** (Format Error) \n")
+                    continue
+                except Exception as e:
+                    logger.critical(
+                        f"Unexpected error fetching app details for {app_id} in format_message: {e}",
+                        exc_info=True,
                     )
                     message_parts.append(
-                        f"**Unknown Game ({app_id})** (Details Unavailable) \n"
+                        f"**Unknown Game ({app_id})** (Unexpected Error) \n"
                     )
                     continue
-
-            except aiohttp.ClientError as e:
-                logger.error(
-                    f"Request error fetching app details for {app_id} in format_message: {e}"
-                )
-                message_parts.append(f"**Unknown Game ({app_id})** (API Error) \n")
-                continue
-            except json.JSONDecodeError as e:
-                logger.error(
-                    f"JSON decode error for app details {app_id} in format_message: {e}."
-                )
-                message_parts.append(f"**Unknown Game ({app_id})** (Data Error) \n")
-                continue
-            except KeyError as e:
-                logger.error(
-                    f"Missing key in app details for {app_id} in format_message: {e}. Response: {game_info_json}"
-                )
-                message_parts.append(f"**Unknown Game ({app_id})** (Format Error) \n")
-                continue
-            except Exception as e:
-                logger.critical(
-                    f"Unexpected error fetching app details for {app_id} in format_message: {e}",
-                    exc_info=True,
-                )
-                message_parts.append(
-                    f"**Unknown Game ({app_id})** (Unexpected Error) \n"
-                )
-                continue
 
             game_name = game_info_data.get("name", f"Unknown Game ({app_id})")
             message_parts.append(
@@ -167,7 +175,7 @@ async def format_message(wishlist: list, short=False) -> str:
         logger.warning(
             f"Formatted message too long ({len(final_message)} chars). Retrying with short format."
         )
-        return await format_message(wishlist, True)
+        return await format_message(wishlist, short=True, cached_data=new_cached_data)
     elif len(final_message) > 1900 and short:
         logger.warning("Shortened message still too long. Sending generic message.")
         return "# 📝 Family Wishlist \n Can't create a message or it will be too long"

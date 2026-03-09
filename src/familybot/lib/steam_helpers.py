@@ -108,7 +108,22 @@ async def process_game_deal(
         original_price = price_overview.get("initial_formatted", current_price)
 
         # Get historical low price
-        lowest_price = await asyncio.to_thread(get_lowest_price, int(app_id))
+        lowest_price_raw = await asyncio.to_thread(get_lowest_price, int(app_id))
+        lowest_price = lowest_price_raw
+
+        # Sanitize lowest_price to a numeric value for comparison
+        lowest_price_num = None
+        if lowest_price_raw != "N/A":
+            try:
+                # Strip currency symbols and commas
+                clean_price = (
+                    lowest_price_raw.replace("$", "").replace(",", "").strip()
+                )
+                lowest_price_num = float(clean_price)
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Could not parse lowest_price '{lowest_price_raw}' for AppID {app_id}"
+                )
 
         # Determine if this is a good deal
         is_good_deal = False
@@ -117,11 +132,10 @@ async def process_game_deal(
         if discount_percent >= high_discount_threshold:
             is_good_deal = True
             deal_reason = f"🔥 **{discount_percent}% OFF**"
-        elif discount_percent >= low_discount_threshold and lowest_price != "N/A":
+        elif discount_percent >= low_discount_threshold and lowest_price_num is not None:
             # Check if current price is close to historical low
             try:
                 current_price_num = float(price_overview.get("final", 0)) / 100
-                lowest_price_num = float(lowest_price)
                 if current_price_num <= lowest_price_num * historical_low_buffer:
                     is_good_deal = True
                     if historical_low_buffer > 1.1:
