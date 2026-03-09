@@ -4,7 +4,6 @@ import logging
 import os
 import random
 import sys
-from typing import Optional
 
 import httpx
 
@@ -71,7 +70,7 @@ class DatabasePopulator:
 
     async def make_request_with_retry(
         self, url: str, api_type: str = "steam"
-    ) -> Optional[httpx.Response]:
+    ) -> httpx.Response | None:
         """Make HTTP request with retry logic for 429 errors."""
         bucket = self.steam_bucket if api_type == "steam" else self.store_bucket
 
@@ -123,7 +122,7 @@ class DatabasePopulator:
 
     def handle_api_response(
         self, api_name: str, response: httpx.Response
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Handle API responses with error checking and enhanced logging."""
         try:
             response.raise_for_status()

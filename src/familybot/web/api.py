@@ -5,7 +5,6 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -276,7 +275,7 @@ async def get_family_library(limit: int = 50, conn=Depends(get_db)):
 async def get_wishlist_summary(
     page: int = 1,
     limit: int = 20,
-    family_member_id: Optional[str] = None,
+    family_member_id: str | None = None,
     conn=Depends(get_db),
 ):
     """Get paginated wishlist summary across all family members"""
@@ -617,7 +616,7 @@ async def purge_cache(cache_type: str = "all"):
 
 
 @app.get("/api/logs", response_model=list[LogEntry])
-async def get_logs(limit: int = 100, level: Optional[str] = None):
+async def get_logs(limit: int = 100, level: str | None = None):
     """Get recent log entries"""
     # This is a simplified implementation
     # In a real implementation, you'd want to read from log files or a log database

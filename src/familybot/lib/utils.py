@@ -3,7 +3,6 @@
 import asyncio
 import json
 import time
-from typing import Optional
 
 import requests
 
@@ -234,7 +233,7 @@ class ProgressTracker:
 class TokenBucket:
     """Token bucket rate limiter for controlling API request rates."""
 
-    def __init__(self, rate: float, capacity: Optional[int] = None):
+    def __init__(self, rate: float, capacity: int | None = None):
         """
         Initialize token bucket.
 

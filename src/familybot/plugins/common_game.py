@@ -85,7 +85,7 @@ class common_games(Extension):
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
-    async def _load_registered_users(self) -> dict:
+    async def _load_registered_users(self) -> dict[str, str]:
         """Loads registered users from the database into a dictionary."""
         users = {}
         conn = None

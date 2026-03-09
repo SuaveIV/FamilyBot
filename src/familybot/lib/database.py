@@ -3,7 +3,6 @@
 import logging
 import os
 import sqlite3
-from typing import Optional  # Import Optional
 
 from familybot.config import (
     FAMILY_LIBRARY_CACHE_TTL,
@@ -320,7 +319,7 @@ def cache_game_details(
     permanent: bool = True,
     cache_hours: int | None = GAME_DETAILS_CACHE_TTL,
     price_source: str = "store_api",
-    conn: Optional[sqlite3.Connection] = None,
+    conn: sqlite3.Connection | None = None,
 ):
     """Cache game details permanently by default, or for specified hours if permanent=False."""
     close_conn = False
@@ -543,8 +542,8 @@ def cache_itad_price(
     permanent: bool = False,
     cache_hours: int = WISHLIST_CACHE_TTL,
     lookup_method: str = "appid",
-    steam_game_name: Optional[str] = None,
-    conn: Optional[sqlite3.Connection] = None,
+    steam_game_name: str | None = None,
+    conn: sqlite3.Connection | None = None,
 ):
     """Cache ITAD price data. If permanent=True, cache never expires (expires_at=NULL, permanent=1)."""
     close_conn = False
@@ -598,10 +597,10 @@ def cache_itad_price_enhanced(
     appid: str,
     price_data: dict,
     lookup_method: str = "appid",
-    steam_game_name: Optional[str] = None,
+    steam_game_name: str | None = None,
     permanent: bool = True,
     cache_hours: int = 6,
-    conn: Optional[sqlite3.Connection] = None,
+    conn: sqlite3.Connection | None = None,
 ):
     """Wrapper for cache_itad_price to maintain compatibility."""
     cache_itad_price(
@@ -793,7 +792,7 @@ def purge_family_library_cache():
             conn.close()
 
 
-def get_steam_id_from_friendly_name(friendly_name: str) -> Optional[str]:
+def get_steam_id_from_friendly_name(friendly_name: str) -> str | None:
     """Retrieves the SteamID associated with a given friendly name from the family_members table."""
     conn = None
     try:
@@ -815,7 +814,7 @@ def get_steam_id_from_friendly_name(friendly_name: str) -> Optional[str]:
             conn.close()
 
 
-def get_steam_id_from_discord_id(discord_id: str) -> Optional[str]:
+def get_steam_id_from_discord_id(discord_id: str) -> str | None:
     """Retrieves the SteamID associated with a given Discord ID from the users table."""
     conn = None
     try:
@@ -835,7 +834,7 @@ def get_steam_id_from_discord_id(discord_id: str) -> Optional[str]:
 
 
 def cache_game_details_with_source(
-    app_id: str, game_data: dict, source: str, conn: Optional[sqlite3.Connection] = None
+    app_id: str, game_data: dict, source: str, conn: sqlite3.Connection | None = None
 ):
     """Wrapper for cache_game_details to maintain compatibility."""
     cache_game_details(
