@@ -153,121 +153,39 @@ def init_db():
         """)
         logger.info("Database: 'itad_price_cache' table checked/created.")
 
-        # --- MIGRATION LOGIC for adding columns to existing tables ---
+        # --- DECLARATIVE MIGRATIONS for adding columns to existing tables ---
 
-        # 1. Check and add 'detected_at' to saved_games
-        cursor.execute("PRAGMA table_info(saved_games)")
-        saved_games_columns = [col[1] for col in cursor.fetchall()]
-
-        if "detected_at" not in saved_games_columns:
-            logger.info(
-                "Database: 'detected_at' column not found in 'saved_games'. Attempting to add."
-            )
-            try:
-                cursor.execute("ALTER TABLE saved_games ADD COLUMN detected_at TEXT")
-                logger.info(
-                    "Database: Added 'detected_at' column to 'saved_games' table."
-                )
-
-                cursor.execute(
-                    "UPDATE saved_games SET detected_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW') WHERE detected_at IS NULL"
-                )
-                conn.commit()
-                logger.info(
-                    "Database: Updated existing rows in 'saved_games' with timestamps."
-                )
-            except sqlite3.OperationalError as e:
-                logger.error(
-                    f"Database: Failed to add/update 'detected_at' column: {e}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Database: Unexpected error during 'detected_at' column migration: {e}",
-                    exc_info=True,
-                )
-        else:
-            logger.debug(
-                "Database: 'detected_at' column already exists in 'saved_games'."
-            )
-
-        # 2. Check and add new columns to game_details_cache
-        cursor.execute("PRAGMA table_info(game_details_cache)")
-        game_cache_columns = [col[1] for col in cursor.fetchall()]
-
-        new_columns = [
-            ("is_multiplayer", "BOOLEAN DEFAULT 0"),
-            ("is_coop", "BOOLEAN DEFAULT 0"),
-            ("is_family_shared", "BOOLEAN DEFAULT 0"),
+        # List of (table_name, column_name, column_definition, default_value_for_update)
+        # default_value_for_update is used to populate existing rows if not NULL.
+        COLUMN_MIGRATIONS = [
+            ("saved_games", "detected_at", "TEXT", "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"),
+            ("game_details_cache", "is_multiplayer", "BOOLEAN DEFAULT 0", "0"),
+            ("game_details_cache", "is_coop", "BOOLEAN DEFAULT 0", "0"),
+            ("game_details_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
+            ("game_details_cache", "price_source", "TEXT DEFAULT 'store_api'", "'store_api'"),
+            ("itad_price_cache", "permanent", "BOOLEAN DEFAULT 1", "1"),
+            ("itad_price_cache", "lookup_method", "TEXT DEFAULT 'appid'", "'appid'"),
+            ("itad_price_cache", "steam_game_name", "TEXT", None),
         ]
 
-        for column_name, column_def in new_columns:
-            if column_name not in game_cache_columns:
-                logger.info(
-                    f"Database: '{column_name}' column not found in 'game_details_cache'. Attempting to add."
-                )
-                try:
-                    cursor.execute(
-                        f"ALTER TABLE game_details_cache ADD COLUMN {column_name} {column_def}"
-                    )
-                    logger.info(
-                        f"Database: Added '{column_name}' column to 'game_details_cache' table."
-                    )
-                    # Set concrete value for existing rows
-                    cursor.execute(
-                        f"UPDATE game_details_cache SET {column_name} = 0 WHERE {column_name} IS NULL"
-                    )
-                    conn.commit()
-                except sqlite3.OperationalError as e:
-                    logger.error(f"Database: Failed to add '{column_name}' column: {e}")
-                except Exception as e:
-                    logger.error(
-                        f"Database: Unexpected error during '{column_name}' column migration: {e}",
-                        exc_info=True,
-                    )
-            else:
-                logger.debug(
-                    f"Database: '{column_name}' column already exists in 'game_details_cache'."
-                )
+        def _run_column_migrations(cursor: sqlite3.Cursor):
+            for table, column, definition, update_val in COLUMN_MIGRATIONS:
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = [col[1] for col in cursor.fetchall()]
 
-        # 3. Check and add 'permanent' column to itad_price_cache
-        cursor.execute("PRAGMA table_info(itad_price_cache)")
-        itad_cache_columns = [col[1] for col in cursor.fetchall()]
+                if column not in columns:
+                    logger.info(f"Database: Adding column '{column}' to table '{table}'.")
+                    try:
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+                        if update_val is not None:
+                            cursor.execute(f"UPDATE {table} SET {column} = {update_val} WHERE {column} IS NULL")
+                        logger.info(f"Database: Successfully added '{column}' to '{table}'.")
+                    except sqlite3.OperationalError as e:
+                        logger.error(f"Database: Failed to add '{column}' to '{table}': {e}")
 
-        if "permanent" not in itad_cache_columns:
-            logger.info(
-                "Database: 'permanent' column not found in 'itad_price_cache'. Attempting to add."
-            )
-            try:
-                cursor.execute(
-                    "ALTER TABLE itad_price_cache ADD COLUMN permanent BOOLEAN DEFAULT 1"
-                )
-                logger.info(
-                    "Database: Added 'permanent' column to 'itad_price_cache' table."
-                )
+        _run_column_migrations(cursor)
 
-                # Update existing rows to have permanent=1 (historical prices are permanent by default)
-                cursor.execute(
-                    "UPDATE itad_price_cache SET permanent = 1 WHERE permanent IS NULL"
-                )
-                conn.commit()
-                logger.info(
-                    "Database: Updated existing ITAD price cache entries to permanent=1."
-                )
-            except sqlite3.OperationalError as e:
-                logger.error(
-                    f"Database: Failed to add 'permanent' column to itad_price_cache: {e}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Database: Unexpected error during 'permanent' column migration: {e}",
-                    exc_info=True,
-                )
-        else:
-            logger.debug(
-                "Database: 'permanent' column already exists in 'itad_price_cache'."
-            )
-
-        # --- END MIGRATION LOGIC ---
+        # --- END MIGRATIONS ---
 
         conn.commit()  # Final commit
     except sqlite3.Error as e:
@@ -413,9 +331,9 @@ def cache_game_details(
     try:
         cursor = conn.cursor()
         import json
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expires_at = None
 
         if not permanent and cache_hours:
@@ -504,9 +422,9 @@ def cache_user_games(
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(hours=cache_hours)
 
         # Clear existing cache for this user
@@ -564,9 +482,9 @@ def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(hours=cache_hours)
 
         cursor.execute(
@@ -636,9 +554,9 @@ def cache_itad_price(
 
     try:
         cursor = conn.cursor()
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if permanent:
             expires_at_str = None
             permanent_val = 1
@@ -728,9 +646,9 @@ def cache_wishlist(steam_id: str, appids: list, cache_hours: int = WISHLIST_CACH
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(hours=cache_hours)
 
         # Clear existing cache for this user
@@ -804,9 +722,9 @@ def cache_family_library(
         conn = get_db_connection()
         cursor = conn.cursor()
         import json
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(hours=cache_hours)
 
         # Clear existing cache
@@ -964,89 +882,6 @@ def cleanup_expired_cache():
             logger.info(f"Cache cleanup: removed {total_deleted} expired entries")
     except Exception as e:
         logger.error(f"Error during cache cleanup: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-
-def migrate_database_phase1():
-    """Add price_source column to game_details_cache table."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Check if column already exists
-        cursor.execute("PRAGMA table_info(game_details_cache)")
-        columns = [col[1] for col in cursor.fetchall()]
-
-        if "price_source" not in columns:
-            cursor.execute(
-                "ALTER TABLE game_details_cache ADD COLUMN price_source TEXT DEFAULT 'store_api'"
-            )
-
-            # Update existing entries to have 'store_api' as source
-            cursor.execute(
-                "UPDATE game_details_cache SET price_source = 'store_api' WHERE price_source IS NULL"
-            )
-
-            conn.commit()
-            logger.info(
-                "Phase 1 database migration completed: Added price_source column"
-            )
-        else:
-            logger.info(
-                "Phase 1 database migration skipped: price_source column already exists"
-            )
-
-    except Exception as e:
-        logger.error(f"Phase 1 database migration failed: {e}")
-        raise
-    finally:
-        if conn:
-            conn.close()
-
-
-def migrate_database_phase2():
-    """Add ITAD lookup method tracking columns to itad_price_cache table."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Check if columns already exist
-        cursor.execute("PRAGMA table_info(itad_price_cache)")
-        columns = [col[1] for col in cursor.fetchall()]
-
-        migrations_needed = []
-        if "lookup_method" not in columns:
-            migrations_needed.append(("lookup_method", "TEXT DEFAULT 'appid'"))
-        if "steam_game_name" not in columns:
-            migrations_needed.append(("steam_game_name", "TEXT"))
-
-        for column_name, column_def in migrations_needed:
-            cursor.execute(
-                f"ALTER TABLE itad_price_cache ADD COLUMN {column_name} {column_def}"
-            )
-            logger.info(
-                f"Phase 2 database migration: Added {column_name} column to itad_price_cache"
-            )
-
-        if migrations_needed:
-            # Update existing entries to have 'appid' as default lookup method
-            cursor.execute(
-                "UPDATE itad_price_cache SET lookup_method = 'appid' WHERE lookup_method IS NULL"
-            )
-            conn.commit()
-            logger.info(
-                "Phase 2 database migration completed: Added ITAD lookup method tracking columns"
-            )
-        else:
-            logger.info("Phase 2 database migration skipped: All columns already exist")
-
-    except Exception as e:
-        logger.error(f"Phase 2 database migration failed: {e}")
-        raise
     finally:
         if conn:
             conn.close()
