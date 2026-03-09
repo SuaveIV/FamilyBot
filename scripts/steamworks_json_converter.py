@@ -20,7 +20,7 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 
@@ -49,7 +49,7 @@ def convert_owned_games(
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.utcnow().isoformat() + "Z",
+                    "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 }
             )
 
@@ -113,7 +113,7 @@ def convert_wishlist(
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.utcnow().isoformat() + "Z",
+                    "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 }
             )
 
@@ -161,7 +161,7 @@ def convert_family_library(data: dict[str, Any]) -> dict[str, Any]:
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.utcnow().isoformat() + "Z",
+                    "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 }
             )
 

@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -53,13 +53,13 @@ def set_bot_client(client):
     """Set the bot client reference for the web API"""
     global _bot_client, _bot_start_time
     _bot_client = client
-    _bot_start_time = datetime.utcnow()
+    _bot_start_time = datetime.now(timezone.utc)
 
 
 def update_last_activity():
     """Update the last activity timestamp"""
     global _last_activity
-    _last_activity = datetime.utcnow()
+    _last_activity = datetime.now(timezone.utc)
 
 
 # Create FastAPI app
@@ -158,7 +158,7 @@ async def get_bot_status():
 
     uptime = None
     if _bot_start_time:
-        uptime_delta = datetime.utcnow() - _bot_start_time
+        uptime_delta = datetime.now(timezone.utc) - _bot_start_time
         uptime = str(uptime_delta).split(".")[0]  # Remove microseconds
 
     # Check token validity using the token plugin's logic
@@ -177,7 +177,7 @@ async def get_bot_status():
             with open(exp_file_path, "r") as f:
                 exp_timestamp = float(f.read().strip())
 
-            now_timestamp = datetime.utcnow().timestamp()
+            now_timestamp = datetime.now(timezone.utc).timestamp()
             token_valid = now_timestamp < exp_timestamp
     except Exception as e:
         logger.error(f"Error checking token status: {e}")
@@ -676,7 +676,7 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
                                             timestamp_str.replace("Z", "+00:00")
                                         )
                                     except Exception:
-                                        timestamp = datetime.utcnow()
+                                        timestamp = datetime.now(timezone.utc)
 
                                     logs.append(
                                         LogEntry(
@@ -734,7 +734,7 @@ async def websocket_logs(websocket: WebSocket):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 # Startup event

@@ -23,7 +23,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 # Add the src directory to the Python path
@@ -289,7 +289,7 @@ class JSONDatabaseImporter:
             return False
 
         appid = str(data["appid"])
-        detected_at = data.get("detected_at", datetime.utcnow().isoformat() + "Z")
+        detected_at = data.get("detected_at", datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
 
         # Add the saved game
         if self.dry_run:
