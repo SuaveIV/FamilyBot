@@ -1,6 +1,6 @@
 import time
 from datetime import datetime
-import requests
+import aiohttp
 from interactions import Extension, GuildText
 from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
@@ -16,13 +16,17 @@ from familybot.lib.database import (
     get_cached_wishlist,
     load_family_members_from_db,
 )
-from familybot.lib.familly_game_manager import get_saved_games
-from familybot.lib.family_utils import find_in_2d_list, format_message
+from familybot.lib.family_game_manager import get_saved_games
+from familybot.lib.family_utils import format_message
 from familybot.lib.logging_config import get_logger, log_private_profile_detection
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import ProgressTracker, get_lowest_price, split_message
+from familybot.lib.utils import (
+    ProgressTracker,
+    add_to_wishlist,
+    split_message,
+)
 from familybot.lib.steam_api_manager import SteamAPIManager
-from familybot.lib.steam_helpers import send_admin_dm
+from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
 logger = get_logger(__name__)
 
@@ -127,13 +131,7 @@ class steam_admin(Extension):
                     )
                     for app_id in cached_wishlist:
                         # Ensure app_id is added with its interested users
-                        if app_id not in [item[0] for item in global_wishlist]:
-                            global_wishlist.append([app_id, [user_steam_id]])
-                        else:
-                            for item in global_wishlist:
-                                if item[0] == app_id:
-                                    item[1].append(user_steam_id)
-                                    break
+                        add_to_wishlist(global_wishlist, str(app_id), user_steam_id)
                 else:
                     # If not cached, fetch fresh wishlist data from API
                     if (
@@ -184,14 +182,7 @@ class steam_admin(Extension):
                                 continue
 
                             user_wishlist_appids.append(app_id)
-                            if app_id not in [item[0] for item in global_wishlist]:
-                                global_wishlist.append([app_id, [user_steam_id]])
-                            else:
-                                # Add user to existing entry
-                                for item in global_wishlist:
-                                    if item[0] == app_id:
-                                        item[1].append(user_steam_id)
-                                        break
+                            add_to_wishlist(global_wishlist, app_id, user_steam_id)
 
                         # Cache the wishlist
                         cache_wishlist(user_steam_id, user_wishlist_appids)
@@ -222,112 +213,39 @@ class steam_admin(Extension):
 
             await ctx.send(f"📊 **Checking {total_games} games for deals...**")
 
-            for index, item in enumerate(global_wishlist):
-                app_id = item[0]
-                interested_users = item[1]
-                games_checked += 1
+            async with aiohttp.ClientSession() as session:
+                for index, item in enumerate(global_wishlist):
+                    app_id = item[0]
+                    interested_users = item[1]
+                    games_checked += 1
 
-                # Report progress using ProgressTracker
-                if progress_tracker.should_report_progress(index + 1):
-                    context_info = f"games checked | {len(deals_found)} deals found"
-                    progress_msg = progress_tracker.get_progress_message(
-                        index + 1, context_info
-                    )
-                    await ctx.send(progress_msg)
-
-                try:
-                    # Get cached game details first
-                    cached_game = get_cached_game_details(app_id)
-                    if cached_game:
-                        game_data = cached_game
-                    else:
-                        # If not cached, fetch from API with enhanced retry logic
-                        await self.steam_api_manager.rate_limit_steam_store_api()
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        app_info_response = (
-                            await self.steam_api_manager.make_request_with_retry(
-                                game_url
-                            )
+                    # Report progress using ProgressTracker
+                    if progress_tracker.should_report_progress(index + 1):
+                        context_info = f"games checked | {len(deals_found)} deals found"
+                        progress_msg = progress_tracker.get_progress_message(
+                            index + 1, context_info
                         )
-                        if app_info_response is None:
-                            continue
-                        game_info_json = app_info_response.json()
-                        if not game_info_json:
-                            continue
+                        await ctx.send(progress_msg)
 
-                        game_data = game_info_json.get(str(app_id), {}).get("data")
-                        if not game_data:
-                            continue
+                    try:
+                        deal_info = await process_game_deal(
+                            app_id,
+                            self.steam_api_manager,
+                            session=session,
+                        )
 
-                        # Cache the game details
-                        cache_game_details(app_id, game_data, permanent=True)
+                        if deal_info:
+                            deal_info["interested_users"] = [
+                                current_family_members.get(uid, "Unknown")
+                                for uid in interested_users
+                            ]
+                            deals_found.append(deal_info)
 
-                    game_name = game_data.get("name", f"Unknown Game ({app_id})")
-                    # Handle both cached data (price_data) and fresh API data (price_overview)
-                    price_overview = game_data.get("price_overview") or game_data.get(
-                        "price_data"
-                    )
-
-                    if not price_overview:
-                        logger.debug(
-                            f"Force deals: No price data found for {app_id} ({game_name})"
+                    except Exception as e:
+                        logger.warning(
+                            f"Force deals: Error checking deals for game {app_id}: {e}"
                         )
                         continue
-
-                    # Check if game is on sale
-                    discount_percent = price_overview.get("discount_percent", 0)
-                    current_price = price_overview.get("final_formatted", "N/A")
-                    original_price = price_overview.get(
-                        "initial_formatted", current_price
-                    )
-
-                    # Get historical low price
-                    lowest_price = get_lowest_price(int(app_id))
-
-                    # Determine if this is a good deal (more lenient criteria for force command)
-                    is_good_deal = False
-                    deal_reason = ""
-
-                    if discount_percent >= 30:  # Lower threshold for force command
-                        is_good_deal = True
-                        deal_reason = f"🔥 **{discount_percent}% OFF**"
-                    elif discount_percent >= 15 and lowest_price != "N/A":
-                        # Check if current price is close to historical low
-                        try:
-                            current_price_num = (
-                                float(price_overview.get("final", 0)) / 100
-                            )
-                            lowest_price_num = float(lowest_price)
-                            if (
-                                current_price_num <= lowest_price_num * 1.2
-                            ):  # Within 20% of historical low
-                                is_good_deal = True
-                                deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
-                        except (ValueError, TypeError):
-                            pass
-
-                    if is_good_deal:
-                        user_names = [
-                            current_family_members.get(uid, "Unknown")
-                            for uid in interested_users
-                        ]
-                        deal_info = {
-                            "name": game_name,
-                            "app_id": app_id,
-                            "current_price": current_price,
-                            "original_price": original_price,
-                            "discount_percent": discount_percent,
-                            "lowest_price": lowest_price,
-                            "deal_reason": deal_reason,
-                            "interested_users": user_names,
-                        }
-                        deals_found.append(deal_info)
-
-                except Exception as e:
-                    logger.warning(
-                        f"Force deals: Error checking deals for game {app_id}: {e}"
-                    )
-                    continue
 
             # Format and send results to wishlist channel
             if deals_found:
@@ -434,93 +352,37 @@ class steam_admin(Extension):
                 cached_wishlist = get_cached_wishlist(user_steam_id)
                 if cached_wishlist is not None:
                     for app_id in cached_wishlist:
-                        if app_id not in [item[0] for item in global_wishlist]:
-                            global_wishlist.append([app_id, [user_steam_id]])
-                        else:
-                            for item in global_wishlist:
-                                if item[0] == app_id:
-                                    item[1].append(user_steam_id)
-                                    break
+                        add_to_wishlist(global_wishlist, str(app_id), user_steam_id)
             if not global_wishlist:
                 await ctx.send("❌ No wishlist games found to check for deals.")
                 return
             deals_found = []
             games_checked = 0
-            for item in global_wishlist:
-                app_id = item[0]
-                interested_users = item[1]
-                games_checked += 1
-                try:
-                    cached_game = get_cached_game_details(app_id)
-                    if cached_game:
-                        game_data = cached_game
-                    else:
-                        await self.steam_api_manager.rate_limit_steam_store_api()
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        app_info_response = requests.get(game_url, timeout=10)
-                        game_info_json = app_info_response.json()
-                        if not game_info_json:
-                            continue
-                        game_data = game_info_json.get(str(app_id), {}).get("data")
-                        if not game_data:
-                            continue
-                        cache_game_details(app_id, game_data, permanent=True)
-                    # Only include games that are family sharing enabled
-                    if not game_data.get("is_family_shared", False):
-                        continue
-                    game_name = game_data.get("name", f"Unknown Game ({app_id})")
-                    # Handle both cached data (price_data) and fresh API data (price_overview)
-                    price_overview = game_data.get("price_overview") or game_data.get(
-                        "price_data"
-                    )
-                    if not price_overview:
-                        logger.debug(
-                            f"Force deals unlimited: No price data found for {app_id} ({game_name})"
+            async with aiohttp.ClientSession() as session:
+                for item in global_wishlist:
+                    app_id = item[0]
+                    interested_users = item[1]
+                    games_checked += 1
+                    try:
+                        deal_info = await process_game_deal(
+                            app_id,
+                            self.steam_api_manager,
+                            session=session,
+                            require_family_shared=True,
+                        )
+
+                        if deal_info:
+                            user_names = [
+                                current_family_members.get(uid, "Unknown")
+                                for uid in interested_users
+                            ]
+                            deal_info["interested_users"] = user_names
+                            deals_found.append(deal_info)
+                    except Exception as e:
+                        logger.warning(
+                            f"Force deals unlimited: Error checking deals for game {app_id}: {e}"
                         )
                         continue
-                    discount_percent = price_overview.get("discount_percent", 0)
-                    current_price = price_overview.get("final_formatted", "N/A")
-                    original_price = price_overview.get(
-                        "initial_formatted", current_price
-                    )
-                    lowest_price = get_lowest_price(int(app_id))
-                    is_good_deal = False
-                    deal_reason = ""
-                    if discount_percent >= 30:
-                        is_good_deal = True
-                        deal_reason = f"🔥 **{discount_percent}% OFF**"
-                    elif discount_percent >= 15 and lowest_price != "N/A":
-                        try:
-                            current_price_num = (
-                                float(price_overview.get("final", 0)) / 100
-                            )
-                            lowest_price_num = float(lowest_price)
-                            if current_price_num <= lowest_price_num * 1.2:
-                                is_good_deal = True
-                                deal_reason = f"💎 **Near Historical Low** ({discount_percent}% off)"
-                        except (ValueError, TypeError):
-                            pass
-                    if is_good_deal:
-                        user_names = [
-                            current_family_members.get(uid, "Unknown")
-                            for uid in interested_users
-                        ]
-                        deal_info = {
-                            "name": game_name,
-                            "app_id": app_id,
-                            "current_price": current_price,
-                            "original_price": original_price,
-                            "discount_percent": discount_percent,
-                            "lowest_price": lowest_price,
-                            "deal_reason": deal_reason,
-                            "interested_users": user_names,
-                        }
-                        deals_found.append(deal_info)
-                except Exception as e:
-                    logger.warning(
-                        f"Force deals unlimited: Error checking deals for game {app_id}: {e}"
-                    )
-                    continue
             if deals_found:
                 message_parts = [
                     f"🎯 **Current Deals Alert (Unlimited, Family Sharing Only)** (found {len(deals_found)} deals from {games_checked} games checked):\n\n"
@@ -654,102 +516,113 @@ class steam_admin(Extension):
             processed_members = 0
             error_count = 0
 
-            for user_steam_id in all_unique_steam_ids_to_check:
-                user_name_for_log = current_family_members.get(
-                    user_steam_id, f"Unknown ({user_steam_id})"
-                )
-                processed_members += 1
-
-                try:
-                    # Get user's owned games
-                    if not self.steam_api:
-                        error_count += 1
-                        logger.warning(
-                            f"Full library scan: Steam API not configured. Cannot fetch games for {user_name_for_log}."
-                        )
-                        continue
-                    await self.steam_api_manager.rate_limit_steam_api()
-                    owned_games_json = self.steam_api.call(
-                        "IPlayerService.GetOwnedGames",
-                        steamid=user_steam_id,
-                        include_appinfo=1,
-                        include_played_free_games=1,
+            async with aiohttp.ClientSession() as session:
+                for user_steam_id in all_unique_steam_ids_to_check:
+                    user_name_for_log = current_family_members.get(
+                        user_steam_id, f"Unknown ({user_steam_id})"
                     )
-                    if not owned_games_json:
-                        error_count += 1
-                        continue
+                    processed_members += 1
 
-                    games = owned_games_json.get("response", {}).get("games", [])
-                    if not games:
-                        logger.info(
-                            f"Full library scan: No games found for {user_name_for_log} (private profile?)"
+                    try:
+                        # Get user's owned games
+                        if not self.steam_api:
+                            error_count += 1
+                            logger.warning(
+                                f"Full library scan: Steam API not configured. Cannot fetch games for {user_name_for_log}."
+                            )
+                            continue
+                        await self.steam_api_manager.rate_limit_steam_api()
+                        owned_games_json = self.steam_api.call(
+                            "IPlayerService.GetOwnedGames",
+                            steamid=user_steam_id,
+                            include_appinfo=1,
+                            include_played_free_games=1,
                         )
-                        continue
-
-                    user_games_cached = 0
-                    await ctx.send(
-                        f"⏳ **Processing {user_name_for_log}**: {len(games)} games found..."
-                    )
-
-                    # Process each game with rate limiting and progress updates
-                    for i, game in enumerate(games):
-                        app_id = str(game.get("appid"))
-                        if not app_id:
+                        if not owned_games_json:
+                            error_count += 1
                             continue
 
-                        total_games_processed += 1
-
-                        # Check if we already have cached details
-                        cached_game = get_cached_game_details(app_id)
-                        if cached_game:
-                            logger.debug(
-                                f"Full library scan: Using cached details for AppID: {app_id}"
+                        games = owned_games_json.get("response", {}).get("games", [])
+                        if not games:
+                            logger.info(
+                                f"Full library scan: No games found for {user_name_for_log} (private profile?)"
                             )
                             continue
 
-                        # Fetch game details from Steam Store API
-                        try:
-                            await self.steam_api_manager.rate_limit_steam_store_api()
-                            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                            logger.debug(
-                                f"Full library scan: Fetching details for AppID: {app_id}"
-                            )
+                        user_games_cached = 0
+                        await ctx.send(
+                            f"⏳ **Processing {user_name_for_log}**: {len(games)} games found..."
+                        )
 
-                            game_info_response = requests.get(game_url, timeout=10)
-                            game_info_json = game_info_response.json()
-
-                            if not game_info_json:
+                        # Process each game with rate limiting and progress updates
+                        for _, game in enumerate(games):
+                            app_id = str(game.get("appid"))
+                            if not app_id:
                                 continue
 
-                            game_data = game_info_json.get(str(app_id), {}).get("data")
-                            if not game_data:
+                            total_games_processed += 1
+
+                            # Check if we already have cached details
+                            cached_game = get_cached_game_details(app_id)
+                            if cached_game:
                                 logger.debug(
-                                    f"Full library scan: No data for AppID {app_id}"
+                                    f"Full library scan: Using cached details for AppID: {app_id}"
                                 )
                                 continue
 
-                            # Cache the game details permanently
-                            cache_game_details(app_id, game_data, permanent=True)
-                            user_games_cached += 1
-                            total_games_cached += 1
+                            # Fetch game details from Steam Store API
+                            try:
+                                await (
+                                    self.steam_api_manager.rate_limit_steam_store_api()
+                                )
+                                game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                                logger.debug(
+                                    f"Full library scan: Fetching details for AppID: {app_id}"
+                                )
 
-                        except Exception as e:
-                            logger.warning(
-                                f"Full library scan: Error processing game {app_id} for {user_name_for_log}: {e}"
-                            )
-                            continue
+                                async with session.get(
+                                    game_url, timeout=aiohttp.ClientTimeout(total=10)
+                                ) as response:
+                                    if response.status != 200:
+                                        continue
+                                    game_info_json = await response.json()
 
-                    await ctx.send(
-                        f"✅ **{user_name_for_log} complete**: {user_games_cached} new games cached ({processed_members}/{total_members})"
-                    )
+                                if not game_info_json:
+                                    continue
 
-                except Exception as e:
-                    error_count += 1
-                    logger.error(
-                        f"Full library scan: Error processing {user_name_for_log}: {e}",
-                        exc_info=True,
-                    )
-                    await ctx.send(f"❌ **Error processing {user_name_for_log}**: {e}")
+                                game_data = game_info_json.get(str(app_id), {}).get(
+                                    "data"
+                                )
+                                if not game_data:
+                                    logger.debug(
+                                        f"Full library scan: No data for AppID {app_id}"
+                                    )
+                                    continue
+
+                                # Cache the game details permanently
+                                cache_game_details(app_id, game_data, permanent=True)
+                                user_games_cached += 1
+                                total_games_cached += 1
+
+                            except Exception as e:
+                                logger.warning(
+                                    f"Full library scan: Error processing game {app_id} for {user_name_for_log}: {e}"
+                                )
+                                continue
+
+                        await ctx.send(
+                            f"✅ **{user_name_for_log} complete**: {user_games_cached} new games cached ({processed_members}/{total_members})"
+                        )
+
+                    except Exception as e:
+                        error_count += 1
+                        logger.error(
+                            f"Full library scan: Error processing {user_name_for_log}: {e}",
+                            exc_info=True,
+                        )
+                        await ctx.send(
+                            f"❌ **Error processing {user_name_for_log}**: {e}"
+                        )
 
             # Final summary
             end_time = datetime.now()
@@ -829,11 +702,7 @@ class steam_admin(Extension):
                         f"Full scan: Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)"
                     )
                     for app_id in cached_wishlist:
-                        idx = find_in_2d_list(app_id, global_wishlist)
-                        if idx is not None:
-                            global_wishlist[idx][1].append(user_steam_id)
-                        else:
-                            global_wishlist.append([app_id, [user_steam_id]])
+                        add_to_wishlist(global_wishlist, str(app_id), user_steam_id)
                     continue
 
                 # If not cached, fetch from API
@@ -875,11 +744,7 @@ class steam_admin(Extension):
                             continue
 
                         user_wishlist_appids.append(app_id)
-                        idx = find_in_2d_list(app_id, global_wishlist)
-                        if idx is not None:
-                            global_wishlist[idx][1].append(user_steam_id)
-                        else:
-                            global_wishlist.append([app_id, [user_steam_id]])
+                        add_to_wishlist(global_wishlist, app_id, user_steam_id)
 
                     # Cache the wishlist
                     cache_wishlist(user_steam_id, user_wishlist_appids)
@@ -930,79 +795,86 @@ class steam_admin(Extension):
                 total_games, progress_interval=5
             )  # Report every 5% instead of 10%
 
-            for item in sorted_all_duplicate_games:
-                app_id = item[0]
-                processed_count += 1
+            async with aiohttp.ClientSession() as session:
+                for item in sorted_all_duplicate_games:
+                    app_id = item[0]
+                    processed_count += 1
 
-                # Report progress using ProgressTracker
-                if progress_tracker.should_report_progress(processed_count):
-                    context_info = f"games | ✅ {len(duplicate_games_for_display)} qualified | ⏭️ {skipped_count} skipped"
-                    if error_count > 0:
-                        context_info += f" | ❌ {error_count} errors"
-                    progress_msg = progress_tracker.get_progress_message(
-                        processed_count, context_info
-                    )
-                    await ctx.send(progress_msg)
-
-                try:
-                    # Check if we have cached game details first
-                    cached_game = get_cached_game_details(app_id)
-                    if cached_game:
-                        logger.info(
-                            f"Full scan: Using cached game details for AppID: {app_id}"
+                    # Report progress using ProgressTracker
+                    if progress_tracker.should_report_progress(processed_count):
+                        context_info = f"games | ✅ {len(duplicate_games_for_display)} qualified | ⏭️ {skipped_count} skipped"
+                        if error_count > 0:
+                            context_info += f" | ❌ {error_count} errors"
+                        progress_msg = progress_tracker.get_progress_message(
+                            processed_count, context_info
                         )
-                        game_data = cached_game
-                    else:
-                        # Use slower rate limiting for full scan
-                        await self.steam_api_manager.rate_limit_full_scan()
+                        await ctx.send(progress_msg)
 
-                        game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                        logger.info(
-                            f"Full scan: Fetching app details for AppID: {app_id} ({processed_count}/{total_games})"
-                        )
-
-                        game_info_response = requests.get(game_url, timeout=10)
-                        game_info_json = game_info_response.json()
-                        if not game_info_json:
-                            error_count += 1
-                            continue
-
-                        game_data = game_info_json.get(str(app_id), {}).get("data")
-                        if not game_data:
-                            logger.warning(
-                                f"Full scan: No game data found for AppID {app_id}"
+                    try:
+                        # Check if we have cached game details first
+                        cached_game = get_cached_game_details(app_id)
+                        if cached_game:
+                            logger.info(
+                                f"Full scan: Using cached game details for AppID: {app_id}"
                             )
-                            error_count += 1
-                            continue
+                            game_data = cached_game
+                        else:
+                            # Use slower rate limiting for full scan
+                            await self.steam_api_manager.rate_limit_full_scan()
 
-                        # Cache the game details permanently
-                        cache_game_details(app_id, game_data, permanent=True)
+                            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                            logger.info(
+                                f"Full scan: Fetching app details for AppID: {app_id} ({processed_count}/{total_games})"
+                            )
 
-                    # Use cached boolean fields for faster performance
-                    is_family_shared = game_data.get("is_family_shared", False)
+                            async with session.get(
+                                game_url, timeout=aiohttp.ClientTimeout(total=10)
+                            ) as response:
+                                if response.status != 200:
+                                    error_count += 1
+                                    continue
+                                game_info_json = await response.json()
+                            if not game_info_json:
+                                error_count += 1
+                                continue
 
-                    if (
-                        game_data.get("type") == "game"
-                        and not game_data.get("is_free")
-                        and is_family_shared
-                        and "recommendations" in game_data
-                        and app_id not in saved_game_appids
-                    ):
-                        duplicate_games_for_display.append(item)
-                        logger.info(
-                            f"Full scan: Added {game_data.get('name', 'Unknown')} to display list"
+                            game_data = game_info_json.get(str(app_id), {}).get("data")
+                            if not game_data:
+                                logger.warning(
+                                    f"Full scan: No game data found for AppID {app_id}"
+                                )
+                                error_count += 1
+                                continue
+
+                            # Cache the game details permanently
+                            cache_game_details(app_id, game_data, permanent=True)
+
+                        # Use cached boolean fields for faster performance
+                        is_family_shared = game_data.get("is_family_shared", False)
+
+                        if (
+                            game_data.get("type") == "game"
+                            and not game_data.get("is_free")
+                            and is_family_shared
+                            and "recommendations" in game_data
+                            and app_id not in saved_game_appids
+                        ):
+                            duplicate_games_for_display.append(item)
+                            logger.info(
+                                f"Full scan: Added {game_data.get('name', 'Unknown')} to display list"
+                            )
+                        else:
+                            skipped_count += 1
+                            logger.debug(
+                                f"Full scan: Skipped {app_id}: filtering criteria not met"
+                            )
+
+                    except Exception as e:
+                        error_count += 1
+                        logger.critical(
+                            f"Full scan: Error processing game {app_id}: {e}",
+                            exc_info=True,
                         )
-                    else:
-                        skipped_count += 1
-                        logger.debug(
-                            f"Full scan: Skipped {app_id}: filtering criteria not met"
-                        )
-
-                except Exception as e:
-                    error_count += 1
-                    logger.critical(
-                        f"Full scan: Error processing game {app_id}: {e}", exc_info=True
-                    )
 
             # Step 4: Update the wishlist channel with results
             end_time = datetime.now()
@@ -1017,7 +889,7 @@ class steam_admin(Extension):
                     return
 
                 # Generate the message using the same format_message function
-                wishlist_new_message = format_message(
+                wishlist_new_message = await format_message(
                     duplicate_games_for_display, short=False
                 )
 

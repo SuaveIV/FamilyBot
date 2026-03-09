@@ -1,22 +1,20 @@
 import os
 import sys
-import time
 import random
 import json
 import argparse
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 import httpx
 
 from steam.webapi import WebAPI
-from typing import Tuple
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,  # pylint: disable=wrong-import-position
@@ -26,9 +24,11 @@ from familybot.lib.database import (
     get_cached_wishlist,
     get_db_connection,
     init_db,
+    load_family_members_from_db,
 )
-from familybot.lib.family_utils import find_in_2d_list, get_family_game_list_url  # pylint: disable=wrong-import-position
+from familybot.lib.family_utils import get_family_game_list_url  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
+from familybot.lib.utils import TokenBucket, add_to_wishlist  # pylint: disable=wrong-import-position
 
 try:
     from tqdm import tqdm
@@ -44,43 +44,6 @@ logger = setup_script_logging("populate_database", "INFO")
 
 # Suppress verbose HTTP request logging from httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-
-class TokenBucket:
-    """Token bucket rate limiter for controlling API request rates."""
-
-    def __init__(self, rate: float, capacity: Optional[int] = None):
-        """
-        Initialize token bucket.
-
-        Args:
-            rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
-            capacity: Maximum tokens in bucket (defaults to rate * 10)
-        """
-        self.rate = rate
-        self.capacity: int = (
-            capacity if capacity is not None else max(1, int(rate * 10.0))
-        )
-        self.tokens: float = float(self.capacity)
-        self.last_update = time.time()
-        self._lock = asyncio.Lock()
-
-    async def acquire(self, tokens: int = 1) -> None:
-        """Acquire tokens from the bucket, waiting if necessary."""
-        async with self._lock:
-            now = time.time()
-            # Add tokens based on elapsed time
-            elapsed = now - self.last_update
-            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
-            self.last_update = now
-
-            # If we don't have enough tokens, wait
-            if self.tokens < tokens:
-                wait_time = (tokens - self.tokens) / self.rate
-                await asyncio.sleep(wait_time)
-                self.tokens = 0
-            else:
-                self.tokens -= tokens
 
 
 class DatabasePopulator:
@@ -200,7 +163,7 @@ class DatabasePopulator:
             logger.error("Unexpected error for %s: %s", api_name, e)
             return None
 
-    def batch_write_games(self, games_data: Dict[str, Dict]) -> int:
+    def batch_write_games(self, games_data: dict[str, dict]) -> int:
         """Write a batch of game details to the database in a single transaction."""
         if not games_data:
             return 0
@@ -302,39 +265,9 @@ class DatabasePopulator:
 
         return await asyncio.to_thread(get_app_info)
 
-    def load_family_members(self) -> Dict[str, str]:
-        """Load family members from database or config."""
-        members = {}
-
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Check if we have family members in database
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                print("📥 Migrating family members from config to database...")
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None),
-                    )
-                conn.commit()
-                print(f"✅ Migrated {len(FAMILY_USER_DICT)} family members")
-
-            # Load family members
-            cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-            for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-
-            conn.close()
-            print(f"👥 Loaded {len(members)} family members")
-
-        except (ValueError, TypeError, OSError) as e:
-            print(f"❌ Error loading family members: {e}")
-            return {}
-
-        return members
+    def load_family_members(self) -> dict[str, str]:
+        """Load family members from database."""
+        return load_family_members_from_db()
 
     async def populate_family_library(self, dry_run: bool = False) -> int:
         """Populate the shared family library cache."""
@@ -424,7 +357,7 @@ class DatabasePopulator:
         return wishlist_data
 
     async def populate_family_libraries(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with all family member game libraries."""
         print("\n🎮 Starting family library population...")
@@ -456,7 +389,7 @@ class DatabasePopulator:
 
     async def _populate_libraries_with_tqdm(
         self,
-        family_members: Dict[str, str],
+        family_members: dict[str, str],
         dry_run: bool,
         total_processed: int,
         total_cached: int,
@@ -518,7 +451,7 @@ class DatabasePopulator:
 
     async def _populate_libraries_without_tqdm(
         self,
-        family_members: Dict[str, str],
+        family_members: dict[str, str],
         dry_run: bool,
         total_processed: int,
         total_cached: int,
@@ -606,7 +539,7 @@ class DatabasePopulator:
         )
         total_cached = 0
 
-        async def fetch_game_with_progress(app_id: str) -> Optional[Tuple[str, Dict]]:
+        async def fetch_game_with_progress(app_id: str) -> Optional[tuple[str, dict]]:
             nonlocal user_cached, user_skipped, total_cached
             game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
             try:
@@ -759,7 +692,7 @@ class DatabasePopulator:
         return total_cached
 
     async def populate_wishlists(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with family member wishlists."""
         print("\n🎯 Starting wishlist population...")
@@ -784,11 +717,7 @@ class DatabasePopulator:
                 if cached_wishlist:
                     print(f"   💾 Using cached wishlist ({len(cached_wishlist)} items)")
                     for app_id in cached_wishlist:
-                        idx = find_in_2d_list(app_id, global_wishlist)
-                        if idx is not None:
-                            global_wishlist[idx][1].append(steam_id)
-                        else:
-                            global_wishlist.append([app_id, [steam_id]])
+                        add_to_wishlist(global_wishlist, str(app_id), steam_id)
                     continue
 
                 if dry_run:
@@ -816,11 +745,7 @@ class DatabasePopulator:
                         continue
 
                     user_wishlist_appids.append(app_id)
-                    idx = find_in_2d_list(app_id, global_wishlist)
-                    if idx is not None:
-                        global_wishlist[idx][1].append(steam_id)
-                    else:
-                        global_wishlist.append([app_id, [steam_id]])
+                    add_to_wishlist(global_wishlist, app_id, steam_id)
 
                 # Cache the wishlist
                 cache_wishlist(steam_id, user_wishlist_appids)

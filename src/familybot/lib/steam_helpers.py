@@ -1,7 +1,13 @@
 import asyncio
+import aiohttp
 from datetime import datetime
 
 from familybot.config import ADMIN_DISCORD_ID
+from familybot.lib.constants import (
+    HIGH_DISCOUNT_THRESHOLD,
+    HISTORICAL_LOW_BUFFER,
+    LOW_DISCOUNT_THRESHOLD,
+)
 from familybot.lib.database import cache_game_details, get_cached_game_details
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
@@ -29,7 +35,9 @@ async def send_admin_dm(bot: FamilyBotClient, message: str) -> None:
 
 
 async def fetch_game_details(
-    app_id: str, steam_api_manager: SteamAPIManager
+    app_id: str,
+    steam_api_manager: SteamAPIManager,
+    session: aiohttp.ClientSession | None = None,
 ) -> dict | None:
     """
     Fetch game details from cache or Steam Store API.
@@ -46,7 +54,9 @@ async def fetch_game_details(
         game_url = (
             f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
         )
-        app_info_response = await steam_api_manager.make_request_with_retry(game_url)
+        app_info_response = await steam_api_manager.make_request_with_retry(
+            game_url, session=session
+        )
 
         if app_info_response is None:
             return None
@@ -71,17 +81,23 @@ async def fetch_game_details(
 async def process_game_deal(
     app_id: str,
     steam_api_manager: SteamAPIManager,
-    high_discount_threshold: int = 50,
-    low_discount_threshold: int = 25,
-    historical_low_buffer: float = 1.1,
+    session: aiohttp.ClientSession | None = None,
+    high_discount_threshold: int = HIGH_DISCOUNT_THRESHOLD,
+    low_discount_threshold: int = LOW_DISCOUNT_THRESHOLD,
+    historical_low_buffer: float = HISTORICAL_LOW_BUFFER,
+    require_family_shared: bool = False,
 ) -> dict | None:
     """
     Process a game to check for deals.
     Returns a dict with deal info if found, else None.
     """
     try:
-        game_data = await fetch_game_details(app_id, steam_api_manager)
+        game_data = await fetch_game_details(app_id, steam_api_manager, session=session)
         if not game_data:
+            return None
+
+        # Check family sharing if required
+        if require_family_shared and not game_data.get("is_family_shared", False):
             return None
 
         game_name = game_data.get("name", f"Unknown Game ({app_id})")
@@ -97,7 +113,20 @@ async def process_game_deal(
         original_price = price_overview.get("initial_formatted", current_price)
 
         # Get historical low price
-        lowest_price = await asyncio.to_thread(get_lowest_price, int(app_id))
+        lowest_price_raw = await asyncio.to_thread(get_lowest_price, int(app_id))
+        lowest_price = lowest_price_raw
+
+        # Sanitize lowest_price to a numeric value for comparison
+        lowest_price_num = None
+        if lowest_price_raw != "N/A":
+            try:
+                # Strip currency symbols and commas
+                clean_price = lowest_price_raw.replace("$", "").replace(",", "").strip()
+                lowest_price_num = float(clean_price)
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Could not parse lowest_price '{lowest_price_raw}' for AppID {app_id}"
+                )
 
         # Determine if this is a good deal
         is_good_deal = False
@@ -106,11 +135,12 @@ async def process_game_deal(
         if discount_percent >= high_discount_threshold:
             is_good_deal = True
             deal_reason = f"🔥 **{discount_percent}% OFF**"
-        elif discount_percent >= low_discount_threshold and lowest_price != "N/A":
+        elif (
+            discount_percent >= low_discount_threshold and lowest_price_num is not None
+        ):
             # Check if current price is close to historical low
             try:
                 current_price_num = float(price_overview.get("final", 0)) / 100
-                lowest_price_num = float(lowest_price)
                 if current_price_num <= lowest_price_num * historical_low_buffer:
                     is_good_deal = True
                     if historical_low_buffer > 1.1:

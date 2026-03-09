@@ -4,7 +4,7 @@ import argparse
 import sys
 import os
 from unittest.mock import MagicMock, AsyncMock, patch
-from typing import List, Dict, Any, cast
+from typing import Any, cast
 
 # Add src to path so we can import familybot
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
@@ -21,7 +21,7 @@ logger = logging.getLogger("TestFreeGames")
 # --- Mock Data ---
 
 
-def create_bsky_post(uri: str, text: str, url: str) -> Dict[str, Any]:
+def create_bsky_post(uri: str, text: str, url: str) -> dict[str, Any]:
     """Helper to create a mock Bluesky post."""
     return {
         "post": {
@@ -124,12 +124,12 @@ MOCK_STEAM_DETAILS = {
 # --- Mocks for Network Calls ---
 
 
-async def mock_fetch_bluesky_posts(*args, **kwargs) -> List[Dict[str, Any]]:
+async def mock_fetch_bluesky_posts(*args, **kwargs) -> list[dict[str, Any]]:
     logger.info("[MOCK] _fetch_bluesky_posts called, returning mock data.")
     return MOCK_BLUESKY_POSTS
 
 
-async def mock_get_reddit_post_details(self, reddit_url: str) -> Dict[str, Any] | None:
+async def mock_get_reddit_post_details(self, reddit_url: str) -> dict[str, Any] | None:
     logger.info(f"[MOCK] _get_reddit_post_details called for {reddit_url}")
     # Append .json if it's not there for matching the key
     if not reddit_url.endswith(".json"):
@@ -139,7 +139,7 @@ async def mock_get_reddit_post_details(self, reddit_url: str) -> Dict[str, Any] 
 
 async def mock_fetch_game_details(
     steam_id: str, steam_api_manager: Any
-) -> Dict[str, Any] | None:
+) -> dict[str, Any] | None:
     logger.info(f"[MOCK] fetch_game_details called for Steam ID: {steam_id}")
     return MOCK_STEAM_DETAILS.get(steam_id)
 

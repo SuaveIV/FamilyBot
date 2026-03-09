@@ -6,7 +6,7 @@ import random
 import sys
 import time
 from datetime import datetime
-from typing import Dict, Optional, Set
+from typing import Optional
 
 import httpx
 
@@ -26,7 +26,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-from familybot.config import FAMILY_USER_DICT, ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_game_details_with_source,  # pylint: disable=wrong-import-position
@@ -34,10 +34,8 @@ from familybot.lib.database import (
     get_cached_game_details,  # pylint: disable=wrong-import-position
     get_cached_itad_price,
     get_cached_wishlist,  # pylint: disable=wrong-import-position
-    get_db_connection,
     init_db,  # pylint: disable=wrong-import-position
-    migrate_database_phase1,  # pylint: disable=wrong-import-position
-    migrate_database_phase2,
+    load_family_members_from_db,
 )  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
 
@@ -174,33 +172,11 @@ class PricePopulator:
             logger.error("Unexpected error for %s: %s", api_name, e)
             return None
 
-    def load_family_members(self) -> Dict[str, str]:
-        members = {}
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                print("📥 Migrating family members from config to database...")
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None),
-                    )
-                conn.commit()
-                print(f"✅ Migrated {len(FAMILY_USER_DICT)} family members")
+    def load_family_members(self) -> dict[str, str]:
+        """Load family members from database."""
+        return load_family_members_from_db()
 
-            cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-            for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-            conn.close()
-            print(f"👥 Loaded {len(members)} family members")
-        except (ValueError, TypeError, OSError) as e:
-            print(f"❌ Error loading family members: {e}")
-            return {}
-        return members
-
-    def collect_all_game_ids(self, family_members: Dict[str, str]) -> Set[str]:
+    def collect_all_game_ids(self, family_members: dict[str, str]) -> set[str]:
         all_game_ids = set()
         print("\n📊 Collecting game IDs from family wishlists...")
         for steam_id, name in family_members.items():
@@ -344,7 +320,7 @@ class PricePopulator:
         return success, "store_api"
 
     def populate_steam_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         print("\n💰 Starting Steam price population...")
         if not game_ids:
@@ -647,7 +623,7 @@ class PricePopulator:
         return self.fetch_itad_price_enhanced(app_id)
 
     def populate_itad_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         print("\n📈 Starting ITAD price population...")
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
@@ -709,7 +685,7 @@ class PricePopulator:
         )
         return itad_prices_cached
 
-    def refresh_current_prices(self, game_ids: Set[str], dry_run: bool = False) -> int:
+    def refresh_current_prices(self, game_ids: set[str], dry_run: bool = False) -> int:
         print("\n🔄 Refreshing current Steam prices...")
         if not game_ids:
             print("❌ No game IDs to process")
@@ -775,8 +751,6 @@ def main():
     try:
         init_db()
         print("✅ Database initialized")
-        migrate_database_phase1()  # Run Phase 1 migrations
-        migrate_database_phase2()  # Run Phase 2 migrations
     except (ValueError, TypeError, OSError) as e:
         print(f"❌ Failed to initialize database or run migrations: {e}")
         return 1

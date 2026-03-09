@@ -28,6 +28,12 @@ steam_family:
   websocket_server_ip: "127.0.0.1" # OPTIONAL: IP address for the bot's internal WebSocket server.
                                    # Use "127.0.0.1" for local development. Change if deploying to a different machine.
 
+# --- Token Sender Configuration ---
+token_sender:
+  token_save_path: "tokens"                        # Directory where Steam tokens are saved
+  browser_profile_path: "FamilyBotBrowserProfile"  # Browser session for token extraction
+  update_buffer_hours: 24                           # Hours before token expiry to trigger a refresh
+
 # --- Help Message Plugin Configuration ---
 help_message:
   channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where the bot's help message will be posted/updated.

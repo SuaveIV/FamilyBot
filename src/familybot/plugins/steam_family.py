@@ -1,6 +1,7 @@
 import time
+import asyncio
 
-import requests
+import aiohttp
 from interactions import Extension
 from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
@@ -23,7 +24,7 @@ from familybot.lib.database import (
 # Import enhanced logging configuration
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import get_lowest_price, split_message
+from familybot.lib.utils import add_to_wishlist, get_lowest_price, split_message
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
@@ -231,71 +232,81 @@ class steam_family(Extension):
                 ):
                     game_array.append(str(game.get("appid")))
 
-            for game_appid in game_array:
-                # Try to get cached game details first
-                cached_game = get_cached_game_details(game_appid)
-                if cached_game:
-                    logger.info(f"Using cached game details for AppID: {game_appid}")
-                    game_data = cached_game
-                else:
-                    # If not cached, fetch from API
-                    await (
-                        self.steam_api_manager.rate_limit_steam_store_api()
-                    )  # Apply store API rate limit
-                    game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
-                    logger.info(
-                        f"Fetching app details from API for AppID: {game_appid} for coop check"
-                    )
-                    app_info_response = requests.get(game_url, timeout=10)
-                    game_info_json = app_info_response.json()
-                    if not game_info_json:
-                        continue
-
-                    game_data = game_info_json.get(str(game_appid), {}).get("data")
-                    if not game_data:
-                        logger.warning(
-                            f"No game data found for AppID {game_appid} in app details response for coop check."
+            async with aiohttp.ClientSession() as session:
+                for game_appid in game_array:
+                    # Try to get cached game details first
+                    cached_game = get_cached_game_details(game_appid)
+                    if cached_game:
+                        logger.info(
+                            f"Using cached game details for AppID: {game_appid}"
                         )
-                        continue
-
-                    # Cache the game details permanently (game details rarely change)
-                    cache_game_details(game_appid, game_data, permanent=True)
-
-                if game_data.get("type") == "game" and not game_data.get("is_free"):
-                    # Use cached boolean fields for faster performance
-                    is_family_shared = game_data.get("is_family_shared", False)
-                    is_multiplayer = game_data.get("is_multiplayer", False)
-
-                    if is_family_shared and is_multiplayer:
-                        game_name = game_data.get(
-                            "name", f"Unknown Game ({game_appid})"
-                        )
-
-                        # Add pricing information if available
-                        try:
-                            current_price = game_data.get("price_overview", {}).get(
-                                "final_formatted", "N/A"
-                            )
-                            lowest_price = get_lowest_price(int(game_appid))
-
-                            price_info = []
-                            if current_price != "N/A":
-                                price_info.append(f"Current: {current_price}")
-                            if lowest_price != "N/A":
-                                price_info.append(f"Lowest: ${lowest_price}")
-
-                            if price_info:
-                                game_name += f" ({' | '.join(price_info)})"
-                        except Exception as e:
-                            logger.warning(
-                                f"Could not get pricing info for coop game {game_appid}: {e}"
-                            )
-
-                        coop_game_names.append(game_name)
+                        game_data = cached_game
                     else:
-                        logger.debug(
-                            f"Game {game_appid} is not categorized as family shared (ID 62)."
+                        # If not cached, fetch from API
+                        await (
+                            self.steam_api_manager.rate_limit_steam_store_api()
+                        )  # Apply store API rate limit
+                        game_url = f"https://store.steampowered.com/api/appdetails?appids={game_appid}&cc=us&l=en"
+                        logger.info(
+                            f"Fetching app details from API for AppID: {game_appid} for coop check"
                         )
+                        async with session.get(
+                            game_url, timeout=aiohttp.ClientTimeout(total=10)
+                        ) as app_info_response:
+                            if app_info_response.status != 200:
+                                continue
+                            game_info_json = await app_info_response.json()
+
+                        if not game_info_json:
+                            continue
+
+                        game_data = game_info_json.get(str(game_appid), {}).get("data")
+                        if not game_data:
+                            logger.warning(
+                                f"No game data found for AppID {game_appid} in app details response for coop check."
+                            )
+                            continue
+
+                        # Cache the game details permanently (game details rarely change)
+                        cache_game_details(game_appid, game_data, permanent=True)
+
+                    if game_data.get("type") == "game" and not game_data.get("is_free"):
+                        # Use cached boolean fields for faster performance
+                        is_family_shared = game_data.get("is_family_shared", False)
+                        is_multiplayer = game_data.get("is_multiplayer", False)
+
+                        if is_family_shared and is_multiplayer:
+                            game_name = game_data.get(
+                                "name", f"Unknown Game ({game_appid})"
+                            )
+
+                            # Add pricing information if available
+                            try:
+                                current_price = game_data.get("price_overview", {}).get(
+                                    "final_formatted", "N/A"
+                                )
+                                lowest_price = await asyncio.to_thread(
+                                    get_lowest_price, int(game_appid)
+                                )
+
+                                price_info = []
+                                if current_price != "N/A":
+                                    price_info.append(f"Current: {current_price}")
+                                if lowest_price != "N/A":
+                                    price_info.append(f"Lowest: ${lowest_price}")
+
+                                if price_info:
+                                    game_name += f" ({' | '.join(price_info)})"
+                            except Exception as e:
+                                logger.warning(
+                                    f"Could not get pricing info for coop game {game_appid}: {e}"
+                                )
+
+                            coop_game_names.append(game_name)
+                        else:
+                            logger.debug(
+                                f"Game {game_appid} is not categorized as family shared (ID 62)."
+                            )
 
             if coop_game_names:
                 # Use the utility function to handle message truncation
@@ -353,7 +364,7 @@ class steam_family(Extension):
             user_name_for_log = ctx.author.username  # Use Discord username for logging
 
             # Collect wishlist games for the calling user only
-            global_wishlist = []
+            global_wishlist: list[list] = []
 
             # Try to get cached wishlist first
             cached_wishlist = get_cached_wishlist(user_steam_id)
@@ -362,7 +373,7 @@ class steam_family(Extension):
                     f"Deals: Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)"
                 )
                 for app_id in cached_wishlist:
-                    global_wishlist.append([app_id, [user_steam_id]])
+                    add_to_wishlist(global_wishlist, str(app_id), user_steam_id)
             else:
                 # If not cached, fetch fresh wishlist data from API
                 if (
@@ -399,11 +410,12 @@ class steam_family(Extension):
                     # Extract app IDs and add to global wishlist
                     user_wishlist_appids = []
                     for game_item in wishlist_items:
-                        app_id = str(game_item.get("appid"))
-                        if not app_id:
+                        raw_app_id = game_item.get("appid")
+                        if raw_app_id is None:
                             continue
+                        app_id = str(raw_app_id)
                         user_wishlist_appids.append(app_id)
-                        global_wishlist.append([app_id, [user_steam_id]])
+                        add_to_wishlist(global_wishlist, app_id, user_steam_id)
 
                     # Cache the wishlist
                     cache_wishlist(user_steam_id, user_wishlist_appids)
@@ -436,27 +448,29 @@ class steam_family(Extension):
                 content=f"📊 Checking {total_games} games for deals..."
             )
 
-            for item in global_wishlist[:max_games_to_check]:
-                app_id = item[0]
-                games_checked += 1
+            async with aiohttp.ClientSession() as session:
+                for item in global_wishlist[:max_games_to_check]:
+                    app_id = item[0]
+                    games_checked += 1
 
-                try:
-                    deal_info = await process_game_deal(
-                        app_id,
-                        self.steam_api_manager,
-                        high_discount_threshold=50,
-                        low_discount_threshold=25,
-                        historical_low_buffer=1.1,
-                    )
+                    try:
+                        deal_info = await process_game_deal(
+                            app_id,
+                            self.steam_api_manager,
+                            session=session,
+                            high_discount_threshold=50,
+                            low_discount_threshold=25,
+                            historical_low_buffer=1.1,
+                        )
 
-                    if deal_info:
-                        deals_found.append(deal_info)
+                        if deal_info:
+                            deals_found.append(deal_info)
 
-                except Exception as e:
-                    logger.warning(
-                        f"Deals: Error checking deals for game {app_id}: {e}"
-                    )
-                    continue
+                    except Exception as e:
+                        logger.warning(
+                            f"Deals: Error checking deals for game {app_id}: {e}"
+                        )
+                        continue
 
             # Format and send results
             if deals_found:

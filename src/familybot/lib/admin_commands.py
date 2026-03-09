@@ -4,8 +4,6 @@ import logging
 import os
 import random
 import sys
-import time
-from typing import Dict, Optional
 
 import httpx
 
@@ -14,7 +12,7 @@ import httpx
 # but included here for potential standalone testing or clarity.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from familybot.config import FAMILY_USER_DICT, STEAMWORKS_API_KEY
+from familybot.config import STEAMWORKS_API_KEY
 from familybot.lib.database import (
     cache_family_library,
     cache_game_details,
@@ -22,53 +20,16 @@ from familybot.lib.database import (
     cache_wishlist,
     get_cached_game_details,
     get_cached_wishlist,
-    get_db_connection,
 )
-from familybot.lib.family_utils import find_in_2d_list, get_family_game_list_url
+from familybot.lib.family_utils import get_family_game_list_url
 from familybot.lib.logging_config import setup_script_logging
+from familybot.lib.utils import TokenBucket, add_to_wishlist
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("admin_commands", "INFO")
 
 # Suppress verbose HTTP request logging from httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-
-class TokenBucket:
-    """Token bucket rate limiter for controlling API request rates."""
-
-    def __init__(self, rate: float, capacity: Optional[int] = None):
-        """
-        Initialize token bucket.
-
-        Args:
-            rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
-            capacity: Maximum tokens in bucket (defaults to rate * 10)
-        """
-        self.rate = rate
-        self.capacity: int = (
-            capacity if capacity is not None else max(1, int(rate * 10.0))
-        )
-        self.tokens: float = float(self.capacity)
-        self.last_update = time.time()
-        self._lock = asyncio.Lock()
-
-    async def acquire(self, tokens: int = 1) -> None:
-        """Acquire tokens from the bucket, waiting if necessary."""
-        async with self._lock:
-            now = time.time()
-            # Add tokens based on elapsed time
-            elapsed = now - self.last_update
-            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
-            self.last_update = now
-
-            # If we don't have enough tokens, wait
-            if self.tokens < tokens:
-                wait_time = (tokens - self.tokens) / self.rate
-                await asyncio.sleep(wait_time)
-                self.tokens = 0
-            else:
-                self.tokens -= tokens
 
 
 class DatabasePopulator:
@@ -109,7 +70,7 @@ class DatabasePopulator:
 
     async def make_request_with_retry(
         self, url: str, api_type: str = "steam"
-    ) -> Optional[httpx.Response]:
+    ) -> httpx.Response | None:
         """Make HTTP request with retry logic for 429 errors."""
         bucket = self.steam_bucket if api_type == "steam" else self.store_bucket
 
@@ -118,9 +79,10 @@ class DatabasePopulator:
                 # Acquire token from bucket
                 await bucket.acquire()
 
-                # Add jitter to prevent synchronized requests
-                jitter = random.uniform(0, 0.1)
-                await asyncio.sleep(jitter)
+                # Add jitter to prevent synchronized requests on retries
+                if attempt > 0:
+                    jitter = random.uniform(0, 0.1)
+                    await asyncio.sleep(jitter)
 
                 # Make the request
                 response = await self.client.get(url)
@@ -160,7 +122,7 @@ class DatabasePopulator:
 
     def handle_api_response(
         self, api_name: str, response: httpx.Response
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Handle API responses with error checking and enhanced logging."""
         try:
             response.raise_for_status()
@@ -181,40 +143,6 @@ class DatabasePopulator:
             logger.error(f"Unexpected error for {api_name}: {e}")
             return None
 
-    def load_family_members(self) -> Dict[str, str]:
-        """Load family members from database or config."""
-        members = {}
-
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Check if we have family members in database
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                logger.info("Migrating family members from config to database...")
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None),
-                    )
-                conn.commit()
-                logger.info(f"Migrated {len(FAMILY_USER_DICT)} family members")
-
-            # Load family members
-            cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-            for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-
-            conn.close()
-            logger.info(f"Loaded {len(members)} family members")
-
-        except Exception as e:
-            logger.error(f"Error loading family members: {e}")
-            return {}
-
-        return members
-
     async def populate_family_library(self, dry_run: bool = False) -> int:
         """Populate the shared family library cache."""
         logger.info("Starting family shared library population...")
@@ -224,12 +152,14 @@ class DatabasePopulator:
             return 0
 
         try:
-            # We need to use requests here because get_family_game_list_url
-            # is typically used with requests in this codebase, but we could
-            # use our async client if we wanted. For consistency with
-            # plugin_admin_actions, we'll fetch then cache.
+            # Fetch the family game list using the retry wrapper for reliability and rate limiting.
             url = get_family_game_list_url()
-            response = await self.client.get(url)
+            response = await self.make_request_with_retry(url, api_type="steam")
+
+            if response is None:
+                logger.error("Failed to fetch family shared library apps (no response)")
+                return 0
+
             games_json = self.handle_api_response("GetSharedLibraryApps", response)
 
             if not games_json:
@@ -251,7 +181,7 @@ class DatabasePopulator:
             return 0
 
     async def populate_family_libraries(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with all family member game libraries."""
         logger.info("Starting family library population...")
@@ -382,7 +312,7 @@ class DatabasePopulator:
         return total_cached
 
     async def populate_wishlists(
-        self, family_members: Dict[str, str], dry_run: bool = False
+        self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
         """Populate database with family member wishlists."""
         logger.info("Starting wishlist population...")
@@ -407,11 +337,7 @@ class DatabasePopulator:
                         f"Using cached wishlist for {name} ({len(cached_wishlist)} items)"
                     )
                     for app_id in cached_wishlist:
-                        idx = find_in_2d_list(app_id, global_wishlist)
-                        if idx is not None:
-                            global_wishlist[idx][1].append(steam_id)
-                        else:
-                            global_wishlist.append([app_id, [steam_id]])
+                        add_to_wishlist(global_wishlist, str(app_id), steam_id)
                     continue
 
                 if dry_run:
@@ -451,11 +377,7 @@ class DatabasePopulator:
                         continue
 
                     user_wishlist_appids.append(app_id)
-                    idx = find_in_2d_list(app_id, global_wishlist)
-                    if idx is not None:
-                        global_wishlist[idx][1].append(steam_id)
-                    else:
-                        global_wishlist.append([app_id, [steam_id]])
+                    add_to_wishlist(global_wishlist, app_id, steam_id)
 
                 # Cache the wishlist
                 cache_wishlist(steam_id, user_wishlist_appids)

@@ -23,7 +23,8 @@ import sqlite3
 import asyncio
 import time
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import Any
+
 
 # Import FamilyBot utilities and types
 from familybot.config import ADMIN_DISCORD_ID
@@ -48,7 +49,7 @@ class example_plugin(Extension):
     def __init__(self, bot: FamilyBotClient):
         self.bot: FamilyBotClient = bot
         self._last_api_call = 0.0
-        self._example_cache: Dict[str, Dict] = {}
+        self._example_cache: dict[str, dict] = {}
         logger.info("Example Plugin loaded")
 
     async def _send_admin_dm(self, message: str) -> None:
@@ -73,7 +74,7 @@ class example_plugin(Extension):
         
         self._last_api_call = time.time()
 
-    async def _get_cached_data(self, key: str) -> Optional[Dict]:
+    async def _get_cached_data(self, key: str) -> dict | None:
         """Get cached data if it exists and is not expired."""
         if key in self._example_cache:
             cache_entry = self._example_cache[key]

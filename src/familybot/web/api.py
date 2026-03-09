@@ -3,9 +3,8 @@
 import asyncio
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +19,7 @@ from familybot.lib.database import (
     get_cached_family_library,
     get_cached_game_details,
     get_db_connection,
+    load_family_members_from_db,
     purge_family_library_cache,
     purge_wishlist_cache,
 )
@@ -52,13 +52,13 @@ def set_bot_client(client):
     """Set the bot client reference for the web API"""
     global _bot_client, _bot_start_time
     _bot_client = client
-    _bot_start_time = datetime.utcnow()
+    _bot_start_time = datetime.now(timezone.utc)
 
 
 def update_last_activity():
     """Update the last activity timestamp"""
     global _last_activity
-    _last_activity = datetime.utcnow()
+    _last_activity = datetime.now(timezone.utc)
 
 
 # Create FastAPI app
@@ -157,7 +157,7 @@ async def get_bot_status():
 
     uptime = None
     if _bot_start_time:
-        uptime_delta = datetime.utcnow() - _bot_start_time
+        uptime_delta = datetime.now(timezone.utc) - _bot_start_time
         uptime = str(uptime_delta).split(".")[0]  # Remove microseconds
 
     # Check token validity using the token plugin's logic
@@ -176,7 +176,7 @@ async def get_bot_status():
             with open(exp_file_path, "r") as f:
                 exp_timestamp = float(f.read().strip())
 
-            now_timestamp = datetime.utcnow().timestamp()
+            now_timestamp = datetime.now(timezone.utc).timestamp()
             token_valid = now_timestamp < exp_timestamp
     except Exception as e:
         logger.error(f"Error checking token status: {e}")
@@ -220,7 +220,7 @@ async def get_cache_stats(conn=Depends(get_db)):
     return CacheStats(**stats)
 
 
-@app.get("/api/family-members", response_model=List[FamilyMember])
+@app.get("/api/family-members", response_model=list[FamilyMember])
 async def get_family_members(conn=Depends(get_db)):
     """Get family members list"""
     cursor = conn.cursor()
@@ -241,7 +241,7 @@ async def get_family_members(conn=Depends(get_db)):
         return []
 
 
-@app.get("/api/family-library", response_model=List[GameDetails])
+@app.get("/api/family-library", response_model=list[GameDetails])
 async def get_family_library(limit: int = 50, conn=Depends(get_db)):
     """Get family library games with details"""
     family_apps = get_cached_family_library()
@@ -275,7 +275,7 @@ async def get_family_library(limit: int = 50, conn=Depends(get_db)):
 async def get_wishlist_summary(
     page: int = 1,
     limit: int = 20,
-    family_member_id: Optional[str] = None,
+    family_member_id: str | None = None,
     conn=Depends(get_db),
 ):
     """Get paginated wishlist summary across all family members"""
@@ -354,7 +354,7 @@ async def get_wishlist_summary(
         return {"items": [], "total_items": 0}
 
 
-@app.get("/api/recent-games", response_model=List[GameDetails])
+@app.get("/api/recent-games", response_model=list[GameDetails])
 async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
     """Get recently added games"""
     cursor = conn.cursor()
@@ -471,7 +471,7 @@ async def populate_database_api(
     """Trigger database population for libraries and/or wishlists."""
     try:
         populator = DatabasePopulator(rate_limit_mode)
-        family_members = populator.load_family_members()
+        family_members = load_family_members_from_db()
 
         total_cached = 0
         if not family_members:
@@ -544,7 +544,7 @@ async def purge_game_details_cache_api():
 
 
 @app.post("/api/admin/plugin-action", response_model=CommandResponse)
-async def plugin_admin_action_api(command_name: str, target_user: Optional[str] = None):
+async def plugin_admin_action_api(command_name: str, target_user: str | None = None):
     """
     Triggers an admin action from a plugin.
     """
@@ -615,8 +615,8 @@ async def purge_cache(cache_type: str = "all"):
         return CommandResponse(success=False, message=f"Error purging cache: {str(e)}")
 
 
-@app.get("/api/logs", response_model=List[LogEntry])
-async def get_logs(limit: int = 100, level: Optional[str] = None):
+@app.get("/api/logs", response_model=list[LogEntry])
+async def get_logs(limit: int = 100, level: str | None = None):
     """Get recent log entries"""
     # This is a simplified implementation
     # In a real implementation, you'd want to read from log files or a log database
@@ -675,7 +675,7 @@ async def get_logs(limit: int = 100, level: Optional[str] = None):
                                             timestamp_str.replace("Z", "+00:00")
                                         )
                                     except Exception:
-                                        timestamp = datetime.utcnow()
+                                        timestamp = datetime.now(timezone.utc)
 
                                     logs.append(
                                         LogEntry(
@@ -733,7 +733,7 @@ async def websocket_logs(websocket: WebSocket):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 # Startup event

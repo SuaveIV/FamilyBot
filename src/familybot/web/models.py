@@ -1,7 +1,7 @@
 # Pydantic models for FamilyBot Web API
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -10,8 +10,8 @@ class BotStatus(BaseModel):
     """Bot status information"""
 
     online: bool
-    uptime: Optional[str] = None
-    last_activity: Optional[datetime] = None
+    uptime: str | None = None
+    last_activity: datetime | None = None
     discord_connected: bool
     websocket_active: bool
     token_valid: bool = False  # New field for token status
@@ -21,11 +21,11 @@ class GameDetails(BaseModel):
     """Game details from cache"""
 
     appid: str
-    name: Optional[str] = None
-    type: Optional[str] = None
+    name: str | None = None
+    type: str | None = None
     is_free: bool = False
-    categories: List[Dict[str, Any]] = []
-    price_data: Optional[Dict[str, Any]] = None
+    categories: list[dict[str, Any]] = []
+    price_data: dict[str, Any] | None = None
     is_multiplayer: bool = False
     is_coop: bool = False
     is_family_shared: bool = False
@@ -36,7 +36,7 @@ class FamilyMember(BaseModel):
 
     steam_id: str
     friendly_name: str
-    discord_id: Optional[str] = None
+    discord_id: str | None = None
 
 
 class LogEntry(BaseModel):
@@ -45,7 +45,7 @@ class LogEntry(BaseModel):
     timestamp: datetime
     level: str
     message: str
-    module: Optional[str] = None
+    module: str | None = None
 
 
 class CacheStats(BaseModel):
@@ -63,7 +63,7 @@ class CommandRequest(BaseModel):
     """Request to execute a bot command"""
 
     command: str
-    parameters: Optional[Dict[str, Any]] = None
+    parameters: dict[str, Any] | None = None
 
 
 class CommandResponse(BaseModel):
@@ -71,7 +71,7 @@ class CommandResponse(BaseModel):
 
     success: bool
     message: str
-    data: Optional[Dict[str, Any]] = None
+    data: dict[str, Any] | None = None
 
 
 class ConfigData(BaseModel):
@@ -90,8 +90,8 @@ class WishlistItem(BaseModel):
 
     appid: str
     steam_id: str
-    game_name: Optional[str] = None
-    price_data: Optional[Dict[str, Any]] = None
+    game_name: str | None = None
+    price_data: dict[str, Any] | None = None
 
 
 class RecentActivity(BaseModel):
@@ -100,4 +100,4 @@ class RecentActivity(BaseModel):
     timestamp: datetime
     activity_type: str  # 'game_added', 'wishlist_update', 'command_executed', etc.
     description: str
-    details: Optional[Dict[str, Any]] = None
+    details: dict[str, Any] | None = None

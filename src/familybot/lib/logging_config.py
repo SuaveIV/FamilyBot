@@ -11,7 +11,6 @@ import logging.handlers
 import sys
 from asyncio import Queue
 from pathlib import Path
-from typing import Optional
 import re
 
 import coloredlogs
@@ -284,7 +283,7 @@ def log_api_error(
     logger: logging.Logger,
     api_name: str,
     error: Exception,
-    context: Optional[str] = None,
+    context: str | None = None,
 ):
     """
     Log API errors with consistent formatting and context.
@@ -349,7 +348,7 @@ class _WebLogQueueHolder:
     """A singleton-like class to hold the web log queue."""
 
     def __init__(self):
-        self.queue: Optional[Queue[str]] = None
+        self.queue: Queue[str] | None = None
 
 
 _web_log_queue_holder = _WebLogQueueHolder()

@@ -76,7 +76,7 @@ WEB_UI_DEFAULT_THEME = config.get("web_ui", {}).get("default_theme", "default")
 
 # -------------Cache TTLs (Hours)---------------
 FAMILY_LIBRARY_CACHE_TTL = (
-    config.get("steam_family", {}).get("cache_ttl_hours", {}).get("family_library", 24)
+    config.get("steam_family", {}).get("cache_ttl_hours", {}).get("family_library", 1)
 )
 WISHLIST_CACHE_TTL = (
     config.get("steam_family", {}).get("cache_ttl_hours", {}).get("wishlist", 2)

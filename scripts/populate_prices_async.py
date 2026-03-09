@@ -7,7 +7,7 @@ import sys
 import time
 import asyncio
 from datetime import datetime
-from typing import Dict, Optional, Set, Tuple
+from typing import Optional
 
 import httpx
 
@@ -27,7 +27,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-from familybot.config import FAMILY_USER_DICT, ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_game_details_with_source,  # pylint: disable=wrong-import-position
@@ -37,8 +37,7 @@ from familybot.lib.database import (
     get_cached_wishlist,  # pylint: disable=wrong-import-position
     get_db_connection,
     init_db,  # pylint: disable=wrong-import-position
-    migrate_database_phase1,  # pylint: disable=wrong-import-position
-    migrate_database_phase2,
+    load_family_members_from_db,
 )  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
 
@@ -253,34 +252,11 @@ class AsyncPricePopulator:
             logger.debug("Error for %s: %s", api_name, e)
             return None
 
-    def load_family_members(self) -> Dict[str, str]:
+    def load_family_members(self) -> dict[str, str]:
         """Load family members from database."""
-        members = {}
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                print("📥 Migrating family members from config to database...")
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        (steam_id, name, None),
-                    )
-                conn.commit()
-                print(f"✅ Migrated {len(FAMILY_USER_DICT)} family members")
+        return load_family_members_from_db()
 
-            cursor.execute("SELECT steam_id, friendly_name FROM family_members")
-            for row in cursor.fetchall():
-                members[row["steam_id"]] = row["friendly_name"]
-            conn.close()
-            print(f"👥 Loaded {len(members)} family members")
-        except (ValueError, TypeError, OSError) as e:
-            print(f"❌ Error loading family members: {e}")
-            return {}
-        return members
-
-    def collect_all_game_ids(self, family_members: Dict[str, str]) -> Set[str]:
+    def collect_all_game_ids(self, family_members: dict[str, str]) -> set[str]:
         """Collect all unique game IDs from family wishlists."""
         all_game_ids = set()
         print("\n📊 Collecting game IDs from family wishlists...")
@@ -296,7 +272,7 @@ class AsyncPricePopulator:
 
     async def fetch_steam_price_single(
         self, app_id: str
-    ) -> Tuple[str, bool, dict, str]:
+    ) -> tuple[str, bool, dict, str]:
         """Fetch Steam price for a single game with multiple strategies. Returns data instead of writing to DB."""
         async with self.semaphore:  # Control concurrency
             # Strategy 1: Steam Store API
@@ -341,7 +317,7 @@ class AsyncPricePopulator:
 
             return app_id, False, {}, "failed"
 
-    async def fetch_itad_price_single(self, app_id: str) -> Tuple[str, str, dict, str]:
+    async def fetch_itad_price_single(self, app_id: str) -> tuple[str, str, dict, str]:
         """Fetch ITAD price for a single game with multiple strategies. Returns data instead of writing to DB."""
         async with self.semaphore:  # Control concurrency
             # Strategy 1: ITAD App ID lookup
@@ -462,7 +438,7 @@ class AsyncPricePopulator:
             return app_id, "not_found", {}, "failed"
 
     def batch_write_steam_data(
-        self, steam_data: Dict[str, Dict], batch_size: int = 100
+        self, steam_data: dict[str, dict], batch_size: int = 100
     ) -> int:
         """Write Steam data to database in safe batches with proper error handling."""
         if not steam_data:
@@ -523,7 +499,7 @@ class AsyncPricePopulator:
         return written_count
 
     def batch_write_itad_data(
-        self, itad_data: Dict[str, Dict], batch_size: int = 100
+        self, itad_data: dict[str, dict], batch_size: int = 100
     ) -> int:
         """Write ITAD data to database in safe batches with proper error handling."""
         if not itad_data:
@@ -589,7 +565,7 @@ class AsyncPricePopulator:
         return written_count
 
     async def populate_steam_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         """Populate Steam prices with async processing using cache-then-write pattern."""
         print("\n💰 Starting async Steam price population...")
@@ -670,7 +646,7 @@ class AsyncPricePopulator:
         return steam_prices_cached
 
     async def populate_itad_prices(
-        self, game_ids: Set[str], dry_run: bool = False, force_refresh: bool = False
+        self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
         """Populate ITAD prices with async processing using cache-then-write pattern."""
         print("\n📈 Starting async ITAD price population...")
@@ -777,7 +753,7 @@ class AsyncPricePopulator:
         return itad_prices_cached
 
     async def refresh_current_prices(
-        self, game_ids: Set[str], dry_run: bool = False
+        self, game_ids: set[str], dry_run: bool = False
     ) -> int:
         """Refresh current Steam prices with force refresh."""
         print("\n🔄 Refreshing current Steam prices with async optimization...")
@@ -842,8 +818,6 @@ async def main():
     try:
         init_db()
         print("✅ Database initialized")
-        migrate_database_phase1()
-        migrate_database_phase2()
     except (ValueError, TypeError, OSError) as e:
         print(f"❌ Failed to initialize database or run migrations: {e}")
         return 1

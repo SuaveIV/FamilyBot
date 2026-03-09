@@ -1,7 +1,6 @@
 import asyncio
 import re
 from datetime import datetime
-from typing import Set
 from urllib.parse import urlparse
 
 import aiohttp
@@ -32,7 +31,7 @@ class FreeGames(Extension):
         logger.info("Free Games Plugin loaded")
 
         # Bluesky state
-        self._seen_bsky_posts: Set[str] = set()
+        self._seen_bsky_posts: set[str] = set()
         self._first_bsky_run = True
 
     async def _send_admin_dm(self, message: str) -> None:
@@ -83,7 +82,8 @@ class FreeGames(Extension):
     async def show_last_free_games_command(self, ctx: PrefixedContext):
         """Displays the last 10 free games found on freegamefindings.bsky.social."""
         await ctx.send("Fetching last 10 free games...")
-        posts = await self._fetch_bluesky_posts()
+        async with aiohttp.ClientSession() as session:
+            posts = await self._fetch_bluesky_posts(session)
 
         if not posts:
             await ctx.send("Could not fetch free games at this time.")
@@ -130,7 +130,7 @@ class FreeGames(Extension):
         else:
             await ctx.send("No recent free games found that meet display criteria.")
 
-    async def _fetch_bluesky_posts(self) -> list:
+    async def _fetch_bluesky_posts(self, session: aiohttp.ClientSession) -> list:
         """Fetches posts from freegamefindings.bsky.social."""
         bsky_url = "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=freegamefindings.bsky.social&limit=10"
         # Use a common browser user-agent to avoid looking like a bot
@@ -144,24 +144,23 @@ class FreeGames(Extension):
 
         for attempt in range(max_retries):
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        bsky_url,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=timeout_seconds),
-                    ) as response:
-                        if response.status != 200:
-                            logger.warning(
-                                "Bluesky API returned status %s", response.status
-                            )
-                            # If it's a 5xx error, maybe retry. If 4xx, probably don't.
-                            if 500 <= response.status < 600:
-                                if attempt < max_retries - 1:
-                                    await asyncio.sleep(retry_delay)
-                                continue
-                            return []
-                        data = await response.json()
-                        return data.get("feed", [])
+                async with session.get(
+                    bsky_url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=timeout_seconds),
+                ) as response:
+                    if response.status != 200:
+                        logger.warning(
+                            "Bluesky API returned status %s", response.status
+                        )
+                        # If it's a 5xx error, maybe retry. If 4xx, probably don't.
+                        if 500 <= response.status < 600:
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(retry_delay)
+                            continue
+                        return []
+                    data = await response.json()
+                    return data.get("feed", [])
             except (asyncio.TimeoutError, aiohttp.ClientError) as e:
                 logger.warning(
                     "Attempt %s/%s failed to fetch Bluesky posts: %s",
@@ -186,7 +185,9 @@ class FreeGames(Extension):
 
         return []
 
-    async def _get_reddit_post_details(self, reddit_url: str) -> dict | None:
+    async def _get_reddit_post_details(
+        self, reddit_url: str, session: aiohttp.ClientSession
+    ) -> dict | None:
         """Fetches details from a Reddit post's JSON endpoint."""
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -194,46 +195,45 @@ class FreeGames(Extension):
         final_url = reddit_url
 
         try:
-            async with aiohttp.ClientSession() as session:
-                # If it's a short URL (redd.it), resolve it to the full URL first.
-                if "redd.it" in urlparse(final_url).netloc:
-                    async with session.head(
-                        final_url,
-                        headers=headers,
-                        allow_redirects=True,
-                        timeout=aiohttp.ClientTimeout(total=10),
-                    ) as response:
-                        if response.status == 200:
-                            final_url = str(response.url)
-                        else:
-                            logger.warning(
-                                "Failed to resolve redd.it URL %s, status: %s",
-                                reddit_url,
-                                response.status,
-                            )
-                            # Continue with original URL as a fallback
-
-                # Now append .json to the (potentially resolved) URL
-                if not final_url.endswith(".json"):
-                    final_url += ".json"
-
-                async with session.get(
-                    final_url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)
+            # If it's a short URL (redd.it), resolve it to the full URL first.
+            if "redd.it" in urlparse(final_url).netloc:
+                async with session.head(
+                    final_url,
+                    headers=headers,
+                    allow_redirects=True,
+                    timeout=aiohttp.ClientTimeout(total=10),
                 ) as response:
-                    if response.status != 200:
+                    if response.status == 200:
+                        final_url = str(response.url)
+                    else:
                         logger.warning(
-                            "Reddit API returned status %s for %s",
+                            "Failed to resolve redd.it URL %s, status: %s",
+                            reddit_url,
                             response.status,
-                            final_url,
                         )
-                        return None
-                    post_data = await response.json()
-                    # The actual post is usually the first item in the first list
-                    post = post_data[0]["data"]["children"][0]["data"]
-                    return {
-                        "link_flair_text": post.get("link_flair_text", ""),
-                        "url": post.get("url"),  # The URL the post links to
-                    }
+                        # Continue with original URL as a fallback
+
+            # Now append .json to the (potentially resolved) URL
+            if not final_url.endswith(".json"):
+                final_url += ".json"
+
+            async with session.get(
+                final_url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                if response.status != 200:
+                    logger.warning(
+                        "Reddit API returned status %s for %s",
+                        response.status,
+                        final_url,
+                    )
+                    return None
+                post_data = await response.json()
+                # The actual post is usually the first item in the first list
+                post = post_data[0]["data"]["children"][0]["data"]
+                return {
+                    "link_flair_text": post.get("link_flair_text", ""),
+                    "url": post.get("url"),  # The URL the post links to
+                }
         except Exception as e:
             logger.error("Error fetching Reddit post details for %s: %s", final_url, e)
             return None
@@ -296,7 +296,11 @@ class FreeGames(Extension):
         }
 
     async def _process_single_post(
-        self, post_item: dict, manual: bool, ctx: PrefixedContext | None
+        self,
+        post_item: dict,
+        manual: bool,
+        ctx: PrefixedContext | None,
+        session: aiohttp.ClientSession,
     ) -> bool:
         """
         Process a single Bluesky post: filter, extract details, and send notification.
@@ -363,7 +367,7 @@ class FreeGames(Extension):
 
             if is_reddit_link:
                 reddit_details = await self._get_reddit_post_details(
-                    game_details["url"]
+                    game_details["url"], session
                 )
                 if not reddit_details:
                     logger.warning(
@@ -417,7 +421,9 @@ class FreeGames(Extension):
         if is_steam:
             steam_id = self._extract_steam_id(game_details["url"])
             if steam_id:
-                steam_data = await fetch_game_details(steam_id, self.steam_api_manager)
+                steam_data = await fetch_game_details(
+                    steam_id, self.steam_api_manager, session=session
+                )
 
                 if steam_data:
                     # Steam Embed
@@ -581,42 +587,43 @@ class FreeGames(Extension):
         logger.info("Checking freegamefindings.bsky.social...")
 
         try:
-            posts = await self._fetch_bluesky_posts()
+            async with aiohttp.ClientSession() as session:
+                posts = await self._fetch_bluesky_posts(session)
 
-            if not posts:
-                if manual and ctx:
-                    await ctx.send("No posts found in feed or error fetching feed.")
-                return
+                if not posts:
+                    if manual and ctx:
+                        await ctx.send("No posts found in feed or error fetching feed.")
+                    return
 
-            # On first run, just mark everything as seen to prevent spamming old news
-            if self._first_bsky_run and not force_check:
-                for post_item in posts:
-                    post_uri = post_item.get("post", {}).get("uri")
-                    if post_uri:
-                        self._seen_bsky_posts.add(post_uri)
-                self._first_bsky_run = False
-                logger.info(
-                    "Initialized Bluesky tracker with %d posts.",
-                    len(self._seen_bsky_posts),
-                )
-                if manual and ctx:
-                    await ctx.send(
-                        f"Initialized tracker with {len(self._seen_bsky_posts)} existing posts. No new notifications sent."
+                # On first run, just mark everything as seen to prevent spamming old news
+                if self._first_bsky_run and not force_check:
+                    for post_item in posts:
+                        post_uri = post_item.get("post", {}).get("uri")
+                        if post_uri:
+                            self._seen_bsky_posts.add(post_uri)
+                    self._first_bsky_run = False
+                    logger.info(
+                        "Initialized Bluesky tracker with %d posts.",
+                        len(self._seen_bsky_posts),
                     )
-                return
+                    if manual and ctx:
+                        await ctx.send(
+                            f"Initialized tracker with {len(self._seen_bsky_posts)} existing posts. No new notifications sent."
+                        )
+                    return
 
-            games_found = 0
-            # Process posts (newest first in API response, so process in reverse to get oldest new ones first)
-            # If it's a forced check, process all posts. Otherwise, only process new ones.
-            posts_to_process = reversed(posts) if force_check else posts
+                games_found = 0
+                # Process posts (newest first in API response, so process in reverse to get oldest new ones first)
+                # If it's a forced check, process all posts. Otherwise, only process new ones.
+                posts_to_process = reversed(posts) if force_check else posts
 
-            for post_item in posts_to_process:
-                if await self._process_single_post(post_item, manual, ctx):
-                    games_found += 1
-                    await asyncio.sleep(2)
+                for post_item in posts_to_process:
+                    if await self._process_single_post(post_item, manual, ctx, session):
+                        games_found += 1
+                        await asyncio.sleep(2)
 
-            if manual and ctx and games_found == 0:
-                await ctx.send("Check complete. No new free games found.")
+                if manual and ctx and games_found == 0:
+                    await ctx.send("Check complete. No new free games found.")
 
         except Exception as e:
             logger.error("Error checking Bluesky: %s", e, exc_info=True)

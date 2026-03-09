@@ -1,12 +1,17 @@
 # In src/familybot/lib/utils.py
 
+import asyncio
 import json
 import time
-from typing import List
 
 import requests
 
 from familybot.config import ITAD_API_KEY  # Import ITAD_API_KEY from config
+from familybot.lib.constants import (
+    DEFAULT_PROGRESS_INTERVAL,
+    MIN_ELAPSED_TIME_FOR_ESTIMATION,
+    SECONDS_PER_MINUTE,
+)
 from familybot.lib.database import cache_itad_price, get_cached_itad_price
 from familybot.lib.logging_config import get_logger
 
@@ -129,6 +134,22 @@ def get_common_elements_in_lists(list_of_lists: list) -> list:
     return sorted(list(common_elements_set))
 
 
+def add_to_wishlist(global_wishlist: list, app_id: str, user_steam_id: str) -> None:
+    """
+    Adds a game app ID to the global wishlist list of lists, tracking users interested.
+    Each item in global_wishlist is [app_id: str, [user_steam_ids: str]].
+    """
+    found = False
+    for item in global_wishlist:
+        if item[0] == app_id:
+            if user_steam_id not in item[1]:
+                item[1].append(user_steam_id)
+            found = True
+            break
+    if not found:
+        global_wishlist.append([app_id, [user_steam_id]])
+
+
 class ProgressTracker:
     """
     Tracks progress and generates formatted progress messages with time estimation.
@@ -137,11 +158,6 @@ class ProgressTracker:
         total_items: Total number of items to process
         progress_interval: Percentage interval for reporting (default: 10)
     """
-
-    # Constants
-    DEFAULT_PROGRESS_INTERVAL = 10
-    MIN_ELAPSED_TIME_FOR_ESTIMATION = 1  # Seconds
-    SECONDS_PER_MINUTE = 60
 
     def __init__(
         self, total_items: int, progress_interval: int = DEFAULT_PROGRESS_INTERVAL
@@ -186,7 +202,7 @@ class ProgressTracker:
         progress_msg += ")"
 
         # Add time estimation if we have meaningful progress
-        if current_percent > 0 and elapsed_time > self.MIN_ELAPSED_TIME_FOR_ESTIMATION:
+        if current_percent > 0 and elapsed_time > MIN_ELAPSED_TIME_FOR_ESTIMATION:
             time_msg = self._safe_time_calculation(elapsed_time, progress_ratio)
             progress_msg += time_msg
 
@@ -202,8 +218,8 @@ class ProgressTracker:
             estimated_total = elapsed_time / progress_ratio
             remaining = max(0, estimated_total - elapsed_time)
 
-            if remaining >= self.SECONDS_PER_MINUTE:
-                return f" | ⏱️ ~{int(remaining / self.SECONDS_PER_MINUTE)} min remaining"
+            if remaining >= SECONDS_PER_MINUTE:
+                return f" | ⏱️ ~{int(remaining / SECONDS_PER_MINUTE)} min remaining"
             elif remaining >= 1:
                 return f" | ⏱️ ~{int(remaining)} sec remaining"
             else:
@@ -214,7 +230,46 @@ class ProgressTracker:
             return ""
 
 
-def split_message(message: str, max_length: int = 1900) -> List[str]:
+class TokenBucket:
+    """Token bucket rate limiter for controlling API request rates."""
+
+    def __init__(self, rate: float, capacity: int | None = None):
+        """
+        Initialize token bucket.
+
+        Args:
+            rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
+            capacity: Maximum tokens in bucket (defaults to rate * 10)
+        """
+        self.rate = rate
+        self.capacity: int = (
+            capacity if capacity is not None else max(1, int(rate * 10.0))
+        )
+        self.tokens: float = float(self.capacity)
+        self.last_update = time.time()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self, tokens: int = 1) -> None:
+        """Acquire tokens from the bucket, waiting if necessary."""
+        async with self._lock:
+            now = time.time()
+            # Add tokens based on elapsed time
+            elapsed = now - self.last_update
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+
+            # If we don't have enough tokens, wait
+            if self.tokens < tokens:
+                wait_time = (tokens - self.tokens) / self.rate
+                await asyncio.sleep(wait_time)
+                # After sleep, we have consumed the tokens we waited for
+                self.tokens = 0.0
+                self.last_update = time.time()
+            else:
+                self.tokens -= tokens
+                self.last_update = now
+
+
+def split_message(message: str, max_length: int = 1900) -> list[str]:
     """
     Split a message into multiple parts that fit within Discord's character limit.
 
@@ -274,7 +329,7 @@ def split_message(message: str, max_length: int = 1900) -> List[str]:
 
 
 def truncate_message_list(
-    items: List[str],
+    items: list[str],
     header: str = "",
     footer_template: str = "\n... and {count} more items!",
     max_length: int = 1900,

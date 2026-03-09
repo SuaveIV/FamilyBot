@@ -1,14 +1,17 @@
-# In src/familybot/lib/familly_game_manager.py
+# In src/familybot/lib/family_game_manager.py
 
 import logging
 import os
 import sqlite3
-from datetime import datetime  # Import datetime to get current time
+from datetime import datetime, timezone  # Import datetime to get current time
 
 from familybot.config import PROJECT_ROOT
 from familybot.lib.database import get_db_connection
 
 logger = logging.getLogger(__name__)
+
+# Flag to ensure migration only runs once per process
+_migration_checked = False
 if not logger.handlers:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -68,11 +71,16 @@ def _migrate_gamelist_to_db(conn: sqlite3.Connection):
 
 def get_saved_games() -> list:
     """Reads the list of saved game AppIDs from the database."""
+    global _migration_checked
     appids = []
     conn = None
     try:
         conn = get_db_connection()
-        _migrate_gamelist_to_db(conn)  # Attempt migration if file exists on first read
+        if not _migration_checked:
+            _migrate_gamelist_to_db(
+                conn
+            )  # Attempt migration if file exists on first read
+            _migration_checked = True
         cursor = conn.cursor()
         # Select both appid and detected_at for sorting later
         cursor.execute("SELECT appid, detected_at FROM saved_games")
@@ -108,7 +116,9 @@ def set_saved_games(game_data_list: list) -> None:  # Renamed parameter for clar
                 appids_to_insert.append(
                     (
                         str(item),
-                        datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
+                        datetime.now(timezone.utc)
+                        .isoformat(timespec="milliseconds")
+                        .replace("+00:00", "Z"),
                     )
                 )
 
