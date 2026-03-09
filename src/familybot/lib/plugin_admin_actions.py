@@ -317,7 +317,31 @@ async def _process_new_games(
                     f"Skipping new game {new_appid}: not a paid game, not family shared, or not type 'game'."
                 )
 
-        set_saved_games(all_games_for_db_update)
+        # Track which new AppIDs were processed (even if skipped for notification)
+        processed_new_appids = {item[0] for item in new_games_to_process}
+
+        # Sync the database state:
+        # 1. Existing games keep their timestamps
+        # 2. PROCESSED new games get current timestamp
+        # 3. UNPROCESSED new games are NOT added (so they stay "new" for next time)
+        final_db_update_list = []
+        for appid in game_array:
+            if appid in new_appids:
+                if appid in processed_new_appids:
+                    final_db_update_list.append((appid, current_utc_iso))
+                # Else: Skip this AppID for now so it remains "new"
+            else:
+                # Find existing timestamp from saved games
+                found_timestamp = next(
+                    (ts for ap, ts in saved_games_with_timestamps if ap == appid), None
+                )
+                if found_timestamp:
+                    final_db_update_list.append((appid, found_timestamp))
+                else:
+                    # Should not happen if logic is correct, but for safety:
+                    final_db_update_list.append((appid, current_utc_iso))
+
+        set_saved_games(final_db_update_list)
         if notification_messages:
             full_message = message_prefix + "\n\n".join(notification_messages)
             return {
@@ -361,12 +385,12 @@ async def check_new_game_action() -> dict[str, Any]:
                 game_list = cached_family_library
             else:
                 # If not cached, fetch from API
-                logger.info("No cached family library found, fetching from API...")
+                logger.info("No cached family library found (or cache expired), fetching from API...")
                 game_list = await _fetch_family_library_from_api(session)
 
                 # Cache for next time
                 cache_family_library(game_list)
-                logger.info(f"Cached family library ({len(game_list)} games)")
+                logger.info(f"Updated family library cache with {len(game_list)} games.")
 
             current_family_members = load_family_members_from_db()
             return await _process_new_games(game_list, current_family_members, session)
