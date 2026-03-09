@@ -92,3 +92,10 @@ Tasks from the original `doc/PRD/TASKS.md` that are still outstanding.
 - [x] `format_message` keyword-only and optimization
 - [x] `plugin_admin_actions.py` appid validation & refactor
 - [x] `steam_helpers.py` price normalization
+- [x] TASK-09 (Consolidate deal detection logic)
+- [x] TASK-10 (Declarative database migration system)
+- [x] TASK-11 (Fix `asyncio.Queue` in `web_logging.py`)
+- [x] TASK-12 (Guard migration check with flag)
+- [x] TASK-13 (Rename `familly_game_manager.py`)
+- [x] TASK-14 (Standardize type annotations)
+- [x] P4-01 through P4-06 (PR #4 Review Refinements)
