@@ -16,7 +16,7 @@ from familybot.lib.database import (
     get_cached_wishlist,
     load_family_members_from_db,
 )
-from familybot.lib.familly_game_manager import get_saved_games
+from familybot.lib.family_game_manager import get_saved_games
 from familybot.lib.family_utils import format_message
 from familybot.lib.logging_config import get_logger, log_private_profile_detection
 from familybot.lib.types import FamilyBotClient

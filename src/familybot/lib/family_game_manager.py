@@ -1,4 +1,4 @@
-# In src/familybot/lib/familly_game_manager.py
+# In src/familybot/lib/family_game_manager.py
 
 import logging
 import os

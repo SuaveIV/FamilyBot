@@ -4,7 +4,7 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 
@@ -28,7 +28,7 @@ from familybot.lib.database import (
     get_db_connection,
     load_family_members_from_db,
 )
-from familybot.lib.familly_game_manager import get_saved_games, set_saved_games
+from familybot.lib.family_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_utils import (
     format_message,
     get_family_game_list_url,
@@ -703,7 +703,7 @@ async def force_wishlist_action() -> dict[str, Any]:
 
 
 async def force_deals_action(
-    target_friendly_name: Optional[str] = None,
+    target_friendly_name: str | None = None,
 ) -> dict[str, Any]:
     """
     Forces a check for deals on wishlist games and returns results.
