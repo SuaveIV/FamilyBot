@@ -130,6 +130,13 @@ function connectWebSocket() {
                 message: data.message || e.data,
                 module: data.name || ''
             };
+
+            // Check if the entry matches the active level filter
+            const selectedLevel = document.getElementById('log-level-filter').value;
+            if (selectedLevel && entry.level.toUpperCase() !== selectedLevel.toUpperCase()) {
+                return;
+            }
+
             currentLogs.unshift(entry);
             if (currentLogs.length > 1000) currentLogs = currentLogs.slice(0, 1000);
             displayLogs(currentLogs);
