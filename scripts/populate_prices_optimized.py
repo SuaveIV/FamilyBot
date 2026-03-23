@@ -601,7 +601,7 @@ class OptimizedPricePopulator:
                 games_to_process.append(gid)
             else:
                 cached_details = get_cached_game_details(gid)
-                if not cached_details or not cached_details.get("price_data"):
+                if not cached_details or not cached_details.get("price_overview"):
                     games_to_process.append(gid)
 
         games_skipped = len(game_ids) - len(games_to_process)

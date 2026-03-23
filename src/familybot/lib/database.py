@@ -290,7 +290,7 @@ def get_cached_game_details(appid: str):
                 "categories": json.loads(row["categories"])
                 if row["categories"]
                 else [],
-                "price_data": json.loads(row["price_data"])
+                "price_overview": json.loads(row["price_data"])
                 if row["price_data"]
                 else None,
                 "is_multiplayer": bool(row["is_multiplayer"])

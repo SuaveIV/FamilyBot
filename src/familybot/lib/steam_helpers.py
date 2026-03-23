@@ -101,8 +101,8 @@ async def process_game_deal(
             return None
 
         game_name = game_data.get("name", f"Unknown Game ({app_id})")
-        # Handle both cached data (price_data) and fresh API data (price_overview)
-        price_overview = game_data.get("price_overview") or game_data.get("price_data")
+        # Handle fresh API data and cached data (normalized)
+        price_overview = game_data.get("price_overview")
 
         if not price_overview:
             return None
@@ -111,6 +111,10 @@ async def process_game_deal(
         discount_percent = price_overview.get("discount_percent", 0)
         current_price = price_overview.get("final_formatted", "N/A")
         original_price = price_overview.get("initial_formatted", current_price)
+
+        # Early exit if the discount doesn't meet minimum thresholds
+        if discount_percent < min(low_discount_threshold, high_discount_threshold):
+            return None
 
         # Get historical low price
         lowest_price_raw = await asyncio.to_thread(get_lowest_price, int(app_id))
