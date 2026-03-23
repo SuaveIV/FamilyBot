@@ -48,8 +48,8 @@ async def get_cache_stats(conn=Depends(get_db)):
 
 @router.post("/api/cache/purge", response_model=CommandResponse)
 async def purge_cache(cache_type: str = "all"):
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
 
         if cache_type == "all":
@@ -76,12 +76,13 @@ async def purge_cache(cache_type: str = "all"):
             )
 
         conn.commit()
-        conn.close()
         update_last_activity()
         return CommandResponse(success=True, message=message)
 
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Error purging cache (type=%s): %s", cache_type, exc)
+        logger.exception("Error purging cache (type=%s)", cache_type)
         return CommandResponse(success=False, message=f"Error purging cache: {exc}")
+    finally:
+        conn.close()
