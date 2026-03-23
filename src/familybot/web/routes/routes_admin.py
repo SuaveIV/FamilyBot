@@ -39,12 +39,12 @@ async def populate_database_api(
     rate_limit_mode: str = "normal",
 ):
     """Warm the cache by scanning family libraries and/or wishlists."""
+    populator = DatabasePopulator(rate_limit_mode)
     try:
         family_members = load_family_members_from_db()
         if not family_members:
             raise HTTPException(status_code=400, detail="No family members configured.")
 
-        populator = DatabasePopulator(rate_limit_mode)
         total = 0
 
         if not wishlist_only:
@@ -54,7 +54,6 @@ async def populate_database_api(
         if not library_only:
             total += await populator.populate_wishlists(family_members)
 
-        await populator.close()
         update_last_activity()
         return CommandResponse(
             success=True, message=f"Database populated. {total} new games cached."
@@ -67,6 +66,8 @@ async def populate_database_api(
         return CommandResponse(
             success=False, message=f"Error populating database: {exc}"
         )
+    finally:
+        await populator.close()
 
 
 # ── Cache purges ──────────────────────────────────────────────────────────────
