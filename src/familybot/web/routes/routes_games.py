@@ -65,6 +65,9 @@ async def get_recent_games(limit: int = 10, conn=Depends(get_db)):
     """Return the most recently detected family library additions."""
     import json
 
+    # Clamp limit to prevent negative or huge values
+    limit = max(1, min(limit, 100))
+
     cursor = conn.cursor()
     try:
         cursor.execute(
