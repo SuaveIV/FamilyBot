@@ -191,7 +191,7 @@ function renderConfigStatus(c) {
         { label: 'Discord Bot', ok: c.discord_configured, icon: 'fa-discord' },
         { label: 'Steam Family', ok: c.steam_family_configured, icon: 'fa-steam' },
         { label: 'Family Members', ok: c.family_members_count > 0, val: c.family_members_count + ' added', icon: 'fa-users' },
-        { label: 'WebSocket', ok: true, val: c.websocket_ip, icon: 'fa-network-wired' },
+        { label: 'WebSocket', ok: !!c.websocket_ip, val: c.websocket_ip || "Not configured", icon: 'fa-network-wired' },
     ];
     document.getElementById('config-status-grid').innerHTML = items.map(it => `
         <div class="stat-card">
