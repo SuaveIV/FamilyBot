@@ -410,13 +410,18 @@ async function loadWishlist(page) {
             return;
         }
 
+        // Group duplicate appids — same game on multiple wishlists → one card, multiple names
+        const grouped = groupByAppid(items);
+
         // Sort client-side
-        const sorted = [...items].sort((a, b) => {
+        const sorted = grouped.sort((a, b) => {
             if (currentSort === 'discount') {
                 return (b.price_data?.discount_percent ?? 0) - (a.price_data?.discount_percent ?? 0);
             }
             return (a.game_name || '\uffff').localeCompare(b.game_name || '\uffff');
         });
+
+        document.getElementById('total-badge').textContent = `${sorted.length} games`;
 
         container.innerHTML = sorted.map(i => buildCard(i, memberId)).join('');
         renderPagination(total_items, page);
@@ -431,9 +436,22 @@ async function loadWishlist(page) {
     }
 }
 
+/* ── Group duplicate appids ───────────────────────────────────────────── */
+function groupByAppid(items) {
+    const map = new Map();
+    items.forEach(item => {
+        if (map.has(item.appid)) {
+            map.get(item.appid).steam_ids.push(item.steam_id);
+        } else {
+            map.set(item.appid, { ...item, steam_ids: [item.steam_id] });
+        }
+    });
+    return [...map.values()];
+}
+
 /* ── Build card HTML ──────────────────────────────────────────────────── */
 function buildCard(item, memberId) {
-    const { appid, game_name, price_data, steam_id } = item;
+    const { appid, game_name, price_data, steam_ids = [item.steam_id] } = item;
     const cached = nameCache[appid];
     const name   = game_name || cached?.name || null;
     const img    = cached?.header_image
@@ -454,8 +472,10 @@ function buildCard(item, memberId) {
         }
     }
 
+    // Show all member names — join with · separator, tooltip lists them all
+    const allNames = steam_ids.map(id => membersMap[id] || '?');
     const memberPart = memberId ? '' :
-        `<span class="wl-member" title="${h(membersMap[steam_id] || '?')}">${h(membersMap[steam_id] || '—')}</span>`;
+        `<span class="wl-member" title="${h(allNames.join(', '))}">${h(allNames.join(' · '))}</span>`;
 
     const namePart = name
         ? `<div class="wl-name">${h(name)}</div>`
