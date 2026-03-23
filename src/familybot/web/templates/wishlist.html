@@ -3,483 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FamilyBot Wishlist</title>
-    
-    <!-- Bootstrap/Bootswatch CSS (dynamically loaded) -->
-    <link id="theme-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    
-    <!-- Font Awesome for icons -->
+    <title>Wishlist — FamilyBot</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">
-                <i class="fas fa-robot me-2"></i>FamilyBot
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">
-                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/wishlist">
-                            <i class="fas fa-heart me-1"></i>Wishlist
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/logs">
-                            <i class="fas fa-file-alt me-1"></i>Logs
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/config">
-                            <i class="fas fa-cog me-1"></i>Config
-                        </a>
-                    </li>
-                </ul>
-                
-                <!-- Theme Switcher Dropdown -->
-                <div class="dropdown me-3" id="theme-dropdown">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-palette me-1"></i>Theme
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <!-- Populated by JavaScript -->
-                    </ul>
-                </div>
-                
-                <!-- Status indicator -->
-                <div id="bot-status-indicator" class="status-indicator status-offline">
-                    <span class="status-dot"></span>
-                    <span>Offline</span>
-                </div>
-            </div>
-        </div>
-    </nav>
+<div class="mobile-topbar">
+    <button class="mobile-menu-btn" id="mobile-menu-btn"><i class="fas fa-bars"></i></button>
+    <span style="font-weight:700;font-size:16px;font-family:var(--font-ui)">FamilyBot</span>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
 
-    <!-- Main Content -->
-    <div class="container mt-4">
-        <!-- Wishlist Filters -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-filter me-2"></i>Wishlist Filters
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-12">
-                                <label class="form-label">Family Member</label>
-                                <div id="family-member-buttons" class="btn-group flex-wrap" role="group">
-                                    <button type="button" class="btn btn-outline-primary active" data-steam-id="">All Members</button>
-                                    <!-- Populated by JavaScript -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<div class="app-layout">
+    {% include 'navbar.html' %}
+
+    <div class="main-content">
+        <div class="page-header">
+            <div>
+                <div class="page-title">Wishlist</div>
+                <div class="page-subtitle">// family wants &amp; deals</div>
             </div>
+            <span class="badge badge-blue" id="total-badge">— items</span>
         </div>
-        <!-- Wishlist Summary -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-heart me-2"></i>Wishlist
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="wishlist-summary" class="game-list">
-                            <!-- Populated by JavaScript -->
-                        </div>
-                        <nav aria-label="Wishlist pagination">
-                            <ul class="pagination justify-content-center" id="wishlist-pagination">
-                                <!-- Pagination links will be populated here -->
-                            </ul>
-                        </nav>
+
+        <div class="page-body">
+
+            <!-- Filter Row -->
+            <div class="card mb-3">
+                <div class="card-body" style="padding:14px 20px">
+                    <label class="form-label mb-2">Filter by Member</label>
+                    <div class="filter-btn-group" id="member-filters">
+                        <button class="filter-btn active" data-steam-id="">All Members</button>
                     </div>
                 </div>
             </div>
+
+            <!-- Wishlist Items -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-heart"></i> Items</div>
+                    <span id="page-info" class="text-dim text-mono text-xs"></span>
+                </div>
+                <div class="card-body" id="wishlist-container">
+                    <div class="empty-state">
+                        <div class="spinner spinner-lg" style="margin:0 auto 12px"></div>
+                        <p>Loading wishlist…</p>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <ul class="pagination" id="wishlist-pagination"></ul>
+                </div>
+            </div>
+
         </div>
     </div>
+</div>
 
-    <!-- Loading Modal -->
-    <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-sm modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-body text-center">
-                    <div class="spinner-border text-primary mb-3" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <div>Processing...</div>
-                </div>
-            </div>
-        </div>
-    </div>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script>
+const PER_PAGE = 20;
+let currentPage = 1;
+let membersMap = {};
 
-    <!-- Alert Container -->
-    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;">
-        <!-- Alerts will be inserted here -->
-    </div>
+document.addEventListener('DOMContentLoaded', async () => {
+    await initMembers();
+    loadWishlist(1);
+});
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Theme Switcher -->
-    <script src="{{ url_for('static', path='js/theme_switcher.js') }}"></script>
-    
-    <!-- Wishlist JavaScript -->
-    <script>
-        // Global variables
-        let refreshInterval;
+async function initMembers() {
+    try {
+        const r = await fetch('/api/family-members');
+        const members = await r.json();
+        membersMap = Object.fromEntries(members.map(m => [m.steam_id, m.friendly_name]));
 
-        const ITEMS_PER_PAGE = 20; // Define items per page for pagination
-        let currentPage = 1;
-
-        document.addEventListener('DOMContentLoaded', function() {
-            loadFamilyMembers();
-            loadWishlistSummary(currentPage);
-            loadBotStatus(); // Load bot status on page load
-            startAutoRefresh(); // Start auto-refresh for bot status
-            
-            // Add event listener to the "All Members" button
-            const allMembersBtn = document.querySelector('#family-member-buttons button[data-steam-id=""]');
-            if (allMembersBtn) {
-                allMembersBtn.addEventListener('click', function() {
-                    selectFamilyMember(this);
-                });
-            }
+        const container = document.getElementById('member-filters');
+        members.forEach(m => {
+            const btn = document.createElement('button');
+            btn.className = 'filter-btn';
+            btn.dataset.steamId = m.steam_id;
+            btn.textContent = m.friendly_name;
+            btn.addEventListener('click', () => selectMember(btn));
+            container.appendChild(btn);
         });
 
-        // Load bot status (copied from dashboard.html)
-        async function loadBotStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const status = await response.json();
-                
-                // Update status indicator
-                const indicator = document.getElementById('bot-status-indicator');
-                if (indicator) { // Check if indicator exists on the page
-                    if (status.online) {
-                        indicator.className = 'status-indicator status-online';
-                        indicator.innerHTML = '<span class="status-dot"></span><span>Online</span>';
-                    } else {
-                        indicator.className = 'status-indicator status-offline';
-                        indicator.innerHTML = '<span class="status-dot"></span><span>Offline</span>';
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading bot status:', error);
-            }
-        }
-
-        // Refresh status (copied from dashboard.html)
-        async function refreshStatus() {
-            await loadBotStatus();
-            showAlert('Status refreshed', 'info');
-        }
-
-        // Start auto-refresh (copied from dashboard.html)
-        function startAutoRefresh() {
-            if (refreshInterval) {
-                clearInterval(refreshInterval); // Clear any existing interval
-            }
-            refreshInterval = setInterval(async () => {
-                await loadBotStatus();
-            }, 30000); // Refresh every 30 seconds
-        }
-
-        // Cleanup on page unload (copied from dashboard.html)
-        window.addEventListener('beforeunload', () => {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-            }
+        container.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => selectMember(btn));
         });
+    } catch (e) { /* silently fail */ }
+}
 
-        // Global variable to store family members data
-        let familyMembersData = [];
+function selectMember(btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadWishlist(1);
+}
 
-        async function loadFamilyMembers() {
-            try {
-                const response = await fetch('/api/family-members');
-                const members = await response.json();
-                familyMembersData = members; // Store for later use
-                const buttonContainer = document.getElementById('family-member-buttons');
-                
-                members.forEach(member => {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = 'btn btn-outline-primary';
-                    button.setAttribute('data-steam-id', member.steam_id);
-                    button.textContent = member.friendly_name;
-                    button.addEventListener('click', function() {
-                        selectFamilyMember(this);
-                    });
-                    buttonContainer.appendChild(button);
-                });
-            } catch (error) {
-                console.error('Error loading family members:', error);
-            }
+function getSelectedMember() {
+    const active = document.querySelector('.filter-btn.active');
+    return active ? active.dataset.steamId : '';
+}
+
+async function loadWishlist(page) {
+    currentPage = page;
+    const memberId = getSelectedMember();
+    let url = `/api/wishlist?page=${page}&limit=${PER_PAGE}`;
+    if (memberId) url += `&family_member_id=${memberId}`;
+
+    const container = document.getElementById('wishlist-container');
+    container.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg" style="margin:0 auto 12px"></div><p>Loading…</p></div>';
+
+    try {
+        const r = await fetch(url);
+        const data = await r.json();
+        const { items, total_items } = data;
+
+        document.getElementById('total-badge').textContent = `${total_items} items`;
+        document.getElementById('page-info').textContent =
+            `Page ${page} of ${Math.ceil(total_items / PER_PAGE) || 1}`;
+
+        if (!items.length) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-heart"></i><h3>No wishlist items</h3><p>Run the bot\'s wishlist commands to populate data.</p></div>';
+            document.getElementById('wishlist-pagination').innerHTML = '';
+            return;
         }
 
-        function getFamilyMemberName(steamId) {
-            const member = familyMembersData.find(m => m.steam_id === steamId);
-            return member ? member.friendly_name : 'Unknown';
-        }
-
-        function selectFamilyMember(button) {
-            // Remove active class from all buttons
-            const buttons = document.querySelectorAll('#family-member-buttons button');
-            buttons.forEach(btn => btn.classList.remove('active'));
-            
-            // Add active class to clicked button
-            button.classList.add('active');
-            
-            // Reset to first page and load wishlist
-            currentPage = 1;
-            loadWishlistSummary(1);
-        }
-
-        function getSelectedFamilyMember() {
-            const activeButton = document.querySelector('#family-member-buttons button.active');
-            return activeButton ? activeButton.getAttribute('data-steam-id') : '';
-        }
-
-        async function loadWishlistSummary(page) {
-            currentPage = page; // Update the global currentPage variable
-            const familyMemberId = getSelectedFamilyMember();
-            let url = `/api/wishlist?page=${page}&limit=${ITEMS_PER_PAGE}`;
-            if (familyMemberId) {
-                url += `&family_member_id=${familyMemberId}`;
-            }
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-                const wishlist = data.items;
-                const totalItems = data.total_items;
-
-                const container = document.getElementById('wishlist-summary');
-                container.innerHTML = '';
-                
-                if (wishlist.length === 0) {
-                    container.innerHTML = '<p class="text-muted">No wishlist items found.</p>';
-                    document.getElementById('wishlist-pagination').innerHTML = '';
-                    return;
-                }
-                
-                wishlist.forEach(item => {
-                    const gameCard = createWishlistCard(item);
-                    container.appendChild(gameCard);
-                });
-
-                updatePagination(totalItems, page, 'wishlist-pagination', loadWishlistSummary);
-                
-            } catch (error) {
-                console.error('Error loading wishlist:', error);
-                showAlert('Error loading wishlist data', 'danger');
-            }
-        }
-        
-        // Create wishlist card element (reused from dashboard.html)
-        function createWishlistCard(item) {
-            const card = document.createElement('div');
-            card.className = 'game-card';
-            
-            let priceInfo = '';
+        container.innerHTML = items.map(item => {
+            const name = memberId ? '' : `<span class="badge badge-gray">${membersMap[item.steam_id] || 'Unknown'}</span>`;
+            let price = '';
             if (item.price_data) {
-                priceInfo = `<span class="badge bg-primary">$${(item.price_data.final / 100).toFixed(2)}</span>`;
+                const p = item.price_data;
+                const disc = p.discount_percent;
+                price = disc > 0
+                    ? `<span class="badge badge-green"><i class="fas fa-tag"></i> ${p.final_formatted} (${disc}% off)</span>`
+                    : `<span class="badge badge-gray">${p.final_formatted}</span>`;
             }
-            
-            // Get family member name for display
-            let memberInfo = '';
-            const selectedMember = getSelectedFamilyMember();
-            if (!selectedMember) {
-                // Show which family member has this game when viewing "All Members"
-                const memberName = getFamilyMemberName(item.steam_id);
-                memberInfo = `<span class="badge bg-secondary">${memberName}</span>`;
-            }
-            
-            card.innerHTML = `
-                <div class="game-info">
-                    <div class="game-title">
-                        <a href="https://store.steampowered.com/app/${item.appid}" target="_blank" class="text-decoration-none text-light">
-                            ${item.game_name || 'Unknown Game'}
-                        </a>
+            return `<div class="game-card">
+                <div style="flex:1">
+                    <div class="game-name">
+                        <a href="https://store.steampowered.com/app/${item.appid}" target="_blank">${item.game_name || 'Unknown Game'}</a>
                     </div>
-                    <div class="game-meta">
-                        App ID: ${item.appid} | Steam ID: ${item.steam_id}
-                    </div>
-                    <div class="game-badges">
-                        ${memberInfo}
-                        ${priceInfo}
-                    </div>
+                    <div class="game-meta">App ID: ${item.appid}</div>
+                    <div class="game-badges mt-1">${name} ${price}</div>
                 </div>
-            `;
-            
-            return card;
-        }
+                <a href="https://store.steampowered.com/app/${item.appid}" target="_blank" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-external-link-alt"></i>
+                </a>
+            </div>`;
+        }).join('');
 
-        function updatePagination(totalItems, currentPage, paginationId, loadFunction) {
-            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-            const paginationContainer = document.getElementById(paginationId);
-            paginationContainer.innerHTML = '';
+        renderPagination(total_items, page);
 
-            if (totalPages <= 1) {
-                return; // No pagination needed for 1 or fewer pages
-            }
+    } catch (e) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle text-red"></i><h3>Failed to load</h3></div>';
+    }
+}
 
-            // First page button
-            const firstPageBtn = document.createElement('li');
-            firstPageBtn.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-            firstPageBtn.innerHTML = `<a class="page-link" href="#" aria-label="First"><span aria-hidden="true">&laquo;&laquo;</span></a>`;
-            firstPageBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage > 1) {
-                    loadFunction(1);
-                }
-            });
-            paginationContainer.appendChild(firstPageBtn);
+function renderPagination(total, current) {
+    const pages = Math.ceil(total / PER_PAGE);
+    const ul = document.getElementById('wishlist-pagination');
+    if (pages <= 1) { ul.innerHTML = ''; return; }
 
-            // Previous button
-            const prevItem = document.createElement('li');
-            prevItem.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-            prevItem.innerHTML = `<a class="page-link" href="#" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a>`;
-            prevItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage > 1) {
-                    loadFunction(currentPage - 1);
-                }
-            });
-            paginationContainer.appendChild(prevItem);
+    const mkItem = (label, page, disabled = false, active = false) => {
+        const li = document.createElement('li');
+        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+        li.innerHTML = `<a class="page-link" href="#">${label}</a>`;
+        if (!disabled && !active) li.querySelector('a').addEventListener('click', e => { e.preventDefault(); loadWishlist(page); });
+        return li;
+    };
 
-            // Page numbers
-            const maxPagesToShow = 5; // Maximum number of page links to display
-            let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-            let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+    ul.innerHTML = '';
+    ul.appendChild(mkItem('«', 1, current === 1));
+    ul.appendChild(mkItem('‹', current - 1, current === 1));
 
-            if (endPage - startPage + 1 < maxPagesToShow) {
-                startPage = Math.max(1, endPage - maxPagesToShow + 1);
-            }
+    let start = Math.max(1, current - 2);
+    let end = Math.min(pages, start + 4);
+    if (end - start < 4) start = Math.max(1, end - 4);
 
-            if (startPage > 1) {
-                const firstPageItem = document.createElement('li');
-                firstPageItem.className = 'page-item';
-                firstPageItem.innerHTML = `<a class="page-link" href="#">1</a>`;
-                firstPageItem.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    loadFunction(1);
-                });
-                paginationContainer.appendChild(firstPageItem);
-                if (startPage > 2) {
-                    const ellipsisItem = document.createElement('li');
-                    ellipsisItem.className = 'page-item disabled';
-                    ellipsisItem.innerHTML = `<span class="page-link">...</span>`;
-                    paginationContainer.appendChild(ellipsisItem);
-                }
-            }
+    for (let i = start; i <= end; i++) ul.appendChild(mkItem(i, i, false, i === current));
 
-            for (let i = startPage; i <= endPage; i++) {
-                const pageItem = document.createElement('li');
-                pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
-                pageItem.innerHTML = `<a class="page-link" href="#">${i}</a>`;
-                pageItem.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    loadFunction(i);
-                });
-                paginationContainer.appendChild(pageItem);
-            }
-
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                    const ellipsisItem = document.createElement('li');
-                    ellipsisItem.className = 'page-item disabled';
-                    ellipsisItem.innerHTML = `<span class="page-link">...</span>`;
-                    paginationContainer.appendChild(ellipsisItem);
-                }
-                const lastPageItem = document.createElement('li');
-                lastPageItem.className = 'page-item';
-                lastPageItem.innerHTML = `<a class="page-link" href="#">${totalPages}</a>`;
-                lastPageItem.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    loadFunction(totalPages);
-                });
-                paginationContainer.appendChild(lastPageItem);
-            }
-
-            // Next button
-            const nextItem = document.createElement('li');
-            nextItem.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-            nextItem.innerHTML = `<a class="page-link" href="#" aria-label="Next"><span aria-hidden="true">&raquo;</span></a>`;
-            nextItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage < totalPages) {
-                    loadFunction(currentPage + 1);
-                }
-            });
-            paginationContainer.appendChild(nextItem);
-
-            // Last page button
-            const lastPageBtn = document.createElement('li');
-            lastPageBtn.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-            lastPageBtn.innerHTML = `<a class="page-link" href="#" aria-label="Last"><span aria-hidden="true">&raquo;&raquo;</span></a>`;
-            lastPageBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage < totalPages) {
-                    loadFunction(totalPages);
-                }
-            });
-            paginationContainer.appendChild(lastPageBtn);
-        }
-
-        // Show loading modal (reused from dashboard.html)
-        function showLoading(show) {
-            const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
-            if (show) {
-                modal.show();
-            } else {
-                modal.hide();
-            }
-        }
-        
-        // Show alert (reused from dashboard.html)
-        function showAlert(message, type = 'info') {
-            const container = document.getElementById('alert-container');
-            const alertId = 'alert-' + Date.now();
-            
-            const alert = document.createElement('div');
-            alert.id = alertId;
-            alert.className = `alert alert-${type} alert-dismissible fade show`;
-            alert.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            container.appendChild(alert);
-            
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                const alertElement = document.getElementById(alertId);
-                if (alertElement) {
-                    const bsAlert = new bootstrap.Alert(alertElement);
-                    bsAlert.close();
-                }
-            }, 5000);
-        }
-    </script>
+    ul.appendChild(mkItem('›', current + 1, current === pages));
+    ul.appendChild(mkItem('»', pages, current === pages));
+}
+</script>
 </body>
 </html>

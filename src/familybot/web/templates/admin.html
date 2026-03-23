@@ -1,58 +1,109 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - FamilyBot</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>Admin — FamilyBot</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
 </head>
 <body>
+<div class="mobile-topbar">
+    <button class="mobile-menu-btn" id="mobile-menu-btn"><i class="fas fa-bars"></i></button>
+    <span style="font-weight:700;font-size:16px;font-family:var(--font-ui)">FamilyBot</span>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
     {% include 'navbar.html' %}
 
-    <div class="container">
-        <h1>Admin Commands</h1>
-
-        <div class="command-section">
-            <h2>Database Population</h2>
-            <button class="admin-command-btn" data-command="populate" data-endpoint="/api/admin/populate-database">Populate Database</button>
-            <p class="description">Scan all family member libraries and wishlists to cache game details.</p>
-        </div>
-
-        <div class="command-section">
-            <h2>Cache Management</h2>
-            <button class="admin-command-btn" data-command="purge_game_details" data-endpoint="/api/admin/purge-game-details">Purge Game Details Cache</button>
-            <p class="description">Purge all entries from the game details cache.</p>
-            <button class="admin-command-btn" data-command="purge_wishlist" data-endpoint="/api/admin/purge-wishlist">Purge Wishlist Cache</button>
-            <p class="description">Purge all entries from the wishlist cache.</p>
-            <button class="admin-command-btn" data-command="purge_family_library" data-endpoint="/api/admin/purge-family-library">Purge Family Library Cache</button>
-            <p class="description">Purge all entries from the family library cache.</p>
-        </div>
-
-        <div class="command-section">
-            <h2>Plugin Actions</h2>
-            <button class="admin-command-btn" data-command="force_new_game" data-endpoint="/api/admin/plugin-action">Force New Game Check</button>
-            <p class="description">Force a check for new games and trigger notifications.</p>
-            <button class="admin-command-btn" data-command="force_wishlist" data-endpoint="/api/admin/plugin-action">Force Wishlist Refresh</button>
-            <p class="description">Force a refresh of the wishlist data.</p>
-            
-            <div class="mt-4 p-3 border border-primary rounded bg-primary bg-opacity-10">
-                <h3 class="h5 text-primary mb-3">Force Deals Check</h3>
-                <div class="d-flex gap-3 align-items-center flex-wrap">
-                    <select id="deals-target-user" class="form-select" style="min-width: 200px;">
-                        <option value="">All Family Members</option>
-                    </select>
-                    <button class="admin-command-btn btn btn-primary" id="force-deals-btn" data-command="force_deals" data-endpoint="/api/admin/plugin-action">Force Deals Check</button>
-                </div>
-                <p class="description mt-2 mb-0 text-muted">Check for current deals on wishlist games. Select a specific family member or check all wishlists.</p>
+    <div class="main-content">
+        <div class="page-header">
+            <div>
+                <div class="page-title">Admin</div>
+                <div class="page-subtitle">// command &amp; control</div>
             </div>
         </div>
 
-        <div id="command-output">
-            <!-- Command output will be displayed here -->
+        <div class="page-body">
+            <div class="grid-2" style="align-items:start">
+
+                <!-- Left column: commands -->
+                <div style="display:flex;flex-direction:column;gap:16px">
+
+                    <!-- Database -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title"><i class="fas fa-database"></i> Database</div>
+                        </div>
+                        <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+                            <button class="btn btn-primary admin-btn" data-cmd="populate" data-endpoint="/api/admin/populate-database" data-method="POST">
+                                <i class="fas fa-download"></i> Populate Database
+                            </button>
+                            <p class="text-dim text-sm">Scan all family libraries and wishlists to warm the cache.</p>
+
+                            <div class="section-divider"></div>
+
+                            <button class="btn btn-danger admin-btn" data-cmd="purge_game_details" data-endpoint="/api/admin/purge-game-details" data-method="POST">
+                                <i class="fas fa-trash"></i> Purge Game Cache
+                            </button>
+                            <button class="btn btn-warning admin-btn" data-cmd="purge_wishlist" data-endpoint="/api/admin/purge-wishlist" data-method="POST">
+                                <i class="fas fa-heart-broken"></i> Purge Wishlist Cache
+                            </button>
+                            <button class="btn btn-warning admin-btn" data-cmd="purge_family_library" data-endpoint="/api/admin/purge-family-library" data-method="POST">
+                                <i class="fas fa-users-slash"></i> Purge Family Library Cache
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Plugin Actions -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title"><i class="fas fa-plug"></i> Plugin Actions</div>
+                        </div>
+                        <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+                            <button class="btn btn-primary plugin-btn" data-command="force_new_game">
+                                <i class="fas fa-bolt"></i> Force New Game Check
+                            </button>
+                            <button class="btn btn-secondary plugin-btn" data-command="force_wishlist">
+                                <i class="fas fa-sync-alt"></i> Force Wishlist Refresh
+                            </button>
+
+                            <div class="section-divider"></div>
+
+                            <label class="form-label">Force Deals — Target Member</label>
+                            <div style="display:flex;gap:8px">
+                                <select id="deals-target-user" class="form-select">
+                                    <option value="">All Family Members</option>
+                                </select>
+                                <button class="btn btn-success plugin-btn" data-command="force_deals" style="flex-shrink:0">
+                                    <i class="fas fa-tags"></i> Check Deals
+                                </button>
+                            </div>
+                            <p class="text-dim text-sm">Scans wishlist games for current discounts and historical lows.</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right column: output terminal -->
+                <div class="card" style="position:sticky;top:24px">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-terminal"></i> Output</div>
+                        <button class="btn btn-secondary btn-sm" onclick="clearOutput()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                    <div id="command-output" class="terminal" style="min-height:300px;border:none;border-radius:0">
+                        <span style="color:var(--text-muted)">// Waiting for command…</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+</div>
 
-    <script src="/static/js/theme_switcher.js"></script>
-    <script src="/static/js/admin.js"></script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/admin.js') }}"></script>
 </body>
 </html>
