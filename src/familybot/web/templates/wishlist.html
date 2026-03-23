@@ -142,16 +142,23 @@
         .wl-free { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--green); }
 
         .wl-member {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .wl-member-tag {
             font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.5px;
-            color: var(--text-muted);
+            color: var(--accent);
             text-transform: uppercase;
             font-family: var(--font-mono);
+            background: var(--accent-dim);
+            border: 1px solid rgba(0, 200, 255, 0.2);
+            border-radius: 20px;
+            padding: 2px 7px;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 90px;
         }
 
         /* ── List view ─────────────────────────────── */
@@ -472,10 +479,10 @@ function buildCard(item, memberId) {
         }
     }
 
-    // Show all member names — join with · separator, tooltip lists them all
-    const allNames = steam_ids.map(id => membersMap[id] || '?');
-    const memberPart = memberId ? '' :
-        `<span class="wl-member" title="${h(allNames.join(', '))}">${h(allNames.join(' · '))}</span>`;
+    // Show all member names as individual badge tags
+    const allNames = steam_ids.map(id => membersMap[id]).filter(Boolean);
+    const memberPart = (memberId || !allNames.length) ? '' :
+        `<div class="wl-member">${allNames.map(n => `<span class="wl-member-tag">${h(n)}</span>`).join('')}</div>`;
 
     const namePart = name
         ? `<div class="wl-name">${h(name)}</div>`
