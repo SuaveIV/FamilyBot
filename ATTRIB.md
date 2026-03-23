@@ -129,12 +129,13 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 ### Typography
 
-**[Rajdhani](https://fonts.google.com/specimen/Rajdhani)**
+**[Saira](https://fonts.google.com/specimen/Saira)**
 
-- **Description**: Display and UI typeface.
+- **Description**: Condensed geometric sans-serif designed for screen UI.
 - **License**: SIL Open Font License 1.1
 - **Usage**: Primary UI font — headings, labels, buttons.
-- **Website**: <https://fonts.google.com/specimen/Rajdhani>
+- **Website**: <https://fonts.google.com/specimen/Saira>
+- **Note**: This font is bundled locally under `src/familybot/web/static/fonts/` rather than loaded from a CDN.
 
 **[Space Mono](https://fonts.google.com/specimen/Space+Mono)**
 
@@ -142,6 +143,7 @@ FamilyBot exists because of the incredible work done by the open-source communit
 - **License**: SIL Open Font License 1.1
 - **Usage**: IDs, timestamps, log output, and code blocks.
 - **Website**: <https://fonts.google.com/specimen/Space+Mono>
+- **Note**: This font is bundled locally under `src/familybot/web/static/fonts/` rather than loaded from a CDN.
 
 ## Development Tools
 

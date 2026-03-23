@@ -111,10 +111,10 @@ Names missing from the local cache are fetched in the background after the page 
 - **Backend**: FastAPI with async/await
 - **Templating**: Jinja2
 - **Frontend**: Vanilla JS, no framework dependencies
-- **Styling**: Custom CSS design system (Rajdhani + Space Mono, dark theme)
+- **Styling**: Custom CSS design system (Saira + Space Mono, dark theme)
 - **Data validation**: Pydantic models
 
-No Bootstrap, no CDN CSS dependencies beyond Font Awesome for icons. The design system lives entirely in `static/css/style.css` and uses CSS custom properties throughout, so it's straightforward to retheme.
+No Bootstrap, no CDN CSS dependencies beyond Font Awesome for icons. The design system lives entirely in `static/css/style.css` and uses CSS custom properties throughout, so it's straightforward to retheme. The fonts Saira (UI) and Space Mono (monospace) are bundled locally under `src/familybot/web/static/fonts/` and loaded via @font-face declarations in `static/css/style.css`. To update these fonts, replace the corresponding .woff2 files in the fonts directory and ensure the @font-face rules in `static/css/style.css` reference the correct filenames.
 
 ### File structure
 
@@ -199,6 +199,6 @@ The design system is defined as CSS variables on `:root` in `style.css`. The mai
 --text-dim     /* secondary text */
 --text-muted   /* placeholder / label text */
 --green / --yellow / --red   /* status colors */
---font-ui      /* Rajdhani — headings, labels, buttons */
+--font-ui      /* Saira — headings, labels, buttons */
 --font-mono    /* Space Mono — IDs, timestamps, code */
 ```
