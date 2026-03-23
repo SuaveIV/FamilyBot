@@ -3,7 +3,54 @@
    Dark mission-control aesthetic for your gaming family
    ===================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+/* Font declarations for bundled fonts */
+@font-face {
+  font-family: 'Saira';
+  src: url('/static/fonts/Saira-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Saira';
+  src: url('/static/fonts/Saira-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Saira';
+  src: url('/static/fonts/Saira-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Saira';
+  src: url('/static/fonts/Saira-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  src: url('/static/fonts/SpaceMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  src: url('/static/fonts/SpaceMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 /* ── Variables ───────────────────────────────────────── */
 :root {
@@ -33,7 +80,7 @@
   --sidebar-w:    220px;
   --radius:       8px;
   --radius-sm:    5px;
-  --font-ui:      'Rajdhani', sans-serif;
+  --font-ui:      'Saira', sans-serif;
   --font-mono:    'Space Mono', monospace;
 
   --shadow:       0 4px 24px rgba(0,0,0,0.5);
