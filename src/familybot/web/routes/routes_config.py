@@ -47,21 +47,30 @@ async def get_config_data():
             NEW_GAME_CHANNEL_ID,
         )
 
+        # Build ConfigData booleans from config values first
+        config_data = ConfigData(
+            discord_configured=bool(DISCORD_API_KEY and ADMIN_DISCORD_ID),
+            steam_family_configured=bool(FAMILY_STEAM_ID and NEW_GAME_CHANNEL_ID),
+            free_epicgames_configured=bool(EPIC_CHANNEL_ID),
+            help_message_configured=bool(HELP_CHANNEL_ID),
+            family_members_count=0,  # Will be updated below
+            websocket_ip=IP_ADDRESS or "127.0.0.1",
+        )
+
+        # Now try to get family_members_count with its own try/except
         conn = get_db_connection()
         try:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM family_members")
             family_count = cursor.fetchone()[0]
-            return ConfigData(
-                discord_configured=bool(DISCORD_API_KEY and ADMIN_DISCORD_ID),
-                steam_family_configured=bool(FAMILY_STEAM_ID and NEW_GAME_CHANNEL_ID),
-                free_epicgames_configured=bool(EPIC_CHANNEL_ID),
-                help_message_configured=bool(HELP_CHANNEL_ID),
-                family_members_count=family_count,
-                websocket_ip=IP_ADDRESS or "127.0.0.1",
-            )
+            config_data.family_members_count = family_count
+        except Exception:
+            logger.exception("Error querying family_members count")
+            config_data.family_members_count = 0  # Safe default
         finally:
             conn.close()
+
+        return config_data
     except Exception:
         logger.exception("Error building config response")
         return ConfigData(
