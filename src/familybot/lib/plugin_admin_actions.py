@@ -34,7 +34,7 @@ from familybot.lib.family_utils import (
     get_family_game_list_url,
 )
 from familybot.lib.logging_config import get_logger, log_private_profile_detection
-from familybot.lib.utils import add_to_wishlist, get_lowest_price
+from familybot.lib.utils import add_to_wishlist, get_lowest_price, prefetch_itad_prices
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal
 
@@ -770,8 +770,9 @@ async def force_deals_action(
             steam_api_manager = SteamAPIManager()
 
             # Prefetch ITAD prices in batch to prevent N+1 API calls
-            from familybot.lib.utils import prefetch_itad_prices
-            app_ids_to_check = [item[0] for item in global_wishlist[:max_games_to_check]]
+            app_ids_to_check = [
+                item[0] for item in global_wishlist[:max_games_to_check]
+            ]
             await asyncio.to_thread(prefetch_itad_prices, app_ids_to_check)
 
             for item in global_wishlist[:max_games_to_check]:

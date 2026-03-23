@@ -1,5 +1,6 @@
 import time
 from datetime import datetime
+import asyncio
 import aiohttp
 from interactions import Extension, GuildText
 from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
@@ -23,12 +24,22 @@ from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import (
     ProgressTracker,
     add_to_wishlist,
+    prefetch_itad_prices,
     split_message,
 )
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
 logger = get_logger(__name__)
+
+
+async def _prefetch_itad_for_wishlist(
+    global_wishlist: list, limit: int | None = None
+) -> None:
+    """Helper to slice the wishlist and prefetch ITAD prices."""
+    items = global_wishlist[:limit] if limit else global_wishlist
+    app_ids = [item[0] for item in items]
+    await asyncio.to_thread(prefetch_itad_prices, app_ids)
 
 
 class steam_admin(Extension):
@@ -141,10 +152,7 @@ class steam_admin(Extension):
                 await ctx.send(f"📊 **Checking {total_games} games for deals...**")
 
                 # Prefetch ITAD prices in batch to prevent N+1 API calls
-                from familybot.lib.utils import prefetch_itad_prices
-                import asyncio
-                app_ids_to_check = [item[0] for item in global_wishlist]
-                await asyncio.to_thread(prefetch_itad_prices, app_ids_to_check)
+                await _prefetch_itad_for_wishlist(global_wishlist)
 
                 for index, item in enumerate(global_wishlist):
                     app_id = item[0]
@@ -287,10 +295,7 @@ class steam_admin(Extension):
             games_checked = 0
 
             # Prefetch ITAD prices in batch to prevent N+1 API calls
-            from familybot.lib.utils import prefetch_itad_prices
-            import asyncio
-            app_ids_to_check = [item[0] for item in global_wishlist]
-            await asyncio.to_thread(prefetch_itad_prices, app_ids_to_check)
+            await _prefetch_itad_for_wishlist(global_wishlist)
 
             async with aiohttp.ClientSession() as session:
                 for item in global_wishlist:

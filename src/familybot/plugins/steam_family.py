@@ -293,7 +293,7 @@ class steam_family(Extension):
                                 if current_price != "N/A":
                                     price_info.append(f"Current: {current_price}")
                                 if lowest_price != "N/A":
-                                    price_info.append(f"Lowest: ${lowest_price}")
+                                    price_info.append(f"Lowest: {lowest_price}")
 
                                 if price_info:
                                     game_name += f" ({' | '.join(price_info)})"
@@ -448,13 +448,26 @@ class steam_family(Extension):
                 content=f"📊 Checking {total_games} games for deals..."
             )
 
-            # Prefetch ITAD prices in batch to prevent N+1 API calls
-            from familybot.lib.utils import prefetch_itad_prices
             import asyncio
-            app_ids_to_check = [item[0] for item in global_wishlist[:max_games_to_check]]
-            await asyncio.to_thread(prefetch_itad_prices, app_ids_to_check)
+            from familybot.lib.utils import prefetch_itad_prices
+            from familybot.lib.steam_helpers import fetch_game_details
 
             async with aiohttp.ClientSession() as session:
+                # First pass: identify discounted games to prefetch ITAD prices only for them
+                filtered_app_ids = []
+                for item in global_wishlist[:max_games_to_check]:
+                    app_id = item[0]
+                    game_data = await fetch_game_details(
+                        app_id, self.steam_api_manager, session=session
+                    )
+                    if game_data and "price_overview" in game_data:
+                        # process_game_deal uses low_discount_threshold=25
+                        if game_data["price_overview"].get("discount_percent", 0) >= 25:
+                            filtered_app_ids.append(app_id)
+
+                if filtered_app_ids:
+                    await asyncio.to_thread(prefetch_itad_prices, filtered_app_ids)
+
                 for item in global_wishlist[:max_games_to_check]:
                     app_id = item[0]
                     games_checked += 1
@@ -491,7 +504,7 @@ class steam_family(Extension):
                     if deal["discount_percent"] > 0:
                         message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal["lowest_price"] != "N/A":
-                        message_parts.append(f" | Lowest ever: ${deal['lowest_price']}")
+                        message_parts.append(f" | Lowest ever: {deal['lowest_price']}")
                     message_parts.append(
                         f"\n🔗 <https://store.steampowered.com/app/{deal['app_id']}>\n\n"
                     )
