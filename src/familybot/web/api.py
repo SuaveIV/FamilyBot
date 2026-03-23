@@ -1,5 +1,4 @@
 # FastAPI application for FamilyBot Web UI
-
 import asyncio
 import logging
 import sqlite3
@@ -11,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
+from pydantic import BaseModel
 from familybot.config import PROJECT_ROOT, WEB_UI_HOST, WEB_UI_PORT
 from familybot.lib.admin_commands import DatabasePopulator
 from familybot.lib.database import (
@@ -22,6 +21,7 @@ from familybot.lib.database import (
     load_family_members_from_db,
     purge_family_library_cache,
     purge_wishlist_cache,
+    cache_game_details,
 )
 from familybot.lib.logging_config import setup_web_logging, get_web_log_queue
 from familybot.lib.plugin_admin_actions import (
@@ -727,6 +727,97 @@ async def websocket_logs(websocket: WebSocket):
             await websocket.close()
         except Exception:
             pass  # Already closed
+
+
+class GameInfoBatchRequest(BaseModel):
+    appids: list[str]
+
+
+class GameInfoItem(BaseModel):
+    appid: str
+    name: str | None = None
+    header_image: str  # always populated – Steam CDN URL
+
+
+@app.post("/api/game-info/batch", response_model=dict[str, GameInfoItem])
+async def get_game_info_batch(body: GameInfoBatchRequest):
+    """
+    Return name + cover-art URL for a batch of Steam App IDs.
+
+    Checks game_details_cache first; fetches from the Steam Store API for any
+    that are missing, caches the results, then returns the full set.
+
+    Capped at 50 appids per call to keep response times reasonable.
+    """
+    import aiohttp as _aiohttp
+
+    appids = [str(a) for a in body.appids[:50]]
+    results: dict[str, GameInfoItem] = {}
+    to_fetch: list[str] = []
+
+    # ── Cache pass ──────────────────────────────────────────────────────────
+    for appid in appids:
+        cached = get_cached_game_details(appid)
+        if cached and cached.get("name"):
+            results[appid] = GameInfoItem(
+                appid=appid,
+                name=cached["name"],
+                header_image=f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
+            )
+        else:
+            to_fetch.append(appid)
+
+    if not to_fetch:
+        return results
+
+    # ── Steam Store API pass ────────────────────────────────────────────────
+    semaphore = asyncio.Semaphore(5)  # max 5 concurrent requests
+
+    async def fetch_one(
+        session: _aiohttp.ClientSession, appid: str
+    ) -> tuple[str, GameInfoItem]:
+        async with semaphore:
+            try:
+                url = (
+                    f"https://store.steampowered.com/api/appdetails"
+                    f"?appids={appid}&cc=us&l=en&filters=basic,price_overview"
+                )
+                async with session.get(
+                    url, timeout=_aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status != 200:
+                        raise ValueError(f"HTTP {resp.status}")
+                    data = await resp.json(content_type=None)
+
+                game_data = data.get(str(appid), {}).get("data")
+                if game_data:
+                    # Persist to the local cache so it's free next time
+                    cache_game_details(appid, game_data, permanent=True)
+                    return appid, GameInfoItem(
+                        appid=appid,
+                        name=game_data.get("name"),
+                        header_image=(
+                            game_data.get("header_image")
+                            or f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
+                        ),
+                    )
+            except Exception as exc:
+                logger.warning("game-info batch: failed for %s: %s", appid, exc)
+
+        # Fallback – at least return a usable CDN URL
+        return appid, GameInfoItem(
+            appid=appid,
+            name=None,
+            header_image=f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
+        )
+
+    async with _aiohttp.ClientSession() as session:
+        fetched = await asyncio.gather(*[fetch_one(session, a) for a in to_fetch])
+
+    for appid, info in fetched:
+        results[appid] = info
+
+    return results
 
 
 # Health check endpoint

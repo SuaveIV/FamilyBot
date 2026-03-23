@@ -6,6 +6,236 @@
     <title>Wishlist — FamilyBot</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <style>
+        /* ── Wishlist Grid ───────────────────────────── */
+        .wishlist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 14px;
+        }
+
+        .wl-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+        }
+
+        .wl-card:hover {
+            border-color: var(--border-glow);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+            transform: translateY(-2px);
+        }
+
+        .wl-cover-wrap {
+            position: relative;
+            width: 100%;
+        }
+
+        .wl-cover {
+            width: 100%;
+            aspect-ratio: 460 / 215;
+            object-fit: cover;
+            background: var(--bg-surface);
+            display: block;
+            transition: opacity 0.25s;
+        }
+
+        .wl-cover.loading { opacity: 0; }
+
+        /* Skeleton shimmer */
+        .wl-cover-placeholder {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                90deg,
+                var(--bg-surface) 25%,
+                var(--bg-card-alt) 50%,
+                var(--bg-surface) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.4s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Sale ribbon */
+        .wl-sale-ribbon {
+            position: absolute;
+            top: 8px; right: 0;
+            background: var(--green);
+            color: #000;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px 3px 8px;
+            border-radius: 2px 0 0 2px;
+            box-shadow: -2px 2px 6px rgba(0,0,0,0.4);
+            line-height: 1;
+            z-index: 2;
+        }
+
+        /* Info */
+        .wl-info {
+            padding: 12px 12px 10px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .wl-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 34px;
+        }
+
+        .wl-name-skeleton {
+            height: 13px;
+            background: linear-gradient(
+                90deg,
+                var(--bg-card-alt) 25%,
+                var(--bg-surface) 50%,
+                var(--bg-card-alt) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.4s ease-in-out infinite;
+            border-radius: 3px;
+            width: 75%;
+            margin: 4px 0;
+        }
+
+        .wl-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: auto;
+            padding-top: 4px;
+        }
+
+        .wl-price { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+        .wl-price.sale   { color: var(--green); }
+        .wl-price.normal { color: var(--text-dim); }
+        .wl-price .strikethrough {
+            text-decoration: line-through;
+            opacity: 0.5;
+            font-weight: 400;
+            margin-right: 4px;
+        }
+        .wl-free { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--green); }
+
+        .wl-member {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90px;
+        }
+
+        /* ── List view ─────────────────────────────── */
+        .list-mode .wishlist-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .list-mode .wl-card {
+            flex-direction: row;
+            height: 64px;
+            transform: none !important;
+        }
+
+        .list-mode .wl-cover-wrap {
+            width: 138px;
+            flex-shrink: 0;
+            height: 64px;
+        }
+
+        .list-mode .wl-cover {
+            width: 138px;
+            height: 64px;
+            aspect-ratio: unset;
+        }
+
+        .list-mode .wl-cover-placeholder {
+            height: 64px;
+        }
+
+        .list-mode .wl-info {
+            flex-direction: row;
+            align-items: center;
+            padding: 10px 14px;
+        }
+
+        .list-mode .wl-name {
+            flex: 1;
+            -webkit-line-clamp: 1;
+            font-size: 14px;
+            min-height: auto;
+        }
+
+        .list-mode .wl-sale-ribbon { display: none; }
+
+        /* ── Controls ───────────────────────────────── */
+        .view-toggle {
+            display: flex;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+
+        .view-toggle button {
+            padding: 6px 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .view-toggle button.active {
+            background: var(--accent-mid);
+            color: var(--accent);
+        }
+
+        .fetch-bar {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        .fetch-bar .spinner { width: 11px; height: 11px; border-width: 1.5px; }
+
+        @media (max-width: 600px) {
+            .wishlist-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        }
+    </style>
 </head>
 <body>
 <div class="mobile-topbar">
@@ -28,26 +258,56 @@
 
         <div class="page-body">
 
-            <!-- Filter Row -->
+            <!-- Filters + controls -->
             <div class="card mb-3">
-                <div class="card-body" style="padding:14px 20px">
-                    <label class="form-label mb-2">Filter by Member</label>
-                    <div class="filter-btn-group" id="member-filters">
-                        <button class="filter-btn active" data-steam-id="">All Members</button>
+                <div class="card-body" style="padding:14px 20px;display:flex;flex-direction:column;gap:14px">
+                    <div>
+                        <label class="form-label mb-2">Member</label>
+                        <div class="filter-btn-group" id="member-filters">
+                            <button class="filter-btn active" data-steam-id="">All Members</button>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+                        <div>
+                            <label class="form-label mb-2">Sort</label>
+                            <div style="display:flex;gap:6px">
+                                <button class="filter-btn active" data-sort="name">A – Z</button>
+                                <button class="filter-btn" data-sort="discount">On Sale First</button>
+                            </div>
+                        </div>
+                        <div style="margin-left:auto">
+                            <label class="form-label mb-2">View</label>
+                            <div class="view-toggle">
+                                <button id="btn-grid" class="active" onclick="setView('grid')" title="Grid">
+                                    <i class="fas fa-th-large"></i>
+                                </button>
+                                <button id="btn-list" onclick="setView('list')" title="List">
+                                    <i class="fas fa-list"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Wishlist Items -->
+            <!-- Game cards -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title"><i class="fas fa-heart"></i> Items</div>
-                    <span id="page-info" class="text-dim text-mono text-xs"></span>
+                    <div class="card-title"><i class="fas fa-heart"></i> Games</div>
+                    <div style="display:flex;align-items:center;gap:14px">
+                        <div id="fetch-bar" class="fetch-bar">
+                            <div class="spinner"></div>
+                            <span id="fetch-msg">Fetching game info…</span>
+                        </div>
+                        <span id="page-info" class="text-dim text-mono text-xs"></span>
+                    </div>
                 </div>
-                <div class="card-body" id="wishlist-container">
-                    <div class="empty-state">
-                        <div class="spinner spinner-lg" style="margin:0 auto 12px"></div>
-                        <p>Loading wishlist…</p>
+                <div id="wishlist-outer" style="padding:16px">
+                    <div id="wishlist-container" class="wishlist-grid">
+                        <div class="empty-state" style="grid-column:1/-1">
+                            <div class="spinner spinner-lg" style="margin:0 auto 12px"></div>
+                            <p>Loading wishlist…</p>
+                        </div>
                     </div>
                 </div>
                 <div class="card-footer">
@@ -61,128 +321,257 @@
 
 <script src="{{ url_for('static', path='js/app.js') }}"></script>
 <script>
-const PER_PAGE = 20;
-let currentPage = 1;
-let membersMap = {};
+/* ── Config ───────────────────────────────────────────────────────────── */
+const PER_PAGE = 24;
 
+/* ── State ────────────────────────────────────────────────────────────── */
+let currentPage = 1;
+let currentSort = 'name';
+let currentView = 'grid';
+let membersMap  = {};
+let nameCache   = {};   // appid → { name, header_image }
+
+/* ── Boot ─────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
     await initMembers();
     loadWishlist(1);
+
+    document.querySelectorAll('[data-sort]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('[data-sort]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentSort = btn.dataset.sort;
+            loadWishlist(1);
+        });
+    });
 });
 
+/* ── Members ──────────────────────────────────────────────────────────── */
 async function initMembers() {
     try {
-        const r = await fetch('/api/family-members');
-        const members = await r.json();
+        const members = await fetch('/api/family-members').then(r => r.json());
         membersMap = Object.fromEntries(members.map(m => [m.steam_id, m.friendly_name]));
-
-        const container = document.getElementById('member-filters');
+        const wrap = document.getElementById('member-filters');
+        // The "All" button already exists; re-attach listener
+        wrap.querySelector('[data-steam-id=""]').addEventListener('click', function() { selectMember(this); });
         members.forEach(m => {
-            const btn = document.createElement('button');
-            btn.className = 'filter-btn';
-            btn.dataset.steamId = m.steam_id;
-            btn.textContent = m.friendly_name;
-            btn.addEventListener('click', () => selectMember(btn));
-            container.appendChild(btn);
+            const b = Object.assign(document.createElement('button'), {
+                className: 'filter-btn',
+                textContent: m.friendly_name,
+            });
+            b.dataset.steamId = m.steam_id;
+            b.addEventListener('click', () => selectMember(b));
+            wrap.appendChild(b);
         });
-
-        container.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => selectMember(btn));
-        });
-    } catch (e) { /* silently fail */ }
+    } catch (_) {}
 }
 
 function selectMember(btn) {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#member-filters .filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     loadWishlist(1);
 }
 
 function getSelectedMember() {
-    const active = document.querySelector('.filter-btn.active');
-    return active ? active.dataset.steamId : '';
+    const a = document.querySelector('#member-filters .filter-btn.active');
+    return a ? a.dataset.steamId : '';
 }
 
+/* ── View toggle ──────────────────────────────────────────────────────── */
+function setView(v) {
+    currentView = v;
+    document.getElementById('btn-grid').classList.toggle('active', v === 'grid');
+    document.getElementById('btn-list').classList.toggle('active', v === 'list');
+    document.getElementById('wishlist-outer').classList.toggle('list-mode', v === 'list');
+}
+
+/* ── Load wishlist ────────────────────────────────────────────────────── */
 async function loadWishlist(page) {
     currentPage = page;
     const memberId = getSelectedMember();
-    let url = `/api/wishlist?page=${page}&limit=${PER_PAGE}`;
-    if (memberId) url += `&family_member_id=${memberId}`;
+    const url = `/api/wishlist?page=${page}&limit=${PER_PAGE}` + (memberId ? `&family_member_id=${memberId}` : '');
 
     const container = document.getElementById('wishlist-container');
-    container.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg" style="margin:0 auto 12px"></div><p>Loading…</p></div>';
+    container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="spinner spinner-lg" style="margin:0 auto 12px"></div><p>Loading…</p></div>`;
 
     try {
-        const r = await fetch(url);
-        const data = await r.json();
-        const { items, total_items } = data;
+        const { items, total_items } = await fetch(url).then(r => r.json());
 
         document.getElementById('total-badge').textContent = `${total_items} items`;
         document.getElementById('page-info').textContent =
-            `Page ${page} of ${Math.ceil(total_items / PER_PAGE) || 1}`;
+            `Page ${page} / ${Math.ceil(total_items / PER_PAGE) || 1}`;
 
         if (!items.length) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-heart"></i><h3>No wishlist items</h3><p>Run the bot\'s wishlist commands to populate data.</p></div>';
+            container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+                <i class="fas fa-heart"></i><h3>No wishlist items</h3>
+                <p>Use <code>!force_wishlist</code> in Discord to populate data.</p></div>`;
             document.getElementById('wishlist-pagination').innerHTML = '';
             return;
         }
 
-        container.innerHTML = items.map(item => {
-            const name = memberId ? '' : `<span class="badge badge-gray">${membersMap[item.steam_id] || 'Unknown'}</span>`;
-            let price = '';
-            if (item.price_data) {
-                const p = item.price_data;
-                const disc = p.discount_percent;
-                price = disc > 0
-                    ? `<span class="badge badge-green"><i class="fas fa-tag"></i> ${p.final_formatted} (${disc}% off)</span>`
-                    : `<span class="badge badge-gray">${p.final_formatted}</span>`;
+        // Sort client-side
+        const sorted = [...items].sort((a, b) => {
+            if (currentSort === 'discount') {
+                return (b.price_data?.discount_percent ?? 0) - (a.price_data?.discount_percent ?? 0);
             }
-            return `<div class="game-card">
-                <div style="flex:1">
-                    <div class="game-name">
-                        <a href="https://store.steampowered.com/app/${item.appid}" target="_blank">${item.game_name || 'Unknown Game'}</a>
-                    </div>
-                    <div class="game-meta">App ID: ${item.appid}</div>
-                    <div class="game-badges mt-1">${name} ${price}</div>
-                </div>
-                <a href="https://store.steampowered.com/app/${item.appid}" target="_blank" class="btn btn-secondary btn-sm">
-                    <i class="fas fa-external-link-alt"></i>
-                </a>
-            </div>`;
-        }).join('');
+            return (a.game_name || '\uffff').localeCompare(b.game_name || '\uffff');
+        });
 
+        container.innerHTML = sorted.map(i => buildCard(i, memberId)).join('');
         renderPagination(total_items, page);
 
+        // Kick off background name/image resolution for any uncached items
+        const missing = sorted.filter(i => !i.game_name && !nameCache[i.appid]).map(i => i.appid);
+        if (missing.length) resolveMissing(missing);
+
     } catch (e) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle text-red"></i><h3>Failed to load</h3></div>';
+        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+            <i class="fas fa-exclamation-circle text-red"></i><h3>Load failed</h3></div>`;
     }
 }
 
+/* ── Build card HTML ──────────────────────────────────────────────────── */
+function buildCard(item, memberId) {
+    const { appid, game_name, price_data, steam_id } = item;
+    const cached = nameCache[appid];
+    const name   = game_name || cached?.name || null;
+    const img    = cached?.header_image
+        ?? `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
+
+    // Price markup
+    let pricePart = '';
+    let ribbon    = '';
+    if (price_data) {
+        const { is_free, discount_percent: disc, final_formatted: final, initial_formatted: orig } = price_data;
+        if (is_free) {
+            pricePart = `<span class="wl-free">FREE</span>`;
+        } else if (disc > 0) {
+            pricePart = `<span class="wl-price sale"><span class="strikethrough">${orig || ''}</span>${final}</span>`;
+            ribbon    = `<div class="wl-sale-ribbon">-${disc}%</div>`;
+        } else {
+            pricePart = `<span class="wl-price normal">${final || ''}</span>`;
+        }
+    }
+
+    const memberPart = memberId ? '' :
+        `<span class="wl-member" title="${h(membersMap[steam_id] || '?')}">${h(membersMap[steam_id] || '—')}</span>`;
+
+    const namePart = name
+        ? `<div class="wl-name">${h(name)}</div>`
+        : `<div class="wl-name-skeleton" data-sk="${appid}"></div>`;
+
+    return `
+        <a class="wl-card" href="https://store.steampowered.com/app/${appid}"
+           target="_blank" rel="noopener" data-appid="${appid}">
+            <div class="wl-cover-wrap">
+                <div class="wl-cover-placeholder" id="ph-${appid}"></div>
+                <img id="img-${appid}" class="wl-cover loading"
+                     src="${h(img)}" alt="" loading="lazy"
+                     onload="imgLoad('${appid}')"
+                     onerror="imgError('${appid}')">
+                ${ribbon}
+            </div>
+            <div class="wl-info">
+                ${namePart}
+                <div class="wl-meta">${pricePart}${memberPart}</div>
+            </div>
+        </a>`;
+}
+
+function imgLoad(id) {
+    document.getElementById(`img-${id}`)?.classList.remove('loading');
+    const ph = document.getElementById(`ph-${id}`);
+    if (ph) ph.style.display = 'none';
+}
+
+function imgError(id) {
+    const img = document.getElementById(`img-${id}`);
+    const ph  = document.getElementById(`ph-${id}`);
+    if (img) img.style.display = 'none';
+    if (ph) {
+        Object.assign(ph.style, { animation: 'none', background: 'var(--bg-card-alt)' });
+        ph.innerHTML = `<div style="position:absolute;inset:0;display:flex;
+            align-items:center;justify-content:center;color:var(--border);font-size:24px">
+            <i class="fab fa-steam"></i></div>`;
+    }
+}
+
+/* ── Batch resolve missing names/images ───────────────────────────────── */
+async function resolveMissing(appids) {
+    const bar = document.getElementById('fetch-bar');
+    const msg = document.getElementById('fetch-msg');
+    bar.style.display = 'flex';
+
+    // Process in chunks of 50 (backend cap)
+    for (let i = 0; i < appids.length; i += 50) {
+        const chunk = appids.slice(i, i + 50);
+        msg.textContent = `Fetching info for ${chunk.length} games…`;
+        try {
+            const result = await fetch('/api/game-info/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appids: chunk }),
+            }).then(r => r.json());
+
+            Object.entries(result).forEach(([appid, data]) => {
+                nameCache[appid] = data;
+
+                // Patch skeleton name in-place
+                const sk = document.querySelector(`[data-sk="${appid}"]`);
+                if (sk && data.name) {
+                    sk.className   = 'wl-name';
+                    sk.textContent = data.name;
+                    delete sk.dataset.sk;
+                }
+
+                // Patch image if still loading (e.g. placeholder showing)
+                const img = document.getElementById(`img-${appid}`);
+                if (img && img.classList.contains('loading') && data.header_image) {
+                    img.src = data.header_image;
+                }
+            });
+        } catch (e) {
+            console.warn('Batch game info failed:', e);
+        }
+    }
+
+    bar.style.display = 'none';
+}
+
+/* ── Pagination ───────────────────────────────────────────────────────── */
 function renderPagination(total, current) {
     const pages = Math.ceil(total / PER_PAGE);
-    const ul = document.getElementById('wishlist-pagination');
+    const ul    = document.getElementById('wishlist-pagination');
     if (pages <= 1) { ul.innerHTML = ''; return; }
 
-    const mkItem = (label, page, disabled = false, active = false) => {
-        const li = document.createElement('li');
-        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
-        li.innerHTML = `<a class="page-link" href="#">${label}</a>`;
-        if (!disabled && !active) li.querySelector('a').addEventListener('click', e => { e.preventDefault(); loadWishlist(page); });
+    const mk = (label, p, disabled, active) => {
+        const li = Object.assign(document.createElement('li'), {
+            className: 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : ''),
+            innerHTML: `<a class="page-link" href="#">${label}</a>`,
+        });
+        if (!disabled && !active)
+            li.querySelector('a').addEventListener('click', e => { e.preventDefault(); loadWishlist(p); });
         return li;
     };
 
     ul.innerHTML = '';
-    ul.appendChild(mkItem('«', 1, current === 1));
-    ul.appendChild(mkItem('‹', current - 1, current === 1));
+    ul.appendChild(mk('«', 1, current === 1));
+    ul.appendChild(mk('‹', current - 1, current === 1));
 
-    let start = Math.max(1, current - 2);
-    let end = Math.min(pages, start + 4);
-    if (end - start < 4) start = Math.max(1, end - 4);
+    let s = Math.max(1, current - 2);
+    let e = Math.min(pages, s + 4);
+    if (e - s < 4) s = Math.max(1, e - 4);
+    for (let i = s; i <= e; i++) ul.appendChild(mk(i, i, false, i === current));
 
-    for (let i = start; i <= end; i++) ul.appendChild(mkItem(i, i, false, i === current));
+    ul.appendChild(mk('›', current + 1, current === pages));
+    ul.appendChild(mk('»', pages, current === pages));
+}
 
-    ul.appendChild(mkItem('›', current + 1, current === pages));
-    ul.appendChild(mkItem('»', pages, current === pages));
+/* ── Util ─────────────────────────────────────────────────────────────── */
+function h(s) {
+    return String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 </body>
