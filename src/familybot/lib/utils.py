@@ -55,7 +55,7 @@ def get_lowest_price(steam_app_id: int) -> str:
             return "N/A"
 
         # Use the prices/v3 endpoint for comprehensive price data including historical lows
-        url_prices = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+        url_prices = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US"
         data = [game_id]
         prices_response = requests.post(url_prices, json=data, timeout=5)
         prices_response.raise_for_status()
@@ -75,24 +75,37 @@ def get_lowest_price(steam_app_id: int) -> str:
             )
 
             if price_amount is not None:
-                # Cache the price data permanently (historical lowest price)
+                formatted_price = f"${price_amount}"
+                # Cache the price data (historical lowest price) with 2-week TTL instead of permanently
                 cache_itad_price(
                     str(steam_app_id),
                     {
                         "lowest_price": str(price_amount),
-                        "lowest_price_formatted": f"${price_amount}",
+                        "lowest_price_formatted": formatted_price,
                         "shop_name": shop_name,
                     },
-                    permanent=True,
+                    permanent=False,
+                    cache_hours=336, # 14 days
                 )
 
                 logger.debug(
-                    f"Cached ITAD price for {steam_app_id} permanently: ${price_amount} from {shop_name}"
+                    f"Cached ITAD price for {steam_app_id} for 14 days: {formatted_price} from {shop_name}"
                 )
-                return str(price_amount)
+                return formatted_price
 
         logger.info(
             f"No historical lowest price found for Steam App ID {steam_app_id}."
+        )
+        # Cache failed lookups for 3 days to avoid hammering the API
+        cache_itad_price(
+            str(steam_app_id),
+            {
+                "lowest_price": "N/A",
+                "lowest_price_formatted": "N/A",
+                "shop_name": "N/A",
+            },
+            permanent=False,
+            cache_hours=72, # 3 days
         )
         return "N/A"
 
@@ -111,6 +124,101 @@ def get_lowest_price(steam_app_id: int) -> str:
             exc_info=True,
         )
         return "N/A"
+
+
+def prefetch_itad_prices(steam_app_ids: list[str]) -> None:
+    """Batch fetches historical low prices for multiple Steam App IDs and caches them."""
+    if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
+        return
+
+    # Filter out already cached IDs
+    uncached_app_ids = []
+    for app_id in steam_app_ids:
+        if not get_cached_itad_price(str(app_id)):
+            uncached_app_ids.append(str(app_id))
+    
+    if not uncached_app_ids:
+        return
+
+    # Batch into chunks of 100 to avoid overly large requests
+    chunk_size = 100
+    for i in range(0, len(uncached_app_ids), chunk_size):
+        chunk_app_ids = uncached_app_ids[i:i + chunk_size]
+        try:
+            logger.info(f"Prefetching ITAD prices for {len(chunk_app_ids)} App IDs...")
+            
+            # 1. Resolve Steam App IDs to ITAD UUIDs
+            url_lookup = f"https://api.isthereanydeal.com/lookup/id/shop/61/v1?key={ITAD_API_KEY}"
+            shop_queries = [f"app/{app_id}" for app_id in chunk_app_ids]
+            lookup_response = requests.post(url_lookup, json=shop_queries, timeout=10)
+            lookup_response.raise_for_status()
+            answer_lookup = json.loads(lookup_response.text)
+
+            # Map UUID to App ID
+            uuid_to_appid = {}
+            for shop_query, uuid in answer_lookup.items():
+                app_id = shop_query.replace("app/", "")
+                if uuid:
+                    uuid_to_appid[uuid] = app_id
+                else:
+                    # Cache failed lookups immediately for 3 days
+                    cache_itad_price(
+                        app_id,
+                        {"lowest_price": "N/A", "lowest_price_formatted": "N/A", "shop_name": "N/A"},
+                        permanent=False, cache_hours=72
+                    )
+
+            if not uuid_to_appid:
+                continue
+
+            # 2. Fetch prices for resolved UUIDs
+            url_prices = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US"
+            uuids_to_fetch = list(uuid_to_appid.keys())
+            prices_response = requests.post(url_prices, json=uuids_to_fetch, timeout=10)
+            prices_response.raise_for_status()
+            answer_prices = json.loads(prices_response.text)
+
+            # Map the responses back to App IDs and cache
+            fetched_uuids = set()
+            for price_data in answer_prices:
+                uuid = price_data.get("id")
+                if not uuid or uuid not in uuid_to_appid:
+                    continue
+                fetched_uuids.add(uuid)
+                app_id = uuid_to_appid[uuid]
+
+                if "historyLow" in price_data and price_data["historyLow"]:
+                    history_low = price_data["historyLow"].get("all", {})
+                    price_amount = history_low.get("amount")
+                    shop_name = history_low.get("shop", {}).get("name", "Historical Low (All Stores)")
+
+                    if price_amount is not None:
+                        formatted_price = f"${price_amount}"
+                        cache_itad_price(
+                            app_id,
+                            {"lowest_price": str(price_amount), "lowest_price_formatted": formatted_price, "shop_name": shop_name},
+                            permanent=False, cache_hours=336
+                        )
+                        continue
+
+                # If no history low found, cache as N/A
+                cache_itad_price(
+                    app_id,
+                    {"lowest_price": "N/A", "lowest_price_formatted": "N/A", "shop_name": "N/A"},
+                    permanent=False, cache_hours=72
+                )
+
+            # Mark any UUIDs that didn't return price data as N/A
+            for uuid, app_id in uuid_to_appid.items():
+                if uuid not in fetched_uuids:
+                    cache_itad_price(
+                        app_id,
+                        {"lowest_price": "N/A", "lowest_price_formatted": "N/A", "shop_name": "N/A"},
+                        permanent=False, cache_hours=72
+                    )
+
+        except Exception as e:
+            logger.error(f"Error during ITAD prefetch batch: {e}")
 
 
 def get_common_elements_in_lists(list_of_lists: list) -> list:

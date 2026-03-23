@@ -460,6 +460,7 @@ async def _collect_wishlists(
     current_family_members: dict,
     force_fresh: bool,
     session: aiohttp.ClientSession,
+    target_user_steam_ids: list[str] | None = None,
 ) -> list[list]:
     """
     Helper to collect wishlists from all family members.
@@ -470,7 +471,10 @@ async def _collect_wishlists(
         return []
 
     global_wishlist: list[list] = []
-    all_unique_steam_ids_to_check = set(current_family_members.keys())
+    if target_user_steam_ids:
+        all_unique_steam_ids_to_check = set(target_user_steam_ids)
+    else:
+        all_unique_steam_ids_to_check = set(current_family_members.keys())
 
     for user_steam_id in all_unique_steam_ids_to_check:
         user_name_for_log = current_family_members.get(
@@ -743,97 +747,12 @@ async def force_deals_action(
                 logger.info("Force deals: Checking deals for all family wishlists")
 
             # Collect wishlist games from the target user(s)
-            # Manually implementing since we might target specific users
-            global_wishlist: list[list] = []
-
-            # If targeting specific users, we can't use the generic _collect_wishlists helper easily
-            # without modifying it to accept target users.
-            # For now, keeping the loop but using logic similar to helpers where possible.
-
-            for user_steam_id in target_user_steam_ids:
-                user_name_for_log = current_family_members.get(
-                    user_steam_id, f"Unknown ({user_steam_id})"
-                )
-
-                # Try to get cached wishlist first
-                cached_wishlist = get_cached_wishlist(user_steam_id)
-                if cached_wishlist is not None:
-                    logger.info(
-                        f"Force deals: Using cached wishlist for {user_name_for_log} ({len(cached_wishlist)} items)"
-                    )
-                    for app_id in cached_wishlist:
-                        # Ensure app_id is added with its interested users
-                        add_to_wishlist(global_wishlist, str(app_id), user_steam_id)
-                else:
-                    # If not cached, fetch fresh wishlist data from API
-                    if (
-                        not STEAMWORKS_API_KEY
-                        or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE"
-                    ):
-                        logger.warning(
-                            f"Force deals: Cannot fetch wishlist for {user_name_for_log} - Steam API key not configured"
-                        )
-                        continue
-
-                    wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
-                    logger.info(
-                        f"Force deals: Fetching fresh wishlist from API for {user_name_for_log}"
-                    )
-
-                    try:
-                        await _rate_limit_steam_api()
-                        async with session.get(
-                            wishlist_url, timeout=aiohttp.ClientTimeout(total=15)
-                        ) as wishlist_response:
-                            text = await wishlist_response.text()
-                            if text == '{"success":2}':
-                                log_private_profile_detection(
-                                    logger,
-                                    user_name_for_log,
-                                    user_steam_id,
-                                    "wishlist",
-                                )
-                                continue
-
-                            wishlist_json = await _handle_api_response(
-                                f"GetWishlist ({user_name_for_log})", wishlist_response
-                            )
-                        if not wishlist_json:
-                            continue
-
-                        wishlist_items = wishlist_json.get("response", {}).get(
-                            "items", []
-                        )
-                        if not wishlist_items:
-                            logger.info(
-                                f"Force deals: No items found in {user_name_for_log}'s wishlist."
-                            )
-                            continue
-
-                        # Extract app IDs and add to global wishlist
-                        user_wishlist_appids = []
-                        for game_item in wishlist_items:
-                            app_id = str(game_item.get("appid"))
-                            if not app_id or app_id == "None":
-                                logger.warning(
-                                    f"Force deals: Skipping wishlist item due to missing or invalid appid: {game_item}"
-                                )
-                                continue
-
-                            user_wishlist_appids.append(app_id)
-                            add_to_wishlist(global_wishlist, app_id, user_steam_id)
-
-                        # Cache the wishlist
-                        cache_wishlist(user_steam_id, user_wishlist_appids)
-                        logger.info(
-                            f"Force deals: Fetched and cached {len(user_wishlist_appids)} wishlist items for {user_name_for_log}"
-                        )
-
-                    except Exception as e:
-                        logger.error(
-                            f"Force deals: Error fetching wishlist for {user_name_for_log}: {e}"
-                        )
-                        continue
+            global_wishlist = await _collect_wishlists(
+                current_family_members,
+                force_fresh=False,
+                session=session,
+                target_user_steam_ids=target_user_steam_ids,
+            )
 
             if not global_wishlist:
                 return {
@@ -849,6 +768,11 @@ async def force_deals_action(
             logger.info(f"Force deals: Checking {total_games} games for deals")
 
             steam_api_manager = SteamAPIManager()
+
+            # Prefetch ITAD prices in batch to prevent N+1 API calls
+            from familybot.lib.utils import prefetch_itad_prices
+            app_ids_to_check = [item[0] for item in global_wishlist[:max_games_to_check]]
+            await asyncio.to_thread(prefetch_itad_prices, app_ids_to_check)
 
             for item in global_wishlist[:max_games_to_check]:
                 app_id = item[0]
@@ -892,12 +816,7 @@ async def force_deals_action(
                     if deal["discount_percent"] > 0:
                         message_parts.append(f" ~~{deal['original_price']}~~")
                     if deal["lowest_price"] != "N/A":
-                        # Handle both formatted ($X.XX) and unformatted (X.XX) prices
-                        lowest_price = deal["lowest_price"]
-                        if lowest_price.startswith("$"):
-                            message_parts.append(f" | Lowest ever: {lowest_price}")
-                        else:
-                            message_parts.append(f" | Lowest ever: ${lowest_price}")
+                        message_parts.append(f" | Lowest ever: {deal['lowest_price']}")
                     message_parts.append(
                         f"\n👥 Wanted by: {', '.join(deal['interested_users'][:3])}"
                     )

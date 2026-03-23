@@ -448,6 +448,12 @@ class steam_family(Extension):
                 content=f"📊 Checking {total_games} games for deals..."
             )
 
+            # Prefetch ITAD prices in batch to prevent N+1 API calls
+            from familybot.lib.utils import prefetch_itad_prices
+            import asyncio
+            app_ids_to_check = [item[0] for item in global_wishlist[:max_games_to_check]]
+            await asyncio.to_thread(prefetch_itad_prices, app_ids_to_check)
+
             async with aiohttp.ClientSession() as session:
                 for item in global_wishlist[:max_games_to_check]:
                     app_id = item[0]
