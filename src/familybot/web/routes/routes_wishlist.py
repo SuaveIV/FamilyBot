@@ -37,7 +37,9 @@ async def get_wishlist_summary(
 
     try:
         if family_member_id:
+            # Count unique appids for the specific member
             count_q = "SELECT COUNT(DISTINCT w.appid) FROM wishlist_cache w WHERE w.steam_id = ?"
+            # Get unique appids for the specific member, then join to get details
             data_q = f"""
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM (
@@ -53,7 +55,9 @@ async def get_wishlist_summary(
             """
             params: list = [family_member_id]
         else:
+            # Count unique appids across all members
             count_q = "SELECT COUNT(DISTINCT w.appid) FROM wishlist_cache w"
+            # Get unique appids across all members, then join to get details
             data_q = f"""
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM (
