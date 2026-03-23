@@ -39,6 +39,13 @@ async def populate_database_api(
     rate_limit_mode: str = "normal",
 ):
     """Warm the cache by scanning family libraries and/or wishlists."""
+    # Reject invalid combination where both library_only and wishlist_only are True
+    if library_only and wishlist_only:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot set both library_only and wishlist_only. Choose one or neither.",
+        )
+
     populator = DatabasePopulator(rate_limit_mode)
     try:
         family_members = load_family_members_from_db()
