@@ -3,483 +3,619 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FamilyBot Wishlist</title>
-    
-    <!-- Bootstrap/Bootswatch CSS (dynamically loaded) -->
-    <link id="theme-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    
-    <!-- Font Awesome for icons -->
+    <title>Wishlist — FamilyBot</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <style>
+        /* ── Wishlist Grid ───────────────────────────── */
+        .wishlist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 14px;
+        }
+
+        .wl-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+        }
+
+        .wl-card:hover {
+            border-color: var(--border-glow);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+            transform: translateY(-2px);
+        }
+
+        .wl-cover-wrap {
+            position: relative;
+            width: 100%;
+        }
+
+        .wl-cover {
+            width: 100%;
+            aspect-ratio: 460 / 215;
+            object-fit: cover;
+            background: var(--bg-surface);
+            display: block;
+            transition: opacity 0.25s;
+        }
+
+        .wl-cover.loading { opacity: 0; }
+
+        /* Skeleton shimmer */
+        .wl-cover-placeholder {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                90deg,
+                var(--bg-surface) 25%,
+                var(--bg-card-alt) 50%,
+                var(--bg-surface) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.4s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Sale ribbon */
+        .wl-sale-ribbon {
+            position: absolute;
+            top: 8px; right: 0;
+            background: var(--green);
+            color: #000;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px 3px 8px;
+            border-radius: 2px 0 0 2px;
+            box-shadow: -2px 2px 6px rgba(0,0,0,0.4);
+            line-height: 1;
+            z-index: 2;
+        }
+
+        /* Info */
+        .wl-info {
+            padding: 12px 12px 10px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .wl-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 34px;
+        }
+
+        .wl-name-skeleton {
+            height: 13px;
+            background: linear-gradient(
+                90deg,
+                var(--bg-card-alt) 25%,
+                var(--bg-surface) 50%,
+                var(--bg-card-alt) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.4s ease-in-out infinite;
+            border-radius: 3px;
+            width: 75%;
+            margin: 4px 0;
+        }
+
+        .wl-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: auto;
+            padding-top: 4px;
+        }
+
+        .wl-price { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+        .wl-price.sale   { color: var(--green); }
+        .wl-price.normal { color: var(--text-dim); }
+        .wl-price .strikethrough {
+            text-decoration: line-through;
+            opacity: 0.5;
+            font-weight: 400;
+            margin-right: 4px;
+        }
+        .wl-free { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--green); }
+
+        .wl-member {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .wl-member-tag {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--accent);
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+            background: var(--accent-dim);
+            border: 1px solid rgba(0, 200, 255, 0.2);
+            border-radius: 20px;
+            padding: 2px 7px;
+            white-space: nowrap;
+        }
+
+        /* ── List view ─────────────────────────────── */
+        .list-mode .wishlist-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .list-mode .wl-card {
+            flex-direction: row;
+            height: 64px;
+            transform: none !important;
+        }
+
+        .list-mode .wl-cover-wrap {
+            width: 138px;
+            flex-shrink: 0;
+            height: 64px;
+        }
+
+        .list-mode .wl-cover {
+            width: 138px;
+            height: 64px;
+            aspect-ratio: unset;
+        }
+
+        .list-mode .wl-cover-placeholder {
+            height: 64px;
+        }
+
+        .list-mode .wl-info {
+            flex-direction: row;
+            align-items: center;
+            padding: 10px 14px;
+        }
+
+        .list-mode .wl-name {
+            flex: 1;
+            -webkit-line-clamp: 1;
+            line-clamp: 1;
+            font-size: 14px;
+            min-height: auto;
+        }
+
+        .list-mode .wl-sale-ribbon { display: none; }
+
+        /* ── Controls ───────────────────────────────── */
+        .view-toggle {
+            display: flex;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+
+        .view-toggle button {
+            padding: 6px 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .view-toggle button.active {
+            background: var(--accent-mid);
+            color: var(--accent);
+        }
+
+        .fetch-bar {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        .fetch-bar .spinner { width: 11px; height: 11px; border-width: 1.5px; }
+
+        @media (max-width: 600px) {
+            .wishlist-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        }
+    </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">
-                <i class="fas fa-robot me-2"></i>FamilyBot
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">
-                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/wishlist">
-                            <i class="fas fa-heart me-1"></i>Wishlist
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/logs">
-                            <i class="fas fa-file-alt me-1"></i>Logs
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/config">
-                            <i class="fas fa-cog me-1"></i>Config
-                        </a>
-                    </li>
-                </ul>
-                
-                <!-- Theme Switcher Dropdown -->
-                <div class="dropdown me-3" id="theme-dropdown">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-palette me-1"></i>Theme
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <!-- Populated by JavaScript -->
-                    </ul>
-                </div>
-                
-                <!-- Status indicator -->
-                <div id="bot-status-indicator" class="status-indicator status-offline">
-                    <span class="status-dot"></span>
-                    <span>Offline</span>
-                </div>
-            </div>
-        </div>
-    </nav>
+<div class="mobile-topbar">
+    <button class="mobile-menu-btn" id="mobile-menu-btn"><i class="fas fa-bars"></i></button>
+    <span style="font-weight:700;font-size:16px;font-family:var(--font-ui)">FamilyBot</span>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
 
-    <!-- Main Content -->
-    <div class="container mt-4">
-        <!-- Wishlist Filters -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-filter me-2"></i>Wishlist Filters
-                        </h5>
+<div class="app-layout">
+    {% include 'navbar.html' %}
+
+    <div class="main-content">
+        <div class="page-header">
+            <div>
+                <div class="page-title">Wishlist</div>
+                <div class="page-subtitle">// family wants &amp; deals</div>
+            </div>
+            <span class="badge badge-blue" id="total-badge">— items</span>
+        </div>
+
+        <div class="page-body">
+
+            <!-- Filters + controls -->
+            <div class="card mb-3">
+                <div class="card-body" style="padding:14px 20px;display:flex;flex-direction:column;gap:14px">
+                    <div>
+                        <label class="form-label mb-2">Member</label>
+                        <div class="filter-btn-group" id="member-filters">
+                            <button class="filter-btn active" data-steam-id="">All Members</button>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-12">
-                                <label class="form-label">Family Member</label>
-                                <div id="family-member-buttons" class="btn-group flex-wrap" role="group">
-                                    <button type="button" class="btn btn-outline-primary active" data-steam-id="">All Members</button>
-                                    <!-- Populated by JavaScript -->
-                                </div>
+                    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+                        <div>
+                            <label class="form-label mb-2">Sort</label>
+                            <div style="display:flex;gap:6px">
+                                <button class="filter-btn active" data-sort="name">A – Z</button>
+                                <button class="filter-btn" data-sort="discount">On Sale First</button>
+                            </div>
+                        </div>
+                        <div style="margin-left:auto">
+                            <label class="form-label mb-2">View</label>
+                            <div class="view-toggle">
+                                <button id="btn-grid" class="active" onclick="setView('grid')" title="Grid">
+                                    <i class="fas fa-th-large"></i>
+                                </button>
+                                <button id="btn-list" onclick="setView('list')" title="List">
+                                    <i class="fas fa-list"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <!-- Wishlist Summary -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-heart me-2"></i>Wishlist
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="wishlist-summary" class="game-list">
-                            <!-- Populated by JavaScript -->
+
+            <!-- Game cards -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-heart"></i> Games</div>
+                    <div style="display:flex;align-items:center;gap:14px">
+                        <div id="fetch-bar" class="fetch-bar">
+                            <div class="spinner"></div>
+                            <span id="fetch-msg">Fetching game info…</span>
                         </div>
-                        <nav aria-label="Wishlist pagination">
-                            <ul class="pagination justify-content-center" id="wishlist-pagination">
-                                <!-- Pagination links will be populated here -->
-                            </ul>
-                        </nav>
+                        <span id="page-info" class="text-dim text-mono text-xs"></span>
                     </div>
+                </div>
+                <div id="wishlist-outer" style="padding:16px">
+                    <div id="wishlist-container" class="wishlist-grid">
+                        <div class="empty-state" style="grid-column:1/-1">
+                            <div class="spinner spinner-lg" style="margin:0 auto 12px"></div>
+                            <p>Loading wishlist…</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <ul class="pagination" id="wishlist-pagination"></ul>
                 </div>
             </div>
+
         </div>
     </div>
+</div>
 
-    <!-- Loading Modal -->
-    <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-sm modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-body text-center">
-                    <div class="spinner-border text-primary mb-3" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <div>Processing...</div>
-                </div>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script>
+/* ── Config ───────────────────────────────────────────────────────────── */
+const PER_PAGE = 24;
+
+/* ── State ────────────────────────────────────────────────────────────── */
+let currentPage = 1;
+let currentSort = 'name';
+let currentView = 'grid';
+let membersMap  = {};
+let nameCache   = {};   // appid → { name, header_image }
+let wishlistRequestId = 0;  // Monotonically increasing request ID
+
+/* ── Boot ─────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', async () => {
+    await initMembers();
+    loadWishlist(1);
+
+    document.querySelectorAll('[data-sort]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('[data-sort]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentSort = btn.dataset.sort;
+            loadWishlist(1);
+        });
+    });
+});
+
+/* ── Members ──────────────────────────────────────────────────────────── */
+async function initMembers() {
+    try {
+        const members = await fetch('/api/family-members').then(r => r.json());
+        membersMap = Object.fromEntries(members.map(m => [m.steam_id, m.friendly_name]));
+        const wrap = document.getElementById('member-filters');
+        // The "All" button already exists; re-attach listener
+        wrap.querySelector('[data-steam-id=""]').addEventListener('click', function() { selectMember(this); });
+        members.forEach(m => {
+            const b = Object.assign(document.createElement('button'), {
+                className: 'filter-btn',
+                textContent: m.friendly_name,
+            });
+            b.dataset.steamId = m.steam_id;
+            b.addEventListener('click', () => selectMember(b));
+            wrap.appendChild(b);
+        });
+    } catch (_) {}
+}
+
+function selectMember(btn) {
+    document.querySelectorAll('#member-filters .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadWishlist(1);
+}
+
+function getSelectedMember() {
+    const a = document.querySelector('#member-filters .filter-btn.active');
+    return a ? a.dataset.steamId : '';
+}
+
+/* ── View toggle ──────────────────────────────────────────────────────── */
+function setView(v) {
+    currentView = v;
+    document.getElementById('btn-grid').classList.toggle('active', v === 'grid');
+    document.getElementById('btn-list').classList.toggle('active', v === 'list');
+    document.getElementById('wishlist-outer').classList.toggle('list-mode', v === 'list');
+}
+
+/* ── Load wishlist ────────────────────────────────────────────────────── */
+async function loadWishlist(page) {
+    currentPage = page;
+    const memberId = getSelectedMember();
+    const requestId = ++wishlistRequestId;
+    const url = `/api/wishlist?page=${page}&limit=${PER_PAGE}` + (memberId ? `&family_member_id=${memberId}` : '');
+
+    const container = document.getElementById('wishlist-container');
+    container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="spinner spinner-lg" style="margin:0 auto 12px"></div><p>Loading…</p></div>`;
+
+    try {
+        const { items, total_items } = await fetch(url).then(r => r.json());
+
+        // Ignore response if a newer request has been made
+        if (requestId !== wishlistRequestId) return;
+
+        document.getElementById('total-badge').textContent = `${total_items} items`;
+        document.getElementById('page-info').textContent =
+            `Page ${page} / ${Math.ceil(total_items / PER_PAGE) || 1}`;
+
+        if (!items.length) {
+            container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+                <i class="fas fa-heart"></i><h3>No wishlist items</h3>
+                <p>Use <code>!force_wishlist</code> in Discord to populate data.</p></div>`;
+            document.getElementById('wishlist-pagination').innerHTML = '';
+            return;
+        }
+
+        // Group duplicate appids — same game on multiple wishlists → one card, multiple names
+        const grouped = groupByAppid(items);
+
+        // Sort client-side
+        const sorted = grouped.sort((a, b) => {
+            if (currentSort === 'discount') {
+                return (b.price_data?.discount_percent ?? 0) - (a.price_data?.discount_percent ?? 0);
+            }
+            return (a.game_name || '\uffff').localeCompare(b.game_name || '\uffff');
+        });
+
+        document.getElementById('total-badge').textContent = `${sorted.length} games`;
+
+        container.innerHTML = sorted.map(i => buildCard(i, memberId)).join('');
+        renderPagination(total_items, page);
+
+        // Kick off background name/image resolution for any uncached items
+        const missing = sorted.filter(i => !i.game_name && !nameCache[i.appid]).map(i => i.appid);
+        if (missing.length) resolveMissing(missing, requestId);
+
+    } catch (e) {
+        // Only show error if this is still the latest request
+        if (requestId === wishlistRequestId) {
+            container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+                <i class="fas fa-exclamation-circle text-red"></i><h3>Load failed</h3></div>`;
+        }
+    }
+}
+
+/* ── Group duplicate appids ───────────────────────────────────────────── */
+function groupByAppid(items) {
+    const map = new Map();
+    items.forEach(item => {
+        if (map.has(item.appid)) {
+            map.get(item.appid).steam_ids.push(item.steam_id);
+        } else {
+            map.set(item.appid, { ...item, steam_ids: [item.steam_id] });
+        }
+    });
+    return [...map.values()];
+}
+
+/* ── Build card HTML ──────────────────────────────────────────────────── */
+function buildCard(item, memberId) {
+    const { appid, game_name, price_data, steam_ids = [item.steam_id] } = item;
+    const cached = nameCache[appid];
+    const name   = game_name || cached?.name || null;
+    const img    = cached?.header_image
+        ?? `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
+
+    // Price markup
+    let pricePart = '';
+    let ribbon    = '';
+    if (price_data) {
+        const { is_free, discount_percent: disc, final_formatted: final, initial_formatted: orig } = price_data;
+        if (is_free) {
+            pricePart = `<span class="wl-free">FREE</span>`;
+        } else if (disc > 0) {
+            pricePart = `<span class="wl-price sale"><span class="strikethrough">${orig || ''}</span>${final}</span>`;
+            ribbon    = `<div class="wl-sale-ribbon">-${disc}%</div>`;
+        } else {
+            pricePart = `<span class="wl-price normal">${final || ''}</span>`;
+        }
+    }
+
+    // Show all member names as individual badge tags
+    const allNames = steam_ids.map(id => membersMap[id]).filter(Boolean);
+    const memberPart = (memberId || !allNames.length) ? '' :
+        `<div class="wl-member">${allNames.map(n => `<span class="wl-member-tag">${h(n)}</span>`).join('')}</div>`;
+
+    const namePart = name
+        ? `<div class="wl-name">${h(name)}</div>`
+        : `<div class="wl-name-skeleton" data-sk="${appid}"></div>`;
+
+    return `
+        <a class="wl-card" href="https://store.steampowered.com/app/${appid}"
+           target="_blank" rel="noopener" data-appid="${appid}">
+            <div class="wl-cover-wrap">
+                <div class="wl-cover-placeholder" id="ph-${appid}"></div>
+                <img id="img-${appid}" class="wl-cover loading"
+                     src="${h(img)}" alt="" loading="lazy"
+                     onload="imgLoad('${appid}')"
+                     onerror="imgError('${appid}')">
+                ${ribbon}
             </div>
-        </div>
-    </div>
+            <div class="wl-info">
+                ${namePart}
+                <div class="wl-meta">${pricePart}${memberPart}</div>
+            </div>
+        </a>`;
+}
 
-    <!-- Alert Container -->
-    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;">
-        <!-- Alerts will be inserted here -->
-    </div>
+function imgLoad(id) {
+    document.getElementById(`img-${id}`)?.classList.remove('loading');
+    const ph = document.getElementById(`ph-${id}`);
+    if (ph) ph.style.display = 'none';
+}
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Theme Switcher -->
-    <script src="{{ url_for('static', path='js/theme_switcher.js') }}"></script>
-    
-    <!-- Wishlist JavaScript -->
-    <script>
-        // Global variables
-        let refreshInterval;
+function imgError(id) {
+    const img = document.getElementById(`img-${id}`);
+    const ph  = document.getElementById(`ph-${id}`);
+    if (img) img.style.display = 'none';
+    if (ph) {
+        Object.assign(ph.style, { animation: 'none', background: 'var(--bg-card-alt)' });
+        ph.innerHTML = `<div style="position:absolute;inset:0;display:flex;
+            align-items:center;justify-content:center;color:var(--border);font-size:24px">
+            <i class="fab fa-steam"></i></div>`;
+    }
+}
 
-        const ITEMS_PER_PAGE = 20; // Define items per page for pagination
-        let currentPage = 1;
+/* ── Batch resolve missing names/images ───────────────────────────────── */
+async function resolveMissing(appids, requestId) {
+    const bar = document.getElementById('fetch-bar');
+    const msg = document.getElementById('fetch-msg');
+    bar.style.display = 'flex';
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadFamilyMembers();
-            loadWishlistSummary(currentPage);
-            loadBotStatus(); // Load bot status on page load
-            startAutoRefresh(); // Start auto-refresh for bot status
-            
-            // Add event listener to the "All Members" button
-            const allMembersBtn = document.querySelector('#family-member-buttons button[data-steam-id=""]');
-            if (allMembersBtn) {
-                allMembersBtn.addEventListener('click', function() {
-                    selectFamilyMember(this);
-                });
+    // Process in chunks of 50 (backend cap)
+    for (let i = 0; i < appids.length; i += 50) {
+        const chunk = appids.slice(i, i + 50);
+        msg.textContent = `Fetching info for ${chunk.length} games…`;
+        try {
+            const result = await fetch('/api/game-info/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appids: chunk }),
+            }).then(r => r.json());
+
+            // Ignore response if a newer request has been made
+            if (requestId !== wishlistRequestId) {
+                bar.style.display = 'none';
+                return;
             }
+
+            Object.entries(result).forEach(([appid, data]) => {
+                nameCache[appid] = data;
+
+                // Patch skeleton name in-place
+                const sk = document.querySelector(`[data-sk="${appid}"]`);
+                if (sk && data.name) {
+                    sk.className   = 'wl-name';
+                    sk.textContent = data.name;
+                    delete sk.dataset.sk;
+                }
+
+                // Patch image if still loading (e.g. placeholder showing)
+                const img = document.getElementById(`img-${appid}`);
+                if (img && img.classList.contains('loading') && data.header_image) {
+                    img.src = data.header_image;
+                }
+            });
+        } catch (e) {
+            console.warn('Batch game info failed:', e);
+        }
+    }
+
+    bar.style.display = 'none';
+}
+
+/* ── Pagination ───────────────────────────────────────────────────────── */
+function renderPagination(total, current) {
+    const pages = Math.ceil(total / PER_PAGE);
+    const ul    = document.getElementById('wishlist-pagination');
+    if (pages <= 1) { ul.innerHTML = ''; return; }
+
+    const mk = (label, p, disabled, active) => {
+        const li = Object.assign(document.createElement('li'), {
+            className: 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : ''),
+            innerHTML: `<a class="page-link" href="#">${label}</a>`,
         });
+        if (!disabled && !active)
+            li.querySelector('a').addEventListener('click', e => { e.preventDefault(); loadWishlist(p); });
+        return li;
+    };
 
-        // Load bot status (copied from dashboard.html)
-        async function loadBotStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const status = await response.json();
-                
-                // Update status indicator
-                const indicator = document.getElementById('bot-status-indicator');
-                if (indicator) { // Check if indicator exists on the page
-                    if (status.online) {
-                        indicator.className = 'status-indicator status-online';
-                        indicator.innerHTML = '<span class="status-dot"></span><span>Online</span>';
-                    } else {
-                        indicator.className = 'status-indicator status-offline';
-                        indicator.innerHTML = '<span class="status-dot"></span><span>Offline</span>';
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading bot status:', error);
-            }
-        }
+    ul.innerHTML = '';
+    ul.appendChild(mk('«', 1, current === 1));
+    ul.appendChild(mk('‹', current - 1, current === 1));
 
-        // Refresh status (copied from dashboard.html)
-        async function refreshStatus() {
-            await loadBotStatus();
-            showAlert('Status refreshed', 'info');
-        }
+    let s = Math.max(1, current - 2);
+    let e = Math.min(pages, s + 4);
+    if (e - s < 4) s = Math.max(1, e - 4);
+    for (let i = s; i <= e; i++) ul.appendChild(mk(i, i, false, i === current));
 
-        // Start auto-refresh (copied from dashboard.html)
-        function startAutoRefresh() {
-            if (refreshInterval) {
-                clearInterval(refreshInterval); // Clear any existing interval
-            }
-            refreshInterval = setInterval(async () => {
-                await loadBotStatus();
-            }, 30000); // Refresh every 30 seconds
-        }
+    ul.appendChild(mk('›', current + 1, current === pages));
+    ul.appendChild(mk('»', pages, current === pages));
+}
 
-        // Cleanup on page unload (copied from dashboard.html)
-        window.addEventListener('beforeunload', () => {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-            }
-        });
-
-        // Global variable to store family members data
-        let familyMembersData = [];
-
-        async function loadFamilyMembers() {
-            try {
-                const response = await fetch('/api/family-members');
-                const members = await response.json();
-                familyMembersData = members; // Store for later use
-                const buttonContainer = document.getElementById('family-member-buttons');
-                
-                members.forEach(member => {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = 'btn btn-outline-primary';
-                    button.setAttribute('data-steam-id', member.steam_id);
-                    button.textContent = member.friendly_name;
-                    button.addEventListener('click', function() {
-                        selectFamilyMember(this);
-                    });
-                    buttonContainer.appendChild(button);
-                });
-            } catch (error) {
-                console.error('Error loading family members:', error);
-            }
-        }
-
-        function getFamilyMemberName(steamId) {
-            const member = familyMembersData.find(m => m.steam_id === steamId);
-            return member ? member.friendly_name : 'Unknown';
-        }
-
-        function selectFamilyMember(button) {
-            // Remove active class from all buttons
-            const buttons = document.querySelectorAll('#family-member-buttons button');
-            buttons.forEach(btn => btn.classList.remove('active'));
-            
-            // Add active class to clicked button
-            button.classList.add('active');
-            
-            // Reset to first page and load wishlist
-            currentPage = 1;
-            loadWishlistSummary(1);
-        }
-
-        function getSelectedFamilyMember() {
-            const activeButton = document.querySelector('#family-member-buttons button.active');
-            return activeButton ? activeButton.getAttribute('data-steam-id') : '';
-        }
-
-        async function loadWishlistSummary(page) {
-            currentPage = page; // Update the global currentPage variable
-            const familyMemberId = getSelectedFamilyMember();
-            let url = `/api/wishlist?page=${page}&limit=${ITEMS_PER_PAGE}`;
-            if (familyMemberId) {
-                url += `&family_member_id=${familyMemberId}`;
-            }
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-                const wishlist = data.items;
-                const totalItems = data.total_items;
-
-                const container = document.getElementById('wishlist-summary');
-                container.innerHTML = '';
-                
-                if (wishlist.length === 0) {
-                    container.innerHTML = '<p class="text-muted">No wishlist items found.</p>';
-                    document.getElementById('wishlist-pagination').innerHTML = '';
-                    return;
-                }
-                
-                wishlist.forEach(item => {
-                    const gameCard = createWishlistCard(item);
-                    container.appendChild(gameCard);
-                });
-
-                updatePagination(totalItems, page, 'wishlist-pagination', loadWishlistSummary);
-                
-            } catch (error) {
-                console.error('Error loading wishlist:', error);
-                showAlert('Error loading wishlist data', 'danger');
-            }
-        }
-        
-        // Create wishlist card element (reused from dashboard.html)
-        function createWishlistCard(item) {
-            const card = document.createElement('div');
-            card.className = 'game-card';
-            
-            let priceInfo = '';
-            if (item.price_data) {
-                priceInfo = `<span class="badge bg-primary">$${(item.price_data.final / 100).toFixed(2)}</span>`;
-            }
-            
-            // Get family member name for display
-            let memberInfo = '';
-            const selectedMember = getSelectedFamilyMember();
-            if (!selectedMember) {
-                // Show which family member has this game when viewing "All Members"
-                const memberName = getFamilyMemberName(item.steam_id);
-                memberInfo = `<span class="badge bg-secondary">${memberName}</span>`;
-            }
-            
-            card.innerHTML = `
-                <div class="game-info">
-                    <div class="game-title">
-                        <a href="https://store.steampowered.com/app/${item.appid}" target="_blank" class="text-decoration-none text-light">
-                            ${item.game_name || 'Unknown Game'}
-                        </a>
-                    </div>
-                    <div class="game-meta">
-                        App ID: ${item.appid} | Steam ID: ${item.steam_id}
-                    </div>
-                    <div class="game-badges">
-                        ${memberInfo}
-                        ${priceInfo}
-                    </div>
-                </div>
-            `;
-            
-            return card;
-        }
-
-        function updatePagination(totalItems, currentPage, paginationId, loadFunction) {
-            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-            const paginationContainer = document.getElementById(paginationId);
-            paginationContainer.innerHTML = '';
-
-            if (totalPages <= 1) {
-                return; // No pagination needed for 1 or fewer pages
-            }
-
-            // First page button
-            const firstPageBtn = document.createElement('li');
-            firstPageBtn.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-            firstPageBtn.innerHTML = `<a class="page-link" href="#" aria-label="First"><span aria-hidden="true">&laquo;&laquo;</span></a>`;
-            firstPageBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage > 1) {
-                    loadFunction(1);
-                }
-            });
-            paginationContainer.appendChild(firstPageBtn);
-
-            // Previous button
-            const prevItem = document.createElement('li');
-            prevItem.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-            prevItem.innerHTML = `<a class="page-link" href="#" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a>`;
-            prevItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage > 1) {
-                    loadFunction(currentPage - 1);
-                }
-            });
-            paginationContainer.appendChild(prevItem);
-
-            // Page numbers
-            const maxPagesToShow = 5; // Maximum number of page links to display
-            let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-            let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-
-            if (endPage - startPage + 1 < maxPagesToShow) {
-                startPage = Math.max(1, endPage - maxPagesToShow + 1);
-            }
-
-            if (startPage > 1) {
-                const firstPageItem = document.createElement('li');
-                firstPageItem.className = 'page-item';
-                firstPageItem.innerHTML = `<a class="page-link" href="#">1</a>`;
-                firstPageItem.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    loadFunction(1);
-                });
-                paginationContainer.appendChild(firstPageItem);
-                if (startPage > 2) {
-                    const ellipsisItem = document.createElement('li');
-                    ellipsisItem.className = 'page-item disabled';
-                    ellipsisItem.innerHTML = `<span class="page-link">...</span>`;
-                    paginationContainer.appendChild(ellipsisItem);
-                }
-            }
-
-            for (let i = startPage; i <= endPage; i++) {
-                const pageItem = document.createElement('li');
-                pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
-                pageItem.innerHTML = `<a class="page-link" href="#">${i}</a>`;
-                pageItem.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    loadFunction(i);
-                });
-                paginationContainer.appendChild(pageItem);
-            }
-
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                    const ellipsisItem = document.createElement('li');
-                    ellipsisItem.className = 'page-item disabled';
-                    ellipsisItem.innerHTML = `<span class="page-link">...</span>`;
-                    paginationContainer.appendChild(ellipsisItem);
-                }
-                const lastPageItem = document.createElement('li');
-                lastPageItem.className = 'page-item';
-                lastPageItem.innerHTML = `<a class="page-link" href="#">${totalPages}</a>`;
-                lastPageItem.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    loadFunction(totalPages);
-                });
-                paginationContainer.appendChild(lastPageItem);
-            }
-
-            // Next button
-            const nextItem = document.createElement('li');
-            nextItem.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-            nextItem.innerHTML = `<a class="page-link" href="#" aria-label="Next"><span aria-hidden="true">&raquo;</span></a>`;
-            nextItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage < totalPages) {
-                    loadFunction(currentPage + 1);
-                }
-            });
-            paginationContainer.appendChild(nextItem);
-
-            // Last page button
-            const lastPageBtn = document.createElement('li');
-            lastPageBtn.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-            lastPageBtn.innerHTML = `<a class="page-link" href="#" aria-label="Last"><span aria-hidden="true">&raquo;&raquo;</span></a>`;
-            lastPageBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (currentPage < totalPages) {
-                    loadFunction(totalPages);
-                }
-            });
-            paginationContainer.appendChild(lastPageBtn);
-        }
-
-        // Show loading modal (reused from dashboard.html)
-        function showLoading(show) {
-            const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
-            if (show) {
-                modal.show();
-            } else {
-                modal.hide();
-            }
-        }
-        
-        // Show alert (reused from dashboard.html)
-        function showAlert(message, type = 'info') {
-            const container = document.getElementById('alert-container');
-            const alertId = 'alert-' + Date.now();
-            
-            const alert = document.createElement('div');
-            alert.id = alertId;
-            alert.className = `alert alert-${type} alert-dismissible fade show`;
-            alert.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            container.appendChild(alert);
-            
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                const alertElement = document.getElementById(alertId);
-                if (alertElement) {
-                    const bsAlert = new bootstrap.Alert(alertElement);
-                    bsAlert.close();
-                }
-            }, 5000);
-        }
-    </script>
+/* ── Util ─────────────────────────────────────────────────────────────── */
+function h(s) {
+    return String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
 </body>
 </html>

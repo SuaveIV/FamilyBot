@@ -43,7 +43,7 @@ FamilyBot combines a Discord bot with a web-based dashboard.
 
 - **Status**: Check if the bot is online, see cache stats, and view recent library additions.
 - **Logs**: A built-in viewer for monitoring bot activity in real-time.
-- **Themes**: Choose from several Bootswatch themes (with dark mode support).
+- **Themes**: Fixed dark theme with a custom design system — no external CSS dependencies beyond Font Awesome.
 - **Control**: Purge caches or trigger database population from your browser.
 
 ## Installation

@@ -118,22 +118,6 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 ## Frontend Dependencies (CDN)
 
-### CSS Framework
-
-**[Bootstrap](https://github.com/twbs/bootstrap)**
-
-- **Description**: The styling foundation for our Web UI.
-- **License**: MIT License
-- **Usage**: Responsive layout and base components.
-- **Website**: <https://getbootstrap.com/>
-
-**[Bootswatch](https://github.com/thomaspark/bootswatch)**
-
-- **Description**: Custom themes for Bootstrap.
-- **License**: MIT License
-- **Usage**: Providing various themes including dark mode.
-- **Website**: <https://bootswatch.com/>
-
 ### Icons
 
 **[Font Awesome](https://github.com/FortAwesome/Font-Awesome)**
@@ -142,6 +126,24 @@ FamilyBot exists because of the incredible work done by the open-source communit
 - **License**: Font Awesome Free License
 - **Usage**: UI icons.
 - **Website**: <https://fontawesome.com/>
+
+### Typography
+
+**[Saira](https://fonts.google.com/specimen/Saira)**
+
+- **Description**: Condensed geometric sans-serif designed for screen UI.
+- **License**: SIL Open Font License 1.1
+- **Usage**: Primary UI font — headings, labels, buttons.
+- **Website**: <https://fonts.google.com/specimen/Saira>
+- **Note**: This font is bundled locally under `src/familybot/web/static/fonts/` rather than loaded from a CDN.
+
+**[Space Mono](https://fonts.google.com/specimen/Space+Mono)**
+
+- **Description**: Monospaced typeface designed for code and data.
+- **License**: SIL Open Font License 1.1
+- **Usage**: IDs, timestamps, log output, and code blocks.
+- **Website**: <https://fonts.google.com/specimen/Space+Mono>
+- **Note**: This font is bundled locally under `src/familybot/web/static/fonts/` rather than loaded from a CDN.
 
 ## Development Tools
 
@@ -176,6 +178,11 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 - **Description**: Extended API for family library management.
 
+**[Steam CDN](https://cdn.akamai.steamstatic.com)**
+
+- **Description**: Steam's content delivery network.
+- **Usage**: Game header images on the wishlist page.
+
 ### Price Tracking
 
 **[IsThereAnyDeal API](https://isthereanydeal.com/)**
@@ -198,7 +205,7 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 ## License Compatibility
 
-FamilyBot is built using libraries compatible with permissive open-source usage (MIT, BSD, Apache 2.0, and Public Domain).
+FamilyBot is built using libraries compatible with permissive open-source usage (MIT, BSD, Apache 2.0, SIL OFL, and Public Domain).
 
 ## Acknowledgments
 

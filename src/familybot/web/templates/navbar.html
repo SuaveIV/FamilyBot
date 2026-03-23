@@ -1,58 +1,37 @@
-<!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">
-                <i class="fas fa-robot me-2"></i>FamilyBot
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">
-                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if active_page == 'wishlist' %}active{% endif %}" href="/wishlist">
-                            <i class="fas fa-heart me-1"></i>Wishlist
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if active_page == 'logs' %}active{% endif %}" href="/logs">
-                            <i class="fas fa-file-alt me-1"></i>Logs
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if active_page == 'config' %}active{% endif %}" href="/config">
-                            <i class="fas fa-cog me-1"></i>Config
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if active_page == 'admin' %}active{% endif %}" href="/admin">
-                            <i class="fas fa-user-shield me-1"></i>Admin
-                        </a>
-                    </li>
-                </ul>
-                
-                <!-- Theme Switcher Dropdown -->
-                <div class="dropdown me-3" id="theme-dropdown">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-palette me-1"></i>Theme
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <!-- Populated by JavaScript -->
-                    </ul>
-                </div>
-                
-                <!-- Status indicator -->
-                <div id="bot-status-indicator" class="status-indicator status-offline">
-                    <span class="status-dot"></span>
-                    <span>Offline</span>
-                </div>
-            </div>
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <div class="sidebar-brand-icon">
+            <i class="fab fa-steam"></i>
         </div>
+        <div>
+            <div class="sidebar-brand-text">FamilyBot</div>
+            <div class="sidebar-brand-sub">Mission Control</div>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <div class="nav-section-label">Navigation</div>
+        <a href="/"        class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/wishlist" class="nav-item {% if active_page == 'wishlist' %}active{% endif %}">
+            <i class="fas fa-heart"></i> Wishlist
+        </a>
+        <a href="/logs"    class="nav-item {% if active_page == 'logs' %}active{% endif %}">
+            <i class="fas fa-terminal"></i> Logs
+        </a>
+        <a href="/config"  class="nav-item {% if active_page == 'config' %}active{% endif %}">
+            <i class="fas fa-sliders-h"></i> Config
+        </a>
+        <a href="/admin"   class="nav-item {% if active_page == 'admin' %}active{% endif %}">
+            <i class="fas fa-shield-alt"></i> Admin
+        </a>
     </nav>
+
+    <div class="sidebar-footer">
+        <div class="status-pill" id="sidebar-status">
+            <span class="dot"></span>
+            <span class="label text-mono text-xs">Connecting...</span>
+        </div>
+    </div>
+</aside>
