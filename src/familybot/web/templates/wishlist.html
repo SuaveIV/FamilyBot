@@ -339,6 +339,7 @@ let currentSort = 'name';
 let currentView = 'grid';
 let membersMap  = {};
 let nameCache   = {};   // appid → { name, header_image }
+let wishlistRequestId = 0;  // Monotonically increasing request ID
 
 /* ── Boot ─────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -398,6 +399,7 @@ function setView(v) {
 async function loadWishlist(page) {
     currentPage = page;
     const memberId = getSelectedMember();
+    const requestId = ++wishlistRequestId;
     const url = `/api/wishlist?page=${page}&limit=${PER_PAGE}` + (memberId ? `&family_member_id=${memberId}` : '');
 
     const container = document.getElementById('wishlist-container');
@@ -406,6 +408,9 @@ async function loadWishlist(page) {
 
     try {
         const { items, total_items } = await fetch(url).then(r => r.json());
+
+        // Ignore response if a newer request has been made
+        if (requestId !== wishlistRequestId) return;
 
         document.getElementById('total-badge').textContent = `${total_items} items`;
         document.getElementById('page-info').textContent =
@@ -437,11 +442,14 @@ async function loadWishlist(page) {
 
         // Kick off background name/image resolution for any uncached items
         const missing = sorted.filter(i => !i.game_name && !nameCache[i.appid]).map(i => i.appid);
-        if (missing.length) resolveMissing(missing);
+        if (missing.length) resolveMissing(missing, requestId);
 
     } catch (e) {
-        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-            <i class="fas fa-exclamation-circle text-red"></i><h3>Load failed</h3></div>`;
+        // Only show error if this is still the latest request
+        if (requestId === wishlistRequestId) {
+            container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+                <i class="fas fa-exclamation-circle text-red"></i><h3>Load failed</h3></div>`;
+        }
     }
 }
 
@@ -527,7 +535,7 @@ function imgError(id) {
 }
 
 /* ── Batch resolve missing names/images ───────────────────────────────── */
-async function resolveMissing(appids) {
+async function resolveMissing(appids, requestId) {
     const bar = document.getElementById('fetch-bar');
     const msg = document.getElementById('fetch-msg');
     bar.style.display = 'flex';
@@ -542,6 +550,12 @@ async function resolveMissing(appids) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ appids: chunk }),
             }).then(r => r.json());
+
+            // Ignore response if a newer request has been made
+            if (requestId !== wishlistRequestId) {
+                bar.style.display = 'none';
+                return;
+            }
 
             Object.entries(result).forEach(([appid, data]) => {
                 nameCache[appid] = data;
