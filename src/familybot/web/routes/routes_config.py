@@ -48,21 +48,22 @@ async def get_config_data():
         )
 
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM family_members")
-        family_count = cursor.fetchone()[0]
-        conn.close()
-
-        return ConfigData(
-            discord_configured=bool(DISCORD_API_KEY and ADMIN_DISCORD_ID),
-            steam_family_configured=bool(FAMILY_STEAM_ID and NEW_GAME_CHANNEL_ID),
-            free_epicgames_configured=bool(EPIC_CHANNEL_ID),
-            help_message_configured=bool(HELP_CHANNEL_ID),
-            family_members_count=family_count,
-            websocket_ip=IP_ADDRESS or "127.0.0.1",
-        )
-    except Exception as exc:
-        logger.error("Error building config response: %s", exc)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM family_members")
+            family_count = cursor.fetchone()[0]
+            return ConfigData(
+                discord_configured=bool(DISCORD_API_KEY and ADMIN_DISCORD_ID),
+                steam_family_configured=bool(FAMILY_STEAM_ID and NEW_GAME_CHANNEL_ID),
+                free_epicgames_configured=bool(EPIC_CHANNEL_ID),
+                help_message_configured=bool(HELP_CHANNEL_ID),
+                family_members_count=family_count,
+                websocket_ip=IP_ADDRESS or "127.0.0.1",
+            )
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("Error building config response")
         return ConfigData(
             discord_configured=False,
             steam_family_configured=False,
