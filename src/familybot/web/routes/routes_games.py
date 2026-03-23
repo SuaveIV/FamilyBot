@@ -31,6 +31,7 @@ router = APIRouter()
 @router.get("/api/family-library", response_model=list[GameDetails])
 async def get_family_library(limit: int = 50):
     """Return cached family library games with their cached details."""
+    limit = max(0, min(limit, 200))
     family_apps = get_cached_family_library()
     if not family_apps:
         return []
