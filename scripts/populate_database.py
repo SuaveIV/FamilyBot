@@ -173,7 +173,7 @@ class DatabasePopulator:
         try:
             conn.execute("BEGIN TRANSACTION")
             for app_id, data in games_data.items():
-                cache_game_details(app_id, data, permanent=True, conn=conn)
+                cache_game_details(app_id, data, permanent=False, conn=conn)
                 written += 1
             conn.commit()
         except Exception as e:
@@ -182,7 +182,7 @@ class DatabasePopulator:
             # Fallback to individual writes to save what we can
             for app_id, data in games_data.items():
                 try:
-                    cache_game_details(app_id, data, permanent=True)
+                    cache_game_details(app_id, data, permanent=False)
                     written += 1
                 except Exception:
                     pass
@@ -659,7 +659,7 @@ class DatabasePopulator:
                 if not game_data:
                     return False
 
-                cache_game_details(app_id, game_data, permanent=True)
+                cache_game_details(app_id, game_data, permanent=False)
                 user_cached += 1
                 total_cached += 1
                 return True

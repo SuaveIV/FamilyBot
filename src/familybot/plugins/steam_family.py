@@ -73,8 +73,11 @@ class steam_family(Extension):
                         vanity_name = vanity_name.split("steamcommunity.com/id/")[
                             1
                         ].strip("/")
-                    resolve = self.steam_api.call(
-                        "ISteamUser.ResolveVanityURL", vanityurl=vanity_name, url_type=1
+                    resolve = await asyncio.to_thread(
+                        self.steam_api.call,
+                        "ISteamUser.ResolveVanityURL",
+                        vanityurl=vanity_name,
+                        url_type=1,
                     )
                     if resolve and resolve.get("response", {}).get("success") == 1:
                         steam_id = resolve["response"]["steamid"]
@@ -94,8 +97,10 @@ class steam_family(Extension):
                     "Steam API key not configured. Cannot retrieve player summaries."
                 )
                 return
-            player_summaries = self.steam_api.call(
-                "ISteamUser.GetPlayerSummaries", steamids=steam_id
+            player_summaries = await asyncio.to_thread(
+                self.steam_api.call,
+                "ISteamUser.GetPlayerSummaries",
+                steamids=steam_id,
             )
             if not player_summaries or not player_summaries.get("response", {}).get(
                 "players"
@@ -122,8 +127,11 @@ class steam_family(Extension):
             if "gameextrainfo" in player:
                 message += f"Currently Playing: {player['gameextrainfo']}\n"
             try:
-                recently_played = self.steam_api.call(
-                    "IPlayerService.GetRecentlyPlayedGames", steamid=steam_id, count=3
+                recently_played = await asyncio.to_thread(
+                    self.steam_api.call,
+                    "IPlayerService.GetRecentlyPlayedGames",
+                    steamid=steam_id,
+                    count=3,
                 )
                 if (
                     recently_played
@@ -196,7 +204,8 @@ class steam_family(Extension):
                 )  # Apply rate limit before API call
                 try:
                     # Corrected method name based on Steam Web API documentation
-                    games_json = self.steam_api.call(
+                    games_json = await asyncio.to_thread(
+                        self.steam_api.call,
                         "IPlayerService.GetFamilySharedApps",
                         steamid=FAMILY_STEAM_ID,
                         include_appinfo=1,
@@ -268,7 +277,7 @@ class steam_family(Extension):
                             continue
 
                         # Cache the game details permanently (game details rarely change)
-                        cache_game_details(game_appid, game_data, permanent=True)
+                        cache_game_details(game_appid, game_data, permanent=False)
 
                     if game_data.get("type") == "game" and not game_data.get("is_free"):
                         # Use cached boolean fields for faster performance
@@ -386,16 +395,29 @@ class steam_family(Extension):
                     return
 
                 try:
-                    if not self.steam_api:
-                        await loading_message.edit(
-                            content="❌ Steam API key is not configured. Cannot fetch wishlist."
-                        )
-                        return
-                    await self.steam_api_manager.rate_limit_steam_api()
-                    wishlist_json = self.steam_api.call(
-                        "IWishlistService.GetWishlist", steamid=user_steam_id
-                    )
-                    if not wishlist_json:
+                    wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
+                    wishlist_json = None
+                    max_retries = 3
+
+                    async with aiohttp.ClientSession() as session:
+                        for attempt in range(max_retries):
+                            try:
+                                await self.steam_api_manager.rate_limit_steam_api()
+                                async with session.get(
+                                    wishlist_url,
+                                    timeout=aiohttp.ClientTimeout(total=15),
+                                ) as response:
+                                    response.raise_for_status()
+                                    wishlist_json = await response.json()
+                                    break
+                            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                                if attempt < max_retries - 1:
+                                    await asyncio.sleep(2**attempt)
+                                    continue
+                                raise e  # Let the outer exception handler catch and log it
+
+                    # Steam returns {"success": 2} for private/empty wishlists
+                    if not wishlist_json or wishlist_json.get("success") == 2:
                         await loading_message.edit(
                             content="❌ Your Steam wishlist is private. Please make it public to use this command."
                         )
@@ -448,7 +470,6 @@ class steam_family(Extension):
                 content=f"📊 Checking {total_games} games for deals..."
             )
 
-            import asyncio
             from familybot.lib.utils import prefetch_itad_prices
             from familybot.lib.steam_helpers import fetch_game_details
 

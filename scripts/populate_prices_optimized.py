@@ -5,6 +5,7 @@ import os
 import random
 import sys
 import time
+import traceback
 from datetime import datetime
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -504,8 +505,8 @@ class OptimizedPricePopulator:
                         cache_game_details(
                             app_id, game_data, permanent=False, conn=conn
                         )
-                    conn.commit()
-                    written_count += 1
+                conn.commit()
+                written_count += len(batch)
 
             except Exception as e:
                 conn.rollback()
@@ -523,11 +524,13 @@ class OptimizedPricePopulator:
                             cache_game_details(
                                 app_id, game_data, permanent=False, conn=conn
                             )
-                            conn.commit()
+                        conn.commit()
                         written_count += 1
-                    except Exception:
+                    except Exception as salvage_error:
                         conn.rollback()
-                        pass
+                        logger.error(f"Failed to write individual Steam record {app_id}: {salvage_error}\n{traceback.format_exc()}")
+                        with open("logs/price_population_failures.log", "a", encoding="utf-8") as f:
+                            f.write(f"{datetime.now()}: Steam Failure - AppID: {app_id}, Source: {source}, Error: {salvage_error}\n")
             finally:
                 conn.close()
 
@@ -563,8 +566,8 @@ class OptimizedPricePopulator:
                         cache_hours=ITAD_CACHE_TTL,
                         conn=conn,
                     )
-                    conn.commit()
-                    written_count += 1
+                conn.commit()
+                written_count += len(batch)
 
             except Exception as e:
                 conn.rollback()
@@ -586,9 +589,11 @@ class OptimizedPricePopulator:
                         )
                         conn.commit()
                         written_count += 1
-                    except Exception:
+                    except Exception as salvage_error:
                         conn.rollback()
-                        pass
+                        logger.error(f"Failed to write individual ITAD record {app_id}: {salvage_error}\n{traceback.format_exc()}")
+                        with open("logs/price_population_failures.log", "a", encoding="utf-8") as f:
+                            f.write(f"{datetime.now()}: ITAD Failure - AppID: {app_id}, Method: {lookup_method}, Error: {salvage_error}\n")
             finally:
                 conn.close()
 

@@ -421,7 +421,7 @@ def cache_game_details(
 
 def force_update_game_cache(appid: str, game_data: dict):
     """Force update cached game details even if they already exist."""
-    cache_game_details(appid, game_data, permanent=True)
+    cache_game_details(appid, game_data, permanent=False)
     logger.info(f"Force updated cache for game {appid}")
 
 
@@ -903,7 +903,7 @@ def cache_game_details_with_source(
 ):
     """Wrapper for cache_game_details to maintain compatibility."""
     cache_game_details(
-        app_id, game_data, permanent=True, price_source=source, conn=conn
+        app_id, game_data, permanent=False, price_source=source, conn=conn
     )
 
 

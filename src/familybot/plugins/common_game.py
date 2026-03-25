@@ -365,9 +365,9 @@ class common_games(Extension):
                                 )
                                 continue
 
-                            # Cache the game details permanently
+                            # Cache the game details
                             cache_game_details(
-                                str(game_appid), game_data, permanent=True
+                                str(game_appid), game_data, permanent=False
                             )
 
                     if game_data.get("type") == "game":

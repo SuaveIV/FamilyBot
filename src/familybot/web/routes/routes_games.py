@@ -183,7 +183,7 @@ async def get_game_info_batch(body: GameInfoBatchRequest):
 
                 game_data = data.get(str(appid), {}).get("data")
                 if game_data:
-                    cache_game_details(appid, game_data, permanent=True)
+                    cache_game_details(appid, game_data, permanent=False)
                     return appid, GameInfoItem(
                         appid=appid,
                         name=game_data.get("name"),

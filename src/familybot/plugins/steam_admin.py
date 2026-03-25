@@ -534,7 +534,7 @@ class steam_admin(Extension):
                                     continue
 
                                 # Cache the game details permanently
-                                cache_game_details(app_id, game_data, permanent=True)
+                                cache_game_details(app_id, game_data, permanent=False)
                                 user_games_cached += 1
                                 total_games_cached += 1
 
@@ -780,8 +780,8 @@ class steam_admin(Extension):
                                 error_count += 1
                                 continue
 
-                            # Cache the game details permanently
-                            cache_game_details(app_id, game_data, permanent=True)
+                            # Cache the game details
+                            cache_game_details(app_id, game_data, permanent=False)
 
                         # Use cached boolean fields for faster performance
                         is_family_shared = game_data.get("is_family_shared", False)
