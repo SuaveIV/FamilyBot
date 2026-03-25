@@ -141,11 +141,11 @@ class common_games(Extension):
                 (discord_id, steam_id),
             )
 
-            # Also insert into 'family_members' table for Web UI display
-            # Use ctx.author.display_name for friendly_name
+            # Also insert/update 'family_members' table for Web UI display
+            # Use INSERT OR REPLACE to backfill discord_id if member already exists from config
             friendly_name = ctx.author.display_name
             cursor.execute(
-                "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                "INSERT OR REPLACE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
                 (steam_id, friendly_name, discord_id),
             )
 

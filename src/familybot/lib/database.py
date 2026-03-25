@@ -216,7 +216,12 @@ def init_db():
 
 def sync_family_members_from_config():
     """Synchronizes family members from config.yml into the family_members database table.
-    This ensures that members defined in the configuration are always present in the DB."""
+    This ensures that members defined in the configuration are always present in the DB.
+
+    Supports two config formats:
+    - Old format (flat string): "steam_id": "Friendly Name"
+    - New format (dict): "steam_id": {"name": "Friendly Name", "discord_id": 123456789}
+    """
     conn = None
     try:
         from familybot.config import FAMILY_USER_DICT
@@ -224,33 +229,23 @@ def sync_family_members_from_config():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        for steam_id, friendly_name in FAMILY_USER_DICT.items():
-            # Check if the member already exists
-            cursor.execute(
-                "SELECT friendly_name FROM family_members WHERE steam_id = ?",
-                (steam_id,),
-            )
-            existing_member = cursor.fetchone()
-
-            if existing_member:
-                # Update friendly_name if it has changed
-                if existing_member["friendly_name"] != friendly_name:
-                    cursor.execute(
-                        "UPDATE family_members SET friendly_name = ? WHERE steam_id = ?",
-                        (friendly_name, steam_id),
-                    )
-                    logger.info(
-                        f"Updated friendly name for Steam ID {steam_id} to '{friendly_name}'."
-                    )
+        for steam_id, value in FAMILY_USER_DICT.items():
+            # Support both old flat string format and new dict format
+            if isinstance(value, str):
+                friendly_name = value
+                discord_id = None
             else:
-                # Insert new member
-                cursor.execute(
-                    "INSERT INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                    (steam_id, friendly_name, None),  # Discord ID can be added later
-                )
-                logger.info(
-                    f"Added new family member: '{friendly_name}' (Steam ID: {steam_id})."
-                )
+                friendly_name = value["name"]
+                discord_id = value.get("discord_id")
+
+            # Use INSERT OR REPLACE to backfill discord_id into existing rows
+            cursor.execute(
+                "INSERT OR REPLACE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                (steam_id, friendly_name, discord_id),
+            )
+            logger.debug(
+                f"Synced family member: '{friendly_name}' (Steam ID: {steam_id}, Discord ID: {discord_id})."
+            )
 
         conn.commit()
         logger.info("Family members synchronized from config.yml to database.")
@@ -835,15 +830,28 @@ def get_steam_id_from_friendly_name(friendly_name: str) -> str | None:
 
 
 def get_steam_id_from_discord_id(discord_id: str) -> str | None:
-    """Retrieves the SteamID associated with a given Discord ID from the users table."""
+    """Retrieves the SteamID associated with a given Discord ID.
+    Checks family_members table first (for config-driven members with discord_id set),
+    then falls back to users table (for !register users)."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # First check family_members table (config-driven members with discord_id)
+        cursor.execute(
+            "SELECT steam_id FROM family_members WHERE discord_id = ?", (discord_id,)
+        )
+        result = cursor.fetchone()
+        if result:
+            return result["steam_id"]
+
+        # Fall back to users table (!register users)
         cursor.execute("SELECT steam_id FROM users WHERE discord_id = ?", (discord_id,))
         result = cursor.fetchone()
         if result:
             return result["steam_id"]
+
         return None
     except Exception as e:
         logger.error(f"Error retrieving SteamID for Discord ID {discord_id}: {e}")

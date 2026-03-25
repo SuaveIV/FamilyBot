@@ -19,9 +19,26 @@ steam_family:
     # REQUIRED: Map Steam User IDs (SteamID64) to friendly names for your family members.
     # The SteamID64 must be a string (enclosed in quotes).
     # You can add as many entries as needed.
+    #
+    # Two formats are supported:
+    #
+    # 1. Simple format (friendly name only):
+    #    "76561198000000001": "User1Name"
+    #
+    # 2. Extended format (with optional discord_id for per-user commands like !deals):
+    #    "76561198000000002":
+    #      name: "User2Name"
+    #      discord_id: 123456789012345678
+    #
+    # The discord_id field is optional but enables commands like !deals to work
+    # for config-driven members. To find a Discord user's ID, enable Developer Mode
+    # in Discord settings, then right-click the user and select "Copy User ID".
+    #
+    # Examples:
     "00000000000000001": "User1Name"
-    "00000000000000002": "User2Name"
-    # Example: "76561198000000000": "John"
+    "00000000000000002":
+      name: "User2Name"
+      # discord_id: 123456789012345678  # Optional: uncomment and add Discord ID
   steamworks_api_key: "" # REQUIRED: Your Steamworks Web API Key. Get this from steamcommunity.com/dev/apikey.
                           # Used for GetOwnedGames, GetWishlist, GetSharedLibraryApps.
   itad_api_key: ""  # REQUIRED: IsThereAnyDeal.com API Key. Get this from isthereanydeal.com/apps/my/.
