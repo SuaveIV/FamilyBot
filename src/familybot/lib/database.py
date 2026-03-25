@@ -414,6 +414,7 @@ def cache_game_details(
         )
     except Exception as e:
         logger.error(f"Error caching game details for {appid}: {e}")
+        raise e
     finally:
         if close_conn and conn:
             conn.close()
@@ -635,6 +636,7 @@ def cache_itad_price(
         logger.debug(f"Cached ITAD price for {appid} {cache_type}")
     except Exception as e:
         logger.error(f"Error caching ITAD price for {appid}: {e}")
+        raise e
     finally:
         if close_conn and conn:
             conn.close()
