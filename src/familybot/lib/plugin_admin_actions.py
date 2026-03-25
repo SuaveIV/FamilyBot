@@ -275,8 +275,8 @@ async def _process_new_games(
                     )
                     continue
 
-                # Cache the game details permanently (game details rarely change)
-                cache_game_details(new_appid, game_data, permanent=True)
+                # Cache the game details (use permanent=False so prices expire with GAME_DETAILS_CACHE_TTL)
+                cache_game_details(new_appid, game_data, permanent=False)
 
             is_family_shared_game = any(
                 cat.get("id") == 62 for cat in game_data.get("categories", [])

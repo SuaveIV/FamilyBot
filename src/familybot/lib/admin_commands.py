@@ -277,7 +277,7 @@ class DatabasePopulator:
                             if not game_data:
                                 return False
 
-                            cache_game_details(app_id, game_data, permanent=True)
+                            cache_game_details(app_id, game_data, permanent=False)
                             user_cached += 1
                             total_cached += 1
                             return True
@@ -422,7 +422,7 @@ class DatabasePopulator:
                 if not game_data:
                     continue
 
-                cache_game_details(app_id, game_data, permanent=True)
+                cache_game_details(app_id, game_data, permanent=False)
                 total_cached += 1
 
                 if (i + 1) % 10 == 0:

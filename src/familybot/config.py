@@ -84,3 +84,6 @@ WISHLIST_CACHE_TTL = (
 GAME_DETAILS_CACHE_TTL = (
     config.get("steam_family", {}).get("cache_ttl_hours", {}).get("game_details", 168)
 )  # 1 week
+ITAD_CACHE_TTL = (
+    config.get("steam_family", {}).get("cache_ttl_hours", {}).get("itad_prices", 336)
+)  # 14 days

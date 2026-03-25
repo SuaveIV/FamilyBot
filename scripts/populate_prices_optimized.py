@@ -501,7 +501,9 @@ class OptimizedPricePopulator:
                             app_id, game_data, source, conn=conn
                         )
                     else:
-                        cache_game_details(app_id, game_data, permanent=True, conn=conn)
+                        cache_game_details(
+                            app_id, game_data, permanent=False, conn=conn
+                        )
 
                     written_count += 1
 
@@ -552,7 +554,7 @@ class OptimizedPricePopulator:
                         price_data,
                         lookup_method=lookup_method,
                         steam_game_name=game_name,
-                        permanent=True,
+                        permanent=False,
                         conn=conn,
                     )
                     written_count += 1

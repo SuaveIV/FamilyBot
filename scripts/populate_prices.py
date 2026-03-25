@@ -204,7 +204,7 @@ class PricePopulator:
 
             if game_info and game_info.get(str(app_id), {}).get("data"):
                 cache_game_details(
-                    app_id, game_info[str(app_id)]["data"], permanent=True
+                    app_id, game_info[str(app_id)]["data"], permanent=False
                 )
                 return app_id, True
             return app_id, False
@@ -448,7 +448,7 @@ class PricePopulator:
                         "shop_name": "Historical Low (All Stores)",
                     },
                     lookup_method="appid",
-                    permanent=True,
+                    permanent=False,
                 )
                 return "cached"
             return "not_found"
@@ -511,7 +511,7 @@ class PricePopulator:
                 },
                 lookup_method="name_search",
                 steam_game_name=game_name,
-                permanent=True,
+                permanent=False,
             )
 
             logger.debug(
