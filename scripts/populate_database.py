@@ -172,10 +172,12 @@ class DatabasePopulator:
         written = 0
         try:
             conn.execute("BEGIN TRANSACTION")
+            batch_written = 0
             for app_id, data in games_data.items():
                 cache_game_details(app_id, data, permanent=False, conn=conn)
-                written += 1
+                batch_written += 1
             conn.commit()
+            written += batch_written
         except Exception as e:
             conn.rollback()
             logger.error(f"Batch write failed: {e}")

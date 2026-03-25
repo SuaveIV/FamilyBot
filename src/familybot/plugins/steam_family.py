@@ -73,6 +73,7 @@ class steam_family(Extension):
                         vanity_name = vanity_name.split("steamcommunity.com/id/")[
                             1
                         ].strip("/")
+                    await self.steam_api_manager.rate_limit_steam_api()
                     resolve = await asyncio.to_thread(
                         self.steam_api.call,
                         "ISteamUser.ResolveVanityURL",
@@ -97,6 +98,7 @@ class steam_family(Extension):
                     "Steam API key not configured. Cannot retrieve player summaries."
                 )
                 return
+            await self.steam_api_manager.rate_limit_steam_api()
             player_summaries = await asyncio.to_thread(
                 self.steam_api.call,
                 "ISteamUser.GetPlayerSummaries",
@@ -127,6 +129,7 @@ class steam_family(Extension):
             if "gameextrainfo" in player:
                 message += f"Currently Playing: {player['gameextrainfo']}\n"
             try:
+                await self.steam_api_manager.rate_limit_steam_api()
                 recently_played = await asyncio.to_thread(
                     self.steam_api.call,
                     "IPlayerService.GetRecentlyPlayedGames",
@@ -446,8 +449,11 @@ class steam_family(Extension):
                     )
 
                 except Exception as e:
+                    # Log only safe fields to avoid leaking the API key in the URL
                     logger.error(
-                        f"Deals: Error fetching wishlist for {user_name_for_log}: {e}"
+                        "Steam wishlist fetch failed for user=%s, error_type=%s",
+                        user_name_for_log,
+                        e.__class__.__name__,
                     )
                     await loading_message.edit(
                         content="❌ Error fetching your wishlist. Please try again later."
