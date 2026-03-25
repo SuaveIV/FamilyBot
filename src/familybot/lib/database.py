@@ -374,7 +374,7 @@ def cache_game_details(
 
         if not permanent and cache_hours:
             expires_at = now + timedelta(hours=cache_hours)
-            expires_at_str = expires_at.isoformat() + "Z"
+            expires_at_str = expires_at.isoformat().replace("+00:00", "Z")
         else:
             expires_at_str = None  # NULL for permanent cache
 
@@ -401,7 +401,7 @@ def cache_game_details(
                 1 if is_coop else 0,
                 1 if is_family_shared else 0,
                 price_source,
-                now.isoformat() + "Z",
+                now.isoformat().replace("+00:00", "Z"),
                 expires_at_str,
                 1 if permanent else 0,
             ),
@@ -468,7 +468,12 @@ def cache_user_games(
 
         # Insert new cache entries
         cache_entries = [
-            (steam_id, str(appid), now.isoformat() + "Z", expires_at.isoformat() + "Z")
+            (
+                steam_id,
+                str(appid),
+                now.isoformat().replace("+00:00", "Z"),
+                expires_at.isoformat().replace("+00:00", "Z"),
+            )
             for appid in appids
         ]
         cursor.executemany(
@@ -529,7 +534,12 @@ def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
             (discord_id, username, cached_at, expires_at)
             VALUES (?, ?, ?, ?)
         """,
-            (discord_id, username, now.isoformat() + "Z", expires_at.isoformat() + "Z"),
+            (
+                discord_id,
+                username,
+                now.isoformat().replace("+00:00", "Z"),
+                expires_at.isoformat().replace("+00:00", "Z"),
+            ),
         )
         conn.commit()
         logger.debug(f"Cached Discord user {discord_id}: {username}")
@@ -598,7 +608,7 @@ def cache_itad_price(
             permanent_val = 1
         else:
             expires_at = now + timedelta(hours=cache_hours)
-            expires_at_str = expires_at.isoformat() + "Z"
+            expires_at_str = expires_at.isoformat().replace("+00:00", "Z")
             permanent_val = 0
 
         cursor.execute(
@@ -614,7 +624,7 @@ def cache_itad_price(
                 price_data.get("shop_name"),
                 lookup_method,
                 steam_game_name,
-                now.isoformat() + "Z",
+                now.isoformat().replace("+00:00", "Z"),
                 expires_at_str,
                 permanent_val,
             ),
@@ -692,7 +702,12 @@ def cache_wishlist(steam_id: str, appids: list, cache_hours: int = WISHLIST_CACH
 
         # Insert new cache entries
         cache_entries = [
-            (steam_id, str(appid), now.isoformat() + "Z", expires_at.isoformat() + "Z")
+            (
+                steam_id,
+                str(appid),
+                now.isoformat().replace("+00:00", "Z"),
+                expires_at.isoformat().replace("+00:00", "Z"),
+            )
             for appid in appids
         ]
         cursor.executemany(
@@ -774,8 +789,8 @@ def cache_family_library(
                     str(app.get("appid")),
                     json.dumps(app.get("owner_steamids", [])),
                     app.get("exclude_reason"),
-                    now.isoformat() + "Z",
-                    expires_at.isoformat() + "Z",
+                    now.isoformat().replace("+00:00", "Z"),
+                    expires_at.isoformat().replace("+00:00", "Z"),
                 )
             )
 

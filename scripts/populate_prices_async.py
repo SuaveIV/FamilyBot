@@ -467,10 +467,10 @@ class AsyncPricePopulator:
                         cache_game_details(
                             app_id, game_data, permanent=False, conn=conn
                         )
+                    conn.commit()
 
                     written_count += 1
 
-                conn.commit()
                 logger.debug(f"Successfully wrote batch of {len(batch)} Steam records")
 
             except Exception as e:
@@ -490,9 +490,10 @@ class AsyncPricePopulator:
                             cache_game_details(
                                 app_id, game_data, permanent=False, conn=conn
                             )
-
+                        conn.commit()
                         written_count += 1
                     except Exception as individual_error:
+                        conn.rollback()
                         logger.error(
                             f"Failed to write individual Steam record {app_id}: {individual_error}"
                         )
@@ -533,11 +534,12 @@ class AsyncPricePopulator:
                         lookup_method=lookup_method,
                         steam_game_name=game_name,
                         permanent=False,
+                        cache_hours=ITAD_CACHE_TTL,
                         conn=conn,
                     )
+                    conn.commit()
                     written_count += 1
 
-                conn.commit()
                 logger.debug(f"Successfully wrote batch of {len(batch)} ITAD records")
 
             except Exception as e:
@@ -559,8 +561,10 @@ class AsyncPricePopulator:
                             cache_hours=ITAD_CACHE_TTL,
                             conn=conn,
                         )
+                        conn.commit()
                         written_count += 1
                     except Exception as individual_error:
+                        conn.rollback()
                         logger.error(
                             f"Failed to write individual ITAD record {app_id}: {individual_error}"
                         )

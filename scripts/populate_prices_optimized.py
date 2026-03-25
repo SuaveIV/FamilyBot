@@ -504,10 +504,9 @@ class OptimizedPricePopulator:
                         cache_game_details(
                             app_id, game_data, permanent=False, conn=conn
                         )
-
+                    conn.commit()
                     written_count += 1
 
-                conn.commit()
             except Exception as e:
                 conn.rollback()
                 logger.error(f"Failed to write Steam batch: {e}")
@@ -524,8 +523,10 @@ class OptimizedPricePopulator:
                             cache_game_details(
                                 app_id, game_data, permanent=False, conn=conn
                             )
+                            conn.commit()
                         written_count += 1
                     except Exception:
+                        conn.rollback()
                         pass
             finally:
                 conn.close()
@@ -559,11 +560,12 @@ class OptimizedPricePopulator:
                         lookup_method=lookup_method,
                         steam_game_name=game_name,
                         permanent=False,
+                        cache_hours=ITAD_CACHE_TTL,
                         conn=conn,
                     )
+                    conn.commit()
                     written_count += 1
 
-                conn.commit()
             except Exception as e:
                 conn.rollback()
                 logger.error(f"Failed to write ITAD batch: {e}")
@@ -582,8 +584,10 @@ class OptimizedPricePopulator:
                             cache_hours=ITAD_CACHE_TTL,
                             conn=conn,
                         )
+                        conn.commit()
                         written_count += 1
                     except Exception:
+                        conn.rollback()
                         pass
             finally:
                 conn.close()

@@ -3,7 +3,7 @@
 
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -11,13 +11,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from familybot.lib.database import get_db_connection
 
 
-def check_price_cache():
-    """Check game_details_cache and itad_price_cache tables."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    now = datetime.now(timezone.utc).isoformat() + "Z"
-
+def _print_game_details_cache(cursor, now):
+    """Print game_details_cache table contents."""
     print("=" * 80)
     print("GAME DETAILS CACHE (Steam prices)")
     print("=" * 80)
@@ -56,6 +51,9 @@ def check_price_cache():
                 expires = expires[:19]
             print(f"  {appid:<12} {name:<30} {permanent:<10} {status:<20} {expires}")
 
+
+def _print_itad_price_cache(cursor, now):
+    """Print itad_price_cache table contents."""
     print("\n" + "=" * 80)
     print("ITAD PRICE CACHE (Historical lows)")
     print("=" * 80)
@@ -94,7 +92,9 @@ def check_price_cache():
                 expires = expires[:19]
             print(f"  {appid:<12} {price:<15} {permanent:<10} {status:<20} {expires}")
 
-    # Summary statistics
+
+def _print_summary(cursor):
+    """Print summary statistics for both cache tables."""
     print("\n" + "=" * 80)
     print("SUMMARY")
     print("=" * 80)
@@ -135,7 +135,20 @@ def check_price_cache():
     else:
         print("\n  ✅ All game details entries use TTL-based expiration.")
 
-    conn.close()
+
+def check_price_cache():
+    """Check game_details_cache and itad_price_cache tables."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+        _print_game_details_cache(cursor, now)
+        _print_itad_price_cache(cursor, now)
+        _print_summary(cursor)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
