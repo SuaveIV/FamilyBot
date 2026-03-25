@@ -214,7 +214,7 @@ def init_db():
             conn.close()
 
 
-def _parse_family_config_entry(value) -> tuple[str, int | None]:
+def _parse_family_config_entry(value) -> tuple[str, str | None]:
     """Parse a family config entry value into (friendly_name, discord_id).
 
     Supports two config formats:
@@ -223,7 +223,8 @@ def _parse_family_config_entry(value) -> tuple[str, int | None]:
     """
     if isinstance(value, str):
         return value, None
-    return value["name"], value.get("discord_id")
+    discord_id = value.get("discord_id")
+    return value["name"], str(discord_id) if discord_id is not None else None
 
 
 def sync_family_members_from_config():
@@ -262,7 +263,10 @@ def sync_family_members_from_config():
                 (steam_id, friendly_name, discord_id),
             )
             logger.debug(
-                f"Synced family member: '{friendly_name}' (Steam ID: {steam_id}, Discord ID: {discord_id})."
+                "Synced family member: '%s' (Steam ID: %s, Discord ID: %s).",
+                friendly_name,
+                steam_id,
+                discord_id,
             )
 
         conn.commit()
