@@ -30,7 +30,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-from familybot.config import ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_game_details_with_source,  # pylint: disable=wrong-import-position
@@ -517,9 +517,13 @@ class OptimizedPricePopulator:
                         game_data = game_info["data"]
                         source = game_info["source"]
                         if source == "steam_library":
-                            cache_game_details_with_source(app_id, game_data, source)
+                            cache_game_details_with_source(
+                                app_id, game_data, source, conn=conn
+                            )
                         else:
-                            cache_game_details(app_id, game_data, permanent=True)
+                            cache_game_details(
+                                app_id, game_data, permanent=False, conn=conn
+                            )
                         written_count += 1
                     except Exception:
                         pass
@@ -574,7 +578,9 @@ class OptimizedPricePopulator:
                             price_data,
                             lookup_method=lookup_method,
                             steam_game_name=game_name,
-                            permanent=True,
+                            permanent=False,
+                            cache_hours=ITAD_CACHE_TTL,
+                            conn=conn,
                         )
                         written_count += 1
                     except Exception:

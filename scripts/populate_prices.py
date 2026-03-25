@@ -26,7 +26,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-from familybot.config import ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_game_details_with_source,  # pylint: disable=wrong-import-position
@@ -449,6 +449,7 @@ class PricePopulator:
                     },
                     lookup_method="appid",
                     permanent=False,
+                    cache_hours=ITAD_CACHE_TTL,
                 )
                 return "cached"
             return "not_found"
@@ -512,6 +513,7 @@ class PricePopulator:
                 lookup_method="name_search",
                 steam_game_name=game_name,
                 permanent=False,
+                cache_hours=ITAD_CACHE_TTL,
             )
 
             logger.debug(
