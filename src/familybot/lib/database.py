@@ -214,6 +214,18 @@ def init_db():
             conn.close()
 
 
+def _parse_family_config_entry(value) -> tuple[str, int | None]:
+    """Parse a family config entry value into (friendly_name, discord_id).
+
+    Supports two config formats:
+    - Old format (flat string): "Friendly Name" -> ("Friendly Name", None)
+    - New format (dict): {"name": "Friendly Name", "discord_id": 123} -> ("Friendly Name", 123)
+    """
+    if isinstance(value, str):
+        return value, None
+    return value["name"], value.get("discord_id")
+
+
 def sync_family_members_from_config():
     """Synchronizes family members from config.yml into the family_members database table.
     This ensures that members defined in the configuration are always present in the DB.
@@ -221,6 +233,9 @@ def sync_family_members_from_config():
     Supports two config formats:
     - Old format (flat string): "steam_id": "Friendly Name"
     - New format (dict): "steam_id": {"name": "Friendly Name", "discord_id": 123456789}
+
+    When using the legacy string format, preserves any existing discord_id from the database
+    rather than clobbering it to NULL.
     """
     conn = None
     try:
@@ -230,15 +245,18 @@ def sync_family_members_from_config():
         cursor = conn.cursor()
 
         for steam_id, value in FAMILY_USER_DICT.items():
-            # Support both old flat string format and new dict format
-            if isinstance(value, str):
-                friendly_name = value
-                discord_id = None
-            else:
-                friendly_name = value["name"]
-                discord_id = value.get("discord_id")
+            friendly_name, discord_id = _parse_family_config_entry(value)
 
-            # Use INSERT OR REPLACE to backfill discord_id into existing rows
+            # For legacy string format (discord_id is None), preserve existing discord_id
+            if discord_id is None:
+                cursor.execute(
+                    "SELECT discord_id FROM family_members WHERE steam_id = ?",
+                    (steam_id,),
+                )
+                existing = cursor.fetchone()
+                if existing and existing["discord_id"]:
+                    discord_id = existing["discord_id"]
+
             cursor.execute(
                 "INSERT OR REPLACE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
                 (steam_id, friendly_name, discord_id),
@@ -940,8 +958,11 @@ def load_family_members_from_db() -> dict:
                     "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
                 )
                 config_members_to_insert = []
-                for steam_id, name in FAMILY_USER_DICT.items():
-                    config_members_to_insert.append((steam_id, name, None))
+                for steam_id, value in FAMILY_USER_DICT.items():
+                    friendly_name, discord_id = _parse_family_config_entry(value)
+                    config_members_to_insert.append(
+                        (steam_id, friendly_name, discord_id)
+                    )
 
                 try:
                     if config_members_to_insert:
