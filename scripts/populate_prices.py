@@ -1,12 +1,12 @@
 """Consolidated async price population script for FamilyBot.
 
-Fetches Steam Store prices and ITAD historical prices with high-performance
-async processing. Uses adaptive rate limiting and batch database writes.
+Fetches ITAD historical prices (with Steam API fallback) using high-performance
+async bulk processing. Uses adaptive rate limiting and batch database writes.
 
 Usage:
-    python scripts/populate_prices.py                    # Populate all prices
-    python scripts/populate_prices.py --steam-only       # Only Steam prices
-    python scripts/populate_prices.py --itad-only        # Only ITAD prices
+    python scripts/populate_prices.py                    # ITAD prices (default)
+    python scripts/populate_prices.py --with-steam       # ITAD + Steam Store prices
+    python scripts/populate_prices.py --steam-only       # Only Steam Store prices
     python scripts/populate_prices.py --force-refresh    # Refresh all cached data
     python scripts/populate_prices.py --dry-run          # Preview without changes
 """
@@ -791,7 +791,9 @@ async def main():
         "--steam-only", action="store_true", help="Only populate Steam Store prices"
     )
     parser.add_argument(
-        "--itad-only", action="store_true", help="Only populate ITAD historical prices"
+        "--with-steam",
+        action="store_true",
+        help="Also populate Steam Store prices alongside ITAD (default is ITAD only)",
     )
     parser.add_argument(
         "--refresh-current",
@@ -827,12 +829,8 @@ async def main():
         parser.error("--concurrent must be >= 1")
 
     # Validate incompatible flag combinations
-    if args.steam_only and args.itad_only:
-        parser.error("--steam-only and --itad-only are mutually exclusive")
-    if args.itad_only and args.refresh_current:
-        parser.error(
-            "--refresh-current applies to Steam only, incompatible with --itad-only"
-        )
+    if args.steam_only and args.with_steam:
+        parser.error("--steam-only and --with-steam are mutually exclusive")
 
     print("FamilyBot Price Population Script\n" + "=" * 60)
     if args.dry_run:
@@ -873,7 +871,8 @@ async def main():
             print("No games found to process. Run populate_database.py first.")
             return 1
 
-        if not args.itad_only:
+        # Default: ITAD only. Use --with-steam or --steam-only for Steam prices.
+        if args.steam_only:
             total_steam_cached = (
                 await populator.refresh_current_prices(all_game_ids, args.dry_run)
                 if args.refresh_current
@@ -881,11 +880,20 @@ async def main():
                     all_game_ids, args.dry_run, args.force_refresh
                 )
             )
-
-        if not args.steam_only:
+        else:
+            # ITAD first (default)
             total_itad_cached = await populator.populate_itad_prices(
                 all_game_ids, args.dry_run, args.force_refresh
             )
+            # Optionally also run Steam prices
+            if args.with_steam:
+                total_steam_cached = (
+                    await populator.refresh_current_prices(all_game_ids, args.dry_run)
+                    if args.refresh_current
+                    else await populator.populate_steam_prices(
+                        all_game_ids, args.dry_run, args.force_refresh
+                    )
+                )
     finally:
         await populator.aclose()
 

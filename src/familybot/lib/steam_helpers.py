@@ -12,7 +12,7 @@ from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
-from familybot.lib.itad_service import get_lowest_price
+from familybot.lib.itad_price_repository import get_cached_itad_price
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 from familybot.lib.steam_api_manager import SteamAPIManager
@@ -92,48 +92,76 @@ async def process_game_deal(
 ) -> dict | None:
     """
     Process a game to check for deals.
+    Prefers ITAD cached data when available, falls back to Steam API.
     Returns a dict with deal info if found, else None.
     """
     try:
-        game_data = await fetch_game_details(app_id, steam_api_manager, session=session)
-        if not game_data:
-            return None
+        game_name = f"Unknown Game ({app_id})"
+        discount_percent = 0
+        current_price = "N/A"
+        original_price = "N/A"
+        lowest_price = "N/A"
+        lowest_price_num = None
+        price_source = "none"
 
-        # Check family sharing if required
-        if require_family_shared and not game_data.get("is_family_shared", False):
-            return None
+        # Try ITAD cache first — it has current price, discount, and historical low
+        itad_cache = await asyncio.to_thread(get_cached_itad_price, app_id)
+        if itad_cache and itad_cache.get("current_price"):
+            game_name = itad_cache.get("steam_game_name") or game_name
+            discount_percent = itad_cache.get("discount_percent", 0)
+            current_price = itad_cache.get("current_price_formatted", "N/A")
+            original_price = itad_cache.get("original_price", "N/A")
+            lowest_price = itad_cache.get("lowest_price_formatted") or itad_cache.get(
+                "lowest_price", "N/A"
+            )
+            price_source = "itad"
 
-        game_name = game_data.get("name", f"Unknown Game ({app_id})")
-        # Handle fresh API data and cached data (normalized)
-        price_overview = game_data.get("price_overview")
+            # Parse lowest_price for numeric comparison
+            if lowest_price != "N/A":
+                try:
+                    clean_price = lowest_price.replace("$", "").replace(",", "").strip()
+                    lowest_price_num = float(clean_price)
+                except (ValueError, TypeError):
+                    pass
+        else:
+            # Fallback: fetch from Steam Store API
+            game_data = await fetch_game_details(
+                app_id, steam_api_manager, session=session
+            )
+            if not game_data:
+                return None
 
-        if not price_overview:
-            return None
+            # Check family sharing if required
+            if require_family_shared and not game_data.get("is_family_shared", False):
+                return None
 
-        # Check if game is on sale
-        discount_percent = price_overview.get("discount_percent", 0)
-        current_price = price_overview.get("final_formatted", "N/A")
-        original_price = price_overview.get("initial_formatted", current_price)
+            game_name = game_data.get("name", game_name)
+            price_overview = game_data.get("price_overview")
+            if not price_overview:
+                return None
+
+            discount_percent = price_overview.get("discount_percent", 0)
+            current_price = price_overview.get("final_formatted", "N/A")
+            original_price = price_overview.get("initial_formatted", current_price)
+            price_source = "steam"
+
+            # Get historical low from ITAD cache (even if no current price data)
+            if itad_cache:
+                lowest_price = itad_cache.get(
+                    "lowest_price_formatted"
+                ) or itad_cache.get("lowest_price", "N/A")
+                if lowest_price != "N/A":
+                    try:
+                        clean_price = (
+                            lowest_price.replace("$", "").replace(",", "").strip()
+                        )
+                        lowest_price_num = float(clean_price)
+                    except (ValueError, TypeError):
+                        pass
 
         # Early exit if the discount doesn't meet minimum thresholds
         if discount_percent < min(low_discount_threshold, high_discount_threshold):
             return None
-
-        # Get historical low price
-        lowest_price_raw = await asyncio.to_thread(get_lowest_price, int(app_id))
-        lowest_price = lowest_price_raw
-
-        # Sanitize lowest_price to a numeric value for comparison
-        lowest_price_num = None
-        if lowest_price_raw != "N/A":
-            try:
-                # Strip currency symbols and commas
-                clean_price = lowest_price_raw.replace("$", "").replace(",", "").strip()
-                lowest_price_num = float(clean_price)
-            except (ValueError, TypeError):
-                logger.warning(
-                    f"Could not parse lowest_price '{lowest_price_raw}' for AppID {app_id}"
-                )
 
         # Determine if this is a good deal
         is_good_deal = False
@@ -145,9 +173,10 @@ async def process_game_deal(
         elif (
             discount_percent >= low_discount_threshold and lowest_price_num is not None
         ):
-            # Check if current price is close to historical low
             try:
-                current_price_num = float(price_overview.get("final", 0)) / 100
+                current_price_num = float(
+                    current_price.replace("$", "").replace(",", "").strip()
+                )
                 if current_price_num <= lowest_price_num * historical_low_buffer:
                     is_good_deal = True
                     if historical_low_buffer > 1.1:
@@ -168,6 +197,7 @@ async def process_game_deal(
                 "discount_percent": discount_percent,
                 "lowest_price": lowest_price,
                 "deal_reason": deal_reason,
+                "price_source": price_source,
             }
 
     except Exception as e:
