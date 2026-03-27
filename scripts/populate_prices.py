@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
-    get_db_connection,
+    get_write_connection,
     init_db,  # pylint: disable=wrong-import-position
 )
 from familybot.lib.game_details_repository import (
@@ -69,25 +69,25 @@ class PricePopulator:
 
         # Adaptive rate limiting
         self.current_delays = {
-            "store_api": 0.1,
-            "itad_api": 0.05,
+            "store": 0.1,
+            "itad": 0.05,
         }
 
         # Rate limit bounds
-        self.min_delays = {"store_api": 0.05, "itad_api": 0.01}
-        self.max_delays = {"store_api": 3.0, "itad_api": 1.5}
+        self.min_delays = {"store": 0.05, "itad": 0.01}
+        self.max_delays = {"store": 3.0, "itad": 1.5}
 
         # Error tracking for adaptive rate limiting
-        self.error_counts = {"store_api": 0, "itad_api": 0}
-        self.success_counts = {"store_api": 0, "itad_api": 0}
-        self.last_adjustment = {"store_api": 0.0, "itad_api": 0.0}
+        self.error_counts = {"store": 0, "itad": 0}
+        self.success_counts = {"store": 0, "itad": 0}
+        self.last_adjustment = {"store": 0.0, "itad": 0.0}
 
         # Async locks for rate limiting
         self.rate_limit_locks = {
-            "store_api": asyncio.Lock(),
-            "itad_api": asyncio.Lock(),
+            "store": asyncio.Lock(),
+            "itad": asyncio.Lock(),
         }
-        self.last_request_times = {"store_api": 0.0, "itad_api": 0.0}
+        self.last_request_times = {"store": 0.0, "itad": 0.0}
 
         # Async HTTP client with connection pooling
         self.client = httpx.AsyncClient(
@@ -110,7 +110,7 @@ class PricePopulator:
         print(f"   Max concurrent requests: {max_concurrent}")
         print(f"   Rate limiting: {rate_limit_mode}")
         print(
-            f"   Initial delays - Store: {self.current_delays['store_api']}s, ITAD: {self.current_delays['itad_api']}s"
+            f"   Initial delays - Store: {self.current_delays['store']}s, ITAD: {self.current_delays['itad']}s"
         )
 
     async def aclose(self):
@@ -173,6 +173,7 @@ class PricePopulator:
         url: str,
         method: str = "GET",
         json_data: Optional[dict | list] = None,
+        params: Optional[dict] = None,
         api_type: str = "store",
         max_retries: int = 2,
     ) -> Optional[httpx.Response]:
@@ -183,17 +184,23 @@ class PricePopulator:
                 await self.rate_limited_request(api_type)
 
                 if method == "GET":
-                    response = await self.client.get(url)
+                    response = await self.client.get(url, params=params)
                 elif method == "POST":
-                    response = await self.client.post(url, json=json_data)
+                    response = await self.client.post(
+                        url, json=json_data, params=params
+                    )
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
 
-                if response.status_code == 429:
+                if response.status_code == 429 or not (
+                    200 <= response.status_code < 300
+                ):
                     if attempt < max_retries:
                         backoff_time = (2**attempt) + random.uniform(0, 1)
                         logger.debug(
-                            "Rate limited (429), retrying in %.1fs (attempt %d/%d)",
+                            "HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
+                            response.status_code,
+                            url.split("?")[0],
                             backoff_time,
                             attempt + 1,
                             max_retries + 1,
@@ -201,7 +208,7 @@ class PricePopulator:
                         await asyncio.sleep(backoff_time)
                         self.adaptive_rate_limit(api_type, False)
                         continue
-                    logger.warning("Max retries exceeded for %s", url)
+                    logger.warning("Max retries exceeded for %s", url.split("?")[0])
                     self.adaptive_rate_limit(api_type, False)
                     return None
 
@@ -267,9 +274,12 @@ class PricePopulator:
         """Fetch Steam price for a single game via Store API."""
         async with self.semaphore:
             try:
-                game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+                game_url = "https://store.steampowered.com/api/appdetails"
                 response = await self.make_request_with_retry(
-                    game_url, method="GET", api_type="store"
+                    game_url,
+                    method="GET",
+                    params={"appids": app_id, "cc": "us", "l": "en"},
+                    api_type="store",
                 )
 
                 if response is not None:
@@ -288,9 +298,12 @@ class PricePopulator:
         async with self.semaphore:
             # Strategy 1: ITAD lookup by Steam appid
             try:
-                lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
+                lookup_url = "https://api.isthereanydeal.com/games/lookup/v1"
                 lookup_response = await self.make_request_with_retry(
-                    lookup_url, method="GET", api_type="itad"
+                    lookup_url,
+                    method="GET",
+                    params={"key": ITAD_API_KEY, "appid": app_id},
+                    api_type="itad",
                 )
 
                 if lookup_response is not None:
@@ -303,11 +316,14 @@ class PricePopulator:
 
                         if game_id:
                             # Get price data using ITAD game ID
-                            prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US"
+                            prices_url = (
+                                "https://api.isthereanydeal.com/games/prices/v3"
+                            )
                             prices_response = await self.make_request_with_retry(
                                 prices_url,
                                 method="POST",
                                 json_data=[game_id],
+                                params={"key": ITAD_API_KEY, "country": "US"},
                                 api_type="itad",
                             )
 
@@ -345,9 +361,12 @@ class PricePopulator:
                 if cached_details and cached_details.get("name"):
                     game_name = cached_details["name"]
 
-                    search_url = f"https://api.isthereanydeal.com/games/search/v1?key={ITAD_API_KEY}&title={game_name}"
+                    search_url = "https://api.isthereanydeal.com/games/search/v1"
                     search_response = await self.make_request_with_retry(
-                        search_url, method="GET", api_type="itad"
+                        search_url,
+                        method="GET",
+                        params={"key": ITAD_API_KEY, "title": game_name},
+                        api_type="itad",
                     )
 
                     if search_response is not None:
@@ -358,11 +377,14 @@ class PricePopulator:
                         if search_data and len(search_data) > 0:
                             game_id = search_data[0].get("id")
                             if game_id:
-                                prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US"
+                                prices_url = (
+                                    "https://api.isthereanydeal.com/games/prices/v3"
+                                )
                                 prices_response = await self.make_request_with_retry(
                                     prices_url,
                                     method="POST",
                                     json_data=[game_id],
+                                    params={"key": ITAD_API_KEY, "country": "US"},
                                     api_type="itad",
                                 )
 
@@ -416,45 +438,35 @@ class PricePopulator:
         for i in range(0, len(items), batch_size):
             batch = items[i : i + batch_size]
 
-            conn = get_db_connection()
             try:
-                conn.execute("BEGIN TRANSACTION")
-                for app_id, game_info in batch:
-                    game_data = game_info["data"]
-                    cache_game_details(app_id, game_data, permanent=False, conn=conn)
-
-                conn.commit()
-                written_count += len(batch)
-                logger.debug(f"Successfully wrote batch of {len(batch)} Steam records")
-
-            except Exception as e:
-                try:
-                    conn.rollback()
-                except Exception as rollback_error:
-                    logger.error(f"Rollback failed: {rollback_error}")
-                logger.error(f"Failed to write Steam batch: {e}")
-                # Try individual records to salvage what we can
-                for app_id, game_info in batch:
-                    try:
+                with get_write_connection() as conn:
+                    for app_id, game_info in batch:
                         game_data = game_info["data"]
                         cache_game_details(
                             app_id, game_data, permanent=False, conn=conn
                         )
-                        conn.commit()
+                    conn.commit()
+                written_count += len(batch)
+                logger.debug("Successfully wrote batch of %d Steam records", len(batch))
+
+            except Exception as e:
+                logger.error("Failed to write Steam batch: %s", e)
+                # Try individual records to salvage what we can
+                for app_id, game_info in batch:
+                    try:
+                        with get_write_connection() as conn:
+                            game_data = game_info["data"]
+                            cache_game_details(
+                                app_id, game_data, permanent=False, conn=conn
+                            )
+                            conn.commit()
                         written_count += 1
                     except Exception as individual_error:
-                        try:
-                            conn.rollback()
-                        except Exception as rollback_error:
-                            logger.error(
-                                f"Individual rollback failed: {rollback_error}"
-                            )
                         logger.error(
-                            f"Failed to write individual Steam record {app_id}: {individual_error}"
+                            "Failed to write individual Steam record %s: %s",
+                            app_id,
+                            individual_error,
                         )
-
-            finally:
-                conn.close()
 
         print(f"   Successfully wrote {written_count} Steam records to database")
         return written_count
@@ -474,37 +486,9 @@ class PricePopulator:
         for i in range(0, len(items), batch_size):
             batch = items[i : i + batch_size]
 
-            conn = get_db_connection()
             try:
-                conn.execute("BEGIN TRANSACTION")
-                for app_id, price_info in batch:
-                    price_data = price_info["data"]
-                    lookup_method = price_info["method"]
-                    game_name = price_info.get("game_name")
-
-                    cache_itad_price_enhanced(
-                        app_id,
-                        price_data,
-                        lookup_method=lookup_method,
-                        steam_game_name=game_name,
-                        permanent=False,
-                        cache_hours=ITAD_CACHE_TTL,
-                        conn=conn,
-                    )
-
-                conn.commit()
-                written_count += len(batch)
-                logger.debug(f"Successfully wrote batch of {len(batch)} ITAD records")
-
-            except Exception as e:
-                try:
-                    conn.rollback()
-                except Exception as rollback_error:
-                    logger.error(f"Rollback failed: {rollback_error}")
-                logger.error(f"Failed to write ITAD batch: {e}")
-                # Try individual records to salvage what we can
-                for app_id, price_info in batch:
-                    try:
+                with get_write_connection() as conn:
+                    for app_id, price_info in batch:
                         price_data = price_info["data"]
                         lookup_method = price_info["method"]
                         game_name = price_info.get("game_name")
@@ -518,21 +502,37 @@ class PricePopulator:
                             cache_hours=ITAD_CACHE_TTL,
                             conn=conn,
                         )
-                        conn.commit()
+                    conn.commit()
+                written_count += len(batch)
+                logger.debug("Successfully wrote batch of %d ITAD records", len(batch))
+
+            except Exception as e:
+                logger.error("Failed to write ITAD batch: %s", e)
+                # Try individual records to salvage what we can
+                for app_id, price_info in batch:
+                    try:
+                        with get_write_connection() as conn:
+                            price_data = price_info["data"]
+                            lookup_method = price_info["method"]
+                            game_name = price_info.get("game_name")
+
+                            cache_itad_price_enhanced(
+                                app_id,
+                                price_data,
+                                lookup_method=lookup_method,
+                                steam_game_name=game_name,
+                                permanent=False,
+                                cache_hours=ITAD_CACHE_TTL,
+                                conn=conn,
+                            )
+                            conn.commit()
                         written_count += 1
                     except Exception as individual_error:
-                        try:
-                            conn.rollback()
-                        except Exception as rollback_error:
-                            logger.error(
-                                f"Individual rollback failed: {rollback_error}"
-                            )
                         logger.error(
-                            f"Failed to write individual ITAD record {app_id}: {individual_error}"
+                            "Failed to write individual ITAD record %s: %s",
+                            app_id,
+                            individual_error,
                         )
-
-            finally:
-                conn.close()
 
         print(f"   Successfully wrote {written_count} ITAD records to database")
         return written_count
