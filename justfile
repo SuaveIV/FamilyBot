@@ -156,23 +156,11 @@ convert-json *args:
     @echo "🔄 Converting Steamworks JSON..."
     mise exec -- uv run python scripts/steamworks_json_converter.py {{args}}
 
-# Populate price data (standard mode)
+# Populate price data (consolidated)
 populate-prices *args:
-    @echo "💰 Populating price data (standard mode)..."
+    @echo "💰 Populating price data (consolidated)..."
     mise exec -- uv run python scripts/populate_prices.py {{args}}
     @echo "✅ Price data populated"
-
-# Populate price data (optimized mode - 6-10x faster)
-populate-prices-fast *args:
-    @echo "💰 Populating price data (optimized mode)..."
-    mise exec -- uv run python scripts/populate_prices_optimized.py {{args}}
-    @echo "✅ Price data populated (optimized)"
-
-# Populate price data (async mode - 15-25x faster)
-populate-prices-turbo *args:
-    @echo "💰 Populating price data (async turbo mode)..."
-    mise exec -- uv run python scripts/populate_prices_async.py {{args}}
-    @echo "✅ Price data populated (turbo)"
 
 # Inspect database structure and contents
 inspect-db:
