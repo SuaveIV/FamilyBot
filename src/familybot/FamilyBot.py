@@ -29,7 +29,7 @@ from familybot.lib.user_repository import (
 )
 from familybot.lib.logging_config import setup_bot_logging
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import split_message
+from familybot.lib.discord_utils import split_message
 from familybot.web.api import app as web_app
 from familybot.lib.family_library_repository import (
     purge_family_library_cache,

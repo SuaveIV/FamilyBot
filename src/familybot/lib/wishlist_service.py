@@ -12,10 +12,25 @@ from familybot.lib.family_utils import format_message
 from familybot.lib.logging_config import get_logger, log_private_profile_detection
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.user_repository import load_family_members_from_db
-from familybot.lib.utils import add_to_wishlist
 from familybot.lib.wishlist_repository import cache_wishlist, get_cached_wishlist
 
 logger = get_logger("wishlist_service")
+
+
+def add_to_wishlist(global_wishlist: list, app_id: str, user_steam_id: str) -> None:
+    """
+    Adds a game app ID to the global wishlist list of lists, tracking users interested.
+    Each item in global_wishlist is [app_id: str, [user_steam_ids: str]].
+    """
+    found = False
+    for item in global_wishlist:
+        if item[0] == app_id:
+            if user_steam_id not in item[1]:
+                item[1].append(user_steam_id)
+            found = True
+            break
+    if not found:
+        global_wishlist.append([app_id, [user_steam_id]])
 
 
 async def collect_wishlists(

@@ -12,9 +12,9 @@ from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
+from familybot.lib.itad_service import get_lowest_price
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import get_lowest_price
 from familybot.lib.steam_api_manager import SteamAPIManager
 
 logger = get_logger(__name__)

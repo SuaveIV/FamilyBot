@@ -5,11 +5,11 @@ from typing import Any
 
 import aiohttp
 
+from familybot.lib.itad_service import prefetch_itad_prices
 from familybot.lib.logging_config import get_logger
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal
 from familybot.lib.user_repository import load_family_members_from_db
-from familybot.lib.utils import prefetch_itad_prices
 from familybot.lib.wishlist_service import collect_wishlists
 
 logger = get_logger("deal_service")

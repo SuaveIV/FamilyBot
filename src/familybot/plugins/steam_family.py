@@ -24,7 +24,9 @@ from familybot.lib.database import (
 # Import enhanced logging configuration
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import add_to_wishlist, get_lowest_price, split_message
+from familybot.lib.discord_utils import split_message
+from familybot.lib.itad_service import get_lowest_price
+from familybot.lib.wishlist_service import add_to_wishlist
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
@@ -483,7 +485,7 @@ class steam_family(Extension):
                 content=f"📊 Checking {total_games} games for deals..."
             )
 
-            from familybot.lib.utils import prefetch_itad_prices
+            from familybot.lib.itad_service import prefetch_itad_prices
             from familybot.lib.steam_helpers import fetch_game_details
 
             async with aiohttp.ClientSession() as session:

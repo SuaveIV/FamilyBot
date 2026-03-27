@@ -24,7 +24,10 @@ from familybot.lib.game_details_repository import (
 )
 from familybot.lib.family_utils import get_family_game_list_url
 from familybot.lib.logging_config import setup_script_logging
-from familybot.lib.utils import TokenBucket, add_to_wishlist
+from familybot.lib.wishlist_service import add_to_wishlist
+
+# TokenBucket will be imported from utils for now
+from familybot.lib.utils import TokenBucket
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("admin_commands", "INFO")

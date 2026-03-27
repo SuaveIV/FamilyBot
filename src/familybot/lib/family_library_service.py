@@ -20,7 +20,7 @@ from familybot.lib.game_details_repository import (
 from familybot.lib.logging_config import get_logger
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.user_repository import load_family_members_from_db
-from familybot.lib.utils import get_lowest_price
+from familybot.lib.itad_service import get_lowest_price
 
 logger = get_logger("family_library_service")
 

@@ -9,7 +9,7 @@ import aiohttp
 from familybot.config import FAMILY_STEAM_ID  # Import FAMILY_USER_DICT here
 from familybot.config import FAMILY_USER_DICT
 from familybot.lib.token_manager import get_token  # <<< IMPORT get_token here
-from familybot.lib.utils import get_lowest_price
+from familybot.lib.itad_service import get_lowest_price
 
 
 # Setup logging for this specific module

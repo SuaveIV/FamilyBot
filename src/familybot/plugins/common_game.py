@@ -21,7 +21,8 @@ from familybot.lib.database import (
 )
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import get_common_elements_in_lists, truncate_message_list
+from familybot.lib.discord_utils import truncate_message_list
+from familybot.lib.utils import get_common_elements_in_lists
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)

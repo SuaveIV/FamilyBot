@@ -21,12 +21,10 @@ from familybot.lib.family_game_manager import get_saved_games
 from familybot.lib.family_utils import format_message
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.utils import (
-    ProgressTracker,
-    add_to_wishlist,
-    prefetch_itad_prices,
-    split_message,
-)
+from familybot.lib.discord_utils import split_message
+from familybot.lib.itad_service import prefetch_itad_prices
+from familybot.lib.utils import ProgressTracker
+from familybot.lib.wishlist_service import add_to_wishlist
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
