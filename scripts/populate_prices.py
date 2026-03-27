@@ -789,23 +789,53 @@ class PricePopulator:
         steam_fallback_data = {}
         if fallback_ids:
             tasks = [self.fetch_steam_price_single(app_id) for app_id in fallback_ids]
-            for coro in asyncio.as_completed(tasks):
-                app_id, success, game_data, source = await coro
-                if success:
-                    steam_fallback_data[app_id] = {
-                        "data": {
-                            "lowest_price": str(
-                                game_data.get("price_overview", {}).get("final", 0)
-                                / 100
-                            ),
-                            "lowest_price_formatted": game_data.get(
-                                "price_overview", {}
-                            ).get("final_formatted", "N/A"),
-                            "shop_name": "Steam",
-                        },
-                        "method": "steam_fallback",
-                        "game_name": game_data.get("name"),
-                    }
+            if ASYNC_TQDM_AVAILABLE:
+                for task in atqdm(
+                    asyncio.as_completed(tasks),
+                    total=len(tasks),
+                    desc="Steam Fallback",
+                    unit="game",
+                ):
+                    app_id, success, game_data, source = await task
+                    if success:
+                        steam_fallback_data[app_id] = {
+                            "data": {
+                                "lowest_price": str(
+                                    game_data.get("price_overview", {}).get("final", 0)
+                                    / 100
+                                ),
+                                "lowest_price_formatted": game_data.get(
+                                    "price_overview", {}
+                                ).get("final_formatted", "N/A"),
+                                "shop_name": "Steam",
+                            },
+                            "method": "steam_fallback",
+                            "game_name": game_data.get("name"),
+                        }
+            else:
+                completed = 0
+                for coro in asyncio.as_completed(tasks):
+                    app_id, success, game_data, source = await coro
+                    if success:
+                        steam_fallback_data[app_id] = {
+                            "data": {
+                                "lowest_price": str(
+                                    game_data.get("price_overview", {}).get("final", 0)
+                                    / 100
+                                ),
+                                "lowest_price_formatted": game_data.get(
+                                    "price_overview", {}
+                                ).get("final_formatted", "N/A"),
+                                "shop_name": "Steam",
+                            },
+                            "method": "steam_fallback",
+                            "game_name": game_data.get("name"),
+                        }
+                    completed += 1
+                    if completed % 10 == 0:
+                        print(
+                            f"   Steam Fallback Progress: {completed}/{len(fallback_ids)}"
+                        )
 
         # Merge ITAD data with Steam fallback data
         all_data = {**itad_data, **steam_fallback_data}
