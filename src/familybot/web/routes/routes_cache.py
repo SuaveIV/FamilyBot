@@ -8,7 +8,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from familybot.lib.database import cleanup_expired_cache, get_db_connection
+from familybot.lib.database import cleanup_expired_cache
 from familybot.web.dependencies import get_db
 from familybot.web.models import CacheStats, CommandResponse
 from familybot.web.state import update_last_activity
@@ -48,34 +48,35 @@ async def get_cache_stats(conn=Depends(get_db)):
 
 @router.post("/api/cache/purge", response_model=CommandResponse)
 async def purge_cache(cache_type: str = "all"):
-    conn = get_db_connection()
+    from familybot.lib.database import get_write_connection
+
     try:
-        cursor = conn.cursor()
-
-        if cache_type == "all":
-            for table in _CACHE_TABLES.values():
-                cursor.execute(f"DELETE FROM {table}")
-            message = "All cache data purged successfully"
-
-        elif cache_type == "expired":
-            conn.close()
+        if cache_type == "expired":
             cleanup_expired_cache()
             update_last_activity()
             return CommandResponse(
                 success=True, message="Expired cache entries cleaned up"
             )
 
-        elif cache_type in _PURGE_TABLE_MAP:
-            cursor.execute(f"DELETE FROM {_PURGE_TABLE_MAP[cache_type]}")
-            message = f"{cache_type.title()} cache purged successfully"
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
 
-        else:
-            conn.close()
-            raise HTTPException(
-                status_code=400, detail=f"Unknown cache_type: {cache_type!r}"
-            )
+            if cache_type == "all":
+                for table in _CACHE_TABLES.values():
+                    cursor.execute(f"DELETE FROM {table}")
+                message = "All cache data purged successfully"
 
-        conn.commit()
+            elif cache_type in _PURGE_TABLE_MAP:
+                cursor.execute(f"DELETE FROM {_PURGE_TABLE_MAP[cache_type]}")
+                message = f"{cache_type.title()} cache purged successfully"
+
+            else:
+                raise HTTPException(
+                    status_code=400, detail=f"Unknown cache_type: {cache_type!r}"
+                )
+
+            conn.commit()
+
         update_last_activity()
         return CommandResponse(success=True, message=message)
 
@@ -84,5 +85,3 @@ async def purge_cache(cache_type: str = "all"):
     except Exception as exc:
         logger.exception("Error purging cache (type=%s)", cache_type)
         return CommandResponse(success=False, message=f"Error purging cache: {exc}")
-    finally:
-        conn.close()

@@ -1,5 +1,6 @@
 # In src/familybot/lib/database.py
 
+import contextlib
 import logging
 import os
 import sqlite3
@@ -62,10 +63,8 @@ def get_write_connection():
 def close_db_connection():
     """Close the thread-local database connection if it exists."""
     if hasattr(_local, "conn") and _local.conn is not None:
-        try:
+        with contextlib.suppress(sqlite3.Error):
             _local.conn.close()
-        except sqlite3.Error:
-            pass
         _local.conn = None
 
 
@@ -326,7 +325,6 @@ def sync_family_members_from_config():
 
 def get_cached_game_details(appid: str):
     """Get cached game details. Returns None if not found. Permanent cache never expires."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -497,44 +495,44 @@ def cache_user_games(
     steam_id: str, appids: list, cache_hours: int = WISHLIST_CACHE_TTL
 ):
     """Cache user's game list for specified hours."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        # Clear existing cache for this user
-        cursor.execute("DELETE FROM user_games_cache WHERE steam_id = ?", (steam_id,))
-
-        # Insert new cache entries
-        cache_entries = [
-            (
-                steam_id,
-                str(appid),
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at.isoformat().replace("+00:00", "Z"),
+            # Clear existing cache for this user
+            cursor.execute(
+                "DELETE FROM user_games_cache WHERE steam_id = ?", (steam_id,)
             )
-            for appid in appids
-        ]
-        cursor.executemany(
-            """
-            INSERT INTO user_games_cache (steam_id, appid, cached_at, expires_at)
-            VALUES (?, ?, ?, ?)
-        """,
-            cache_entries,
-        )
-        conn.commit()
-        logger.debug(f"Cached {len(appids)} games for user {steam_id}")
+
+            # Insert new cache entries
+            cache_entries = [
+                (
+                    steam_id,
+                    str(appid),
+                    now.isoformat().replace("+00:00", "Z"),
+                    expires_at.isoformat().replace("+00:00", "Z"),
+                )
+                for appid in appids
+            ]
+            cursor.executemany(
+                """
+                INSERT INTO user_games_cache (steam_id, appid, cached_at, expires_at)
+                VALUES (?, ?, ?, ?)
+            """,
+                cache_entries,
+            )
+            conn.commit()
+            logger.debug(f"Cached {len(appids)} games for user {steam_id}")
     except Exception as e:
         logger.error(f"Error caching user games for {steam_id}: {e}")
 
 
 def get_cached_discord_user(discord_id: str):
     """Get cached Discord user info if not expired, returns None if not found or expired."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -556,37 +554,35 @@ def get_cached_discord_user(discord_id: str):
 
 def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
     """Cache Discord user info for specified hours."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO discord_users_cache
-            (discord_id, username, cached_at, expires_at)
-            VALUES (?, ?, ?, ?)
-        """,
-            (
-                discord_id,
-                username,
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at.isoformat().replace("+00:00", "Z"),
-            ),
-        )
-        conn.commit()
-        logger.debug(f"Cached Discord user {discord_id}: {username}")
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO discord_users_cache
+                (discord_id, username, cached_at, expires_at)
+                VALUES (?, ?, ?, ?)
+            """,
+                (
+                    discord_id,
+                    username,
+                    now.isoformat().replace("+00:00", "Z"),
+                    expires_at.isoformat().replace("+00:00", "Z"),
+                ),
+            )
+            conn.commit()
+            logger.debug(f"Cached Discord user {discord_id}: {username}")
     except Exception as e:
         logger.error(f"Error caching Discord user {discord_id}: {e}")
 
 
 def get_cached_itad_price(appid: str):
     """Get cached ITAD price data. Returns None if not found. Permanent cache never expires."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -718,7 +714,6 @@ def cache_itad_price_enhanced(
 
 def get_cached_wishlist(steam_id: str):
     """Get cached wishlist data if not expired, returns None if not found or expired."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -740,44 +735,42 @@ def get_cached_wishlist(steam_id: str):
 
 def cache_wishlist(steam_id: str, appids: list, cache_hours: int = WISHLIST_CACHE_TTL):
     """Cache user's wishlist for specified hours (wishlists change moderately)."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        # Clear existing cache for this user
-        cursor.execute("DELETE FROM wishlist_cache WHERE steam_id = ?", (steam_id,))
+            # Clear existing cache for this user
+            cursor.execute("DELETE FROM wishlist_cache WHERE steam_id = ?", (steam_id,))
 
-        # Insert new cache entries
-        cache_entries = [
-            (
-                steam_id,
-                str(appid),
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at.isoformat().replace("+00:00", "Z"),
+            # Insert new cache entries
+            cache_entries = [
+                (
+                    steam_id,
+                    str(appid),
+                    now.isoformat().replace("+00:00", "Z"),
+                    expires_at.isoformat().replace("+00:00", "Z"),
+                )
+                for appid in appids
+            ]
+            cursor.executemany(
+                """
+                INSERT INTO wishlist_cache (steam_id, appid, cached_at, expires_at)
+                VALUES (?, ?, ?, ?)
+            """,
+                cache_entries,
             )
-            for appid in appids
-        ]
-        cursor.executemany(
-            """
-            INSERT INTO wishlist_cache (steam_id, appid, cached_at, expires_at)
-            VALUES (?, ?, ?, ?)
-        """,
-            cache_entries,
-        )
-        conn.commit()
-        logger.debug(f"Cached {len(appids)} wishlist items for user {steam_id}")
+            conn.commit()
+            logger.debug(f"Cached {len(appids)} wishlist items for user {steam_id}")
     except Exception as e:
         logger.error(f"Error caching wishlist for {steam_id}: {e}")
 
 
 def get_cached_family_library():
     """Get cached family library data if not expired, returns None if not found or expired."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -814,76 +807,72 @@ def cache_family_library(
     family_apps: list, cache_hours: int = FAMILY_LIBRARY_CACHE_TTL
 ):
     """Cache family library data for specified hours (updates infrequently)."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        import json
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            import json
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        # Clear existing cache
-        cursor.execute("DELETE FROM family_library_cache")
+            # Clear existing cache
+            cursor.execute("DELETE FROM family_library_cache")
 
-        # Insert new cache entries
-        cache_entries = []
-        for app in family_apps:
-            cache_entries.append(
-                (
-                    str(app.get("appid")),
-                    json.dumps(app.get("owner_steamids", [])),
-                    app.get("exclude_reason"),
-                    now.isoformat().replace("+00:00", "Z"),
-                    expires_at.isoformat().replace("+00:00", "Z"),
+            # Insert new cache entries
+            cache_entries = []
+            for app in family_apps:
+                cache_entries.append(
+                    (
+                        str(app.get("appid")),
+                        json.dumps(app.get("owner_steamids", [])),
+                        app.get("exclude_reason"),
+                        now.isoformat().replace("+00:00", "Z"),
+                        expires_at.isoformat().replace("+00:00", "Z"),
+                    )
                 )
-            )
 
-        cursor.executemany(
-            """
-            INSERT INTO family_library_cache (appid, owner_steamids, exclude_reason, cached_at, expires_at)
-            VALUES (?, ?, ?, ?, ?)
-        """,
-            cache_entries,
-        )
-        conn.commit()
-        logger.debug(
-            f"Cached {len(family_apps)} family library apps for {cache_hours} hours"
-        )
+            cursor.executemany(
+                """
+                INSERT INTO family_library_cache (appid, owner_steamids, exclude_reason, cached_at, expires_at)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                cache_entries,
+            )
+            conn.commit()
+            logger.debug(
+                f"Cached {len(family_apps)} family library apps for {cache_hours} hours"
+            )
     except Exception as e:
         logger.error(f"Error caching family library: {e}")
 
 
 def purge_wishlist_cache():
     """Purge all entries from the wishlist_cache table."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM wishlist_cache")
-        conn.commit()
-        logger.info("Purged all entries from wishlist_cache.")
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM wishlist_cache")
+            conn.commit()
+            logger.info("Purged all entries from wishlist_cache.")
     except Exception as e:
         logger.error(f"Error purging wishlist_cache: {e}")
 
 
 def purge_family_library_cache():
     """Purge all entries from the family_library_cache table."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM family_library_cache")
-        conn.commit()
-        logger.info("Purged all entries from family_library_cache.")
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM family_library_cache")
+            conn.commit()
+            logger.info("Purged all entries from family_library_cache.")
     except Exception as e:
         logger.error(f"Error purging family_library_cache: {e}")
 
 
 def get_steam_id_from_friendly_name(friendly_name: str) -> str | None:
     """Retrieves the SteamID associated with a given friendly name from the family_members table."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -904,7 +893,6 @@ def get_steam_id_from_discord_id(discord_id: str) -> str | None:
     """Retrieves the SteamID associated with a given Discord ID.
     Checks family_members table first (for config-driven members with discord_id set),
     then falls back to users table (for !register users)."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -940,41 +928,40 @@ def cache_game_details_with_source(
 
 def cleanup_expired_cache():
     """Remove expired cache entries from all cache tables."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
 
-        tables = [
-            "game_details_cache",
-            "user_games_cache",
-            "wishlist_cache",
-            "discord_users_cache",
-            "family_library_cache",
-            "itad_price_cache",
-        ]
+            tables = [
+                "game_details_cache",
+                "user_games_cache",
+                "wishlist_cache",
+                "discord_users_cache",
+                "family_library_cache",
+                "itad_price_cache",
+            ]
 
-        total_deleted = 0
-        for table in tables:
-            # Check if table has 'permanent' column
-            cursor.execute(f"PRAGMA table_info({table})")
-            columns = [col[1] for col in cursor.fetchall()]
+            total_deleted = 0
+            for table in tables:
+                # Check if table has 'permanent' column
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = [col[1] for col in cursor.fetchall()]
 
-            query = f"DELETE FROM {table} WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"
+                query = f"DELETE FROM {table} WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"
 
-            if "permanent" in columns:
-                # Protect permanent entries from deletion regardless of expires_at
-                query += " AND (permanent != 1 OR permanent IS NULL)"
+                if "permanent" in columns:
+                    # Protect permanent entries from deletion regardless of expires_at
+                    query += " AND (permanent != 1 OR permanent IS NULL)"
 
-            cursor.execute(query)
-            deleted = cursor.rowcount
-            total_deleted += deleted
-            if deleted > 0:
-                logger.debug(f"Cleaned up {deleted} expired entries from {table}")
+                cursor.execute(query)
+                deleted = cursor.rowcount
+                total_deleted += deleted
+                if deleted > 0:
+                    logger.debug(f"Cleaned up {deleted} expired entries from {table}")
 
-        conn.commit()
-        if total_deleted > 0:
-            logger.info(f"Cache cleanup: removed {total_deleted} expired entries")
+            conn.commit()
+            if total_deleted > 0:
+                logger.info(f"Cache cleanup: removed {total_deleted} expired entries")
     except Exception as e:
         logger.error(f"Error during cache cleanup: {e}")
 
@@ -984,7 +971,6 @@ def cleanup_expired_cache():
 
 def _has_migration_run(migration_name: str) -> bool:
     """Check if a named migration has already been applied."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -999,15 +985,14 @@ def _has_migration_run(migration_name: str) -> bool:
 
 def _mark_migration_run(migration_name: str) -> None:
     """Record that a named migration has been applied."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR IGNORE INTO migrations (name, applied_at) VALUES (?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))",
-            (migration_name,),
-        )
-        conn.commit()
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR IGNORE INTO migrations (name, applied_at) VALUES (?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))",
+                (migration_name,),
+            )
+            conn.commit()
     except Exception as e:
         logger.error(f"Error marking migration '{migration_name}': {e}")
 
@@ -1074,14 +1059,13 @@ def load_family_members_from_db() -> dict:
     from steam.steamid import SteamID
 
     members = {}
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
 
-        if not _has_migration_run("family_members_from_config"):
+    if not _has_migration_run("family_members_from_config"):
+        if FAMILY_USER_DICT:
+            conn = get_db_connection()
+            cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
+            if cursor.fetchone()[0] == 0:
                 logger.info(
                     "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
                 )
@@ -1093,25 +1077,38 @@ def load_family_members_from_db() -> dict:
                     )
 
                 if config_members_to_insert:
-                    cursor.executemany(
-                        "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                        config_members_to_insert,
-                    )
-                    conn.commit()
-                    logger.info(
-                        f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
-                    )
+                    try:
+                        with get_write_connection() as write_conn:
+                            write_cursor = write_conn.cursor()
+                            write_cursor.executemany(
+                                "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                                config_members_to_insert,
+                            )
+                            write_conn.commit()
+                            logger.info(
+                                f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
+                            )
+                    except sqlite3.Error as e:
+                        logger.error(
+                            f"Database: Error during family_members migration from config.yml: {e}"
+                        )
                 else:
                     logger.info(
                         "Database: No family members found in config.yml for migration."
                     )
-                _mark_migration_run("family_members_from_config")
             else:
                 logger.debug(
-                    "Database: 'family_members' table already has data or config.yml is empty. Skipping config.yml migration."
+                    "Database: 'family_members' table already has data. Skipping config.yml migration."
                 )
-                _mark_migration_run("family_members_from_config")
+        else:
+            logger.debug(
+                "Database: config.yml is empty. Skipping config.yml migration."
+            )
+        _mark_migration_run("family_members_from_config")
 
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         cursor.execute("SELECT steam_id, friendly_name FROM family_members")
         for row in cursor.fetchall():
             steam_id = row["steam_id"]
@@ -1139,7 +1136,6 @@ def load_family_members_from_db() -> dict:
 def load_all_registered_users_from_db() -> dict:
     """Loads all registered users (discord_id: steam_id) from the database."""
     users = {}
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
