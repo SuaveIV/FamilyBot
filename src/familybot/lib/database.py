@@ -1,8 +1,11 @@
 # In src/familybot/lib/database.py
 
+import contextlib
 import logging
 import os
 import sqlite3
+import threading
+from contextlib import contextmanager
 
 from familybot.config import (
     FAMILY_LIBRARY_CACHE_TTL,
@@ -19,199 +22,268 @@ if not logger.handlers:
 
 DATABASE_FILE = os.path.join(PROJECT_ROOT, "bot_data.db")
 
+# --- Connection pool: single connection per thread with write serialization ---
+_local = threading.local()
+_write_lock = threading.Lock()
+
 
 def get_db_connection():
-    """Establishes and returns a new SQLite database connection."""
-    try:
-        # Allow the connection to be used across multiple threads, necessary for FastAPI.
-        conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-    except sqlite3.Error as e:
-        logger.critical(f"Database connection error: {e}")
-        raise
+    """Returns a thread-local SQLite connection, creating one if needed.
+
+    Uses a single connection per thread to avoid repeated setup overhead.
+    Writes are serialized via _write_lock to prevent concurrent write corruption.
+    """
+    if not hasattr(_local, "conn") or _local.conn is None:
+        try:
+            conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            _local.conn = conn
+        except sqlite3.Error as e:
+            logger.critical(f"Database connection error: {e}")
+            raise
+    else:
+        # Check if the existing connection is still usable (not closed)
+        try:
+            _local.conn.execute("SELECT 1")
+        except sqlite3.ProgrammingError:
+            # Connection was closed, create a new one
+            try:
+                conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=WAL")
+                _local.conn = conn
+            except sqlite3.Error as e:
+                logger.critical(f"Database connection error: {e}")
+                raise
+    return _local.conn
+
+
+@contextmanager
+def get_write_connection():
+    """Context manager that provides a connection with write lock held.
+
+    Usage:
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT ...")
+            conn.commit()
+
+    If an exception is raised inside the with-block, the transaction is
+    automatically rolled back to prevent leaving an open transaction on
+    the reused thread-local connection.
+    """
+    conn = get_db_connection()
+    with _write_lock:
+        try:
+            yield conn
+        except BaseException:
+            conn.rollback()
+            raise
+
+
+def close_db_connection():
+    """Close the thread-local database connection if it exists."""
+    if hasattr(_local, "conn") and _local.conn is not None:
+        with contextlib.suppress(sqlite3.Error):
+            _local.conn.close()
+        _local.conn = None
 
 
 def init_db():
     """Initializes the database schema by creating tables if they don't exist
     and adding new columns if they are missing (for schema evolution)."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
 
-        # Create 'users' table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                discord_id TEXT PRIMARY KEY,
-                steam_id TEXT NOT NULL UNIQUE
-            )
-        """)
-        logger.info("Database: 'users' table checked/created.")
+            # Create 'users' table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    discord_id TEXT PRIMARY KEY,
+                    steam_id TEXT NOT NULL UNIQUE
+                )
+            """)
+            logger.info("Database: 'users' table checked/created.")
 
-        # Create 'saved_games' table with detected_at timestamp if it doesn't exist
-        # The DEFAULT (STRFTIME...) works perfectly when creating a new table.
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS saved_games (
-                appid TEXT PRIMARY KEY,
-                detected_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
-            )
-        """)
-        logger.info("Database: 'saved_games' table checked/created.")
+            # Create 'saved_games' table with detected_at timestamp if it doesn't exist
+            # The DEFAULT (STRFTIME...) works perfectly when creating a new table.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS saved_games (
+                    appid TEXT PRIMARY KEY,
+                    detected_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+                )
+            """)
+            logger.info("Database: 'saved_games' table checked/created.")
 
-        # Create 'family_members' table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS family_members (
-                steam_id TEXT PRIMARY KEY,
-                friendly_name TEXT NOT NULL,
-                discord_id TEXT
-            )
-        """)
-        logger.info("Database: 'family_members' table checked/created.")
+            # Create 'family_members' table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS family_members (
+                    steam_id TEXT PRIMARY KEY,
+                    friendly_name TEXT NOT NULL,
+                    discord_id TEXT
+                )
+            """)
+            logger.info("Database: 'family_members' table checked/created.")
 
-        # Create 'game_details_cache' table for Steam Store API responses
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS game_details_cache (
-                appid TEXT PRIMARY KEY,
-                name TEXT,
-                type TEXT,
-                is_free BOOLEAN,
-                categories TEXT,
-                price_data TEXT,
-                is_multiplayer BOOLEAN DEFAULT 0,
-                is_coop BOOLEAN DEFAULT 0,
-                is_family_shared BOOLEAN DEFAULT 0,
-                cached_at TEXT NOT NULL,
-                expires_at TEXT,
-                permanent BOOLEAN DEFAULT 1,
-                price_source TEXT DEFAULT 'store_api'
-            )
-        """)
-        logger.info("Database: 'game_details_cache' table checked/created.")
+            # Create 'game_details_cache' table for Steam Store API responses
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS game_details_cache (
+                    appid TEXT PRIMARY KEY,
+                    name TEXT,
+                    type TEXT,
+                    is_free BOOLEAN,
+                    categories TEXT,
+                    price_data TEXT,
+                    is_multiplayer BOOLEAN DEFAULT 0,
+                    is_coop BOOLEAN DEFAULT 0,
+                    is_family_shared BOOLEAN DEFAULT 0,
+                    cached_at TEXT NOT NULL,
+                    expires_at TEXT,
+                    permanent BOOLEAN DEFAULT 1,
+                    price_source TEXT DEFAULT 'store_api'
+                )
+            """)
+            logger.info("Database: 'game_details_cache' table checked/created.")
 
-        # Create 'user_games_cache' table for Steam GetOwnedGames responses
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_games_cache (
-                steam_id TEXT,
-                appid TEXT,
-                cached_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                PRIMARY KEY (steam_id, appid)
-            )
-        """)
-        logger.info("Database: 'user_games_cache' table checked/created.")
+            # Create 'user_games_cache' table for Steam GetOwnedGames responses
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_games_cache (
+                    steam_id TEXT,
+                    appid TEXT,
+                    cached_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (steam_id, appid)
+                )
+            """)
+            logger.info("Database: 'user_games_cache' table checked/created.")
 
-        # Create 'wishlist_cache' table for Steam wishlist data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS wishlist_cache (
-                steam_id TEXT,
-                appid TEXT,
-                cached_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                PRIMARY KEY (steam_id, appid)
-            )
-        """)
-        logger.info("Database: 'wishlist_cache' table checked/created.")
+            # Create 'wishlist_cache' table for Steam wishlist data
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS wishlist_cache (
+                    steam_id TEXT,
+                    appid TEXT,
+                    cached_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (steam_id, appid)
+                )
+            """)
+            logger.info("Database: 'wishlist_cache' table checked/created.")
 
-        # Create 'discord_users_cache' table for Discord user info
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS discord_users_cache (
-                discord_id TEXT PRIMARY KEY,
-                username TEXT,
-                cached_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL
-            )
-        """)
-        logger.info("Database: 'discord_users_cache' table checked/created.")
+            # Create 'discord_users_cache' table for Discord user info
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS discord_users_cache (
+                    discord_id TEXT PRIMARY KEY,
+                    username TEXT,
+                    cached_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+            """)
+            logger.info("Database: 'discord_users_cache' table checked/created.")
 
-        # Create 'family_library_cache' table for family shared library
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS family_library_cache (
-                appid TEXT PRIMARY KEY,
-                owner_steamids TEXT,
-                exclude_reason INTEGER,
-                cached_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL
-            )
-        """)
-        logger.info("Database: 'family_library_cache' table checked/created.")
+            # Create 'family_library_cache' table for family shared library
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS family_library_cache (
+                    appid TEXT PRIMARY KEY,
+                    owner_steamids TEXT,
+                    exclude_reason INTEGER,
+                    cached_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+            """)
+            logger.info("Database: 'family_library_cache' table checked/created.")
 
-        # Create 'itad_price_cache' table for ITAD price data (historical prices are permanent)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS itad_price_cache (
-                appid TEXT PRIMARY KEY,
-                lowest_price TEXT,
-                lowest_price_formatted TEXT,
-                shop_name TEXT,
-                cached_at TEXT NOT NULL,
-                expires_at TEXT,
-                permanent BOOLEAN DEFAULT 1,
-                lookup_method TEXT DEFAULT 'appid',
-                steam_game_name TEXT
-            )
-        """)
-        logger.info("Database: 'itad_price_cache' table checked/created.")
+            # Create 'itad_price_cache' table for ITAD price data (historical prices are permanent)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS itad_price_cache (
+                    appid TEXT PRIMARY KEY,
+                    lowest_price TEXT,
+                    lowest_price_formatted TEXT,
+                    shop_name TEXT,
+                    cached_at TEXT NOT NULL,
+                    expires_at TEXT,
+                    permanent BOOLEAN DEFAULT 1,
+                    lookup_method TEXT DEFAULT 'appid',
+                    steam_game_name TEXT
+                )
+            """)
+            logger.info("Database: 'itad_price_cache' table checked/created.")
 
-        # --- DECLARATIVE MIGRATIONS for adding columns to existing tables ---
+            # Create 'migrations' table for tracking applied migrations
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS migrations (
+                    name TEXT PRIMARY KEY,
+                    applied_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+                )
+            """)
+            logger.info("Database: 'migrations' table checked/created.")
 
-        # List of (table_name, column_name, column_definition, default_value_for_update)
-        # default_value_for_update is used to populate existing rows if not NULL.
-        COLUMN_MIGRATIONS = [
-            (
-                "saved_games",
-                "detected_at",
-                "TEXT",
-                "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')",
-            ),
-            ("game_details_cache", "is_multiplayer", "BOOLEAN DEFAULT 0", "0"),
-            ("game_details_cache", "is_coop", "BOOLEAN DEFAULT 0", "0"),
-            ("game_details_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
-            (
-                "game_details_cache",
-                "price_source",
-                "TEXT DEFAULT 'store_api'",
-                "'store_api'",
-            ),
-            ("itad_price_cache", "permanent", "BOOLEAN DEFAULT 1", "1"),
-            ("itad_price_cache", "lookup_method", "TEXT DEFAULT 'appid'", "'appid'"),
-            ("itad_price_cache", "steam_game_name", "TEXT", None),
-        ]
+            # --- DECLARATIVE MIGRATIONS for adding columns to existing tables ---
 
-        def _run_column_migrations(cursor: sqlite3.Cursor):
-            for table, column, definition, update_val in COLUMN_MIGRATIONS:
-                cursor.execute(f"PRAGMA table_info({table})")
-                columns = [col[1] for col in cursor.fetchall()]
+            # List of (table_name, column_name, column_definition, default_value_for_update)
+            # default_value_for_update is used to populate existing rows if not NULL.
+            COLUMN_MIGRATIONS = [
+                (
+                    "saved_games",
+                    "detected_at",
+                    "TEXT",
+                    "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')",
+                ),
+                ("game_details_cache", "is_multiplayer", "BOOLEAN DEFAULT 0", "0"),
+                ("game_details_cache", "is_coop", "BOOLEAN DEFAULT 0", "0"),
+                ("game_details_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
+                (
+                    "game_details_cache",
+                    "price_source",
+                    "TEXT DEFAULT 'store_api'",
+                    "'store_api'",
+                ),
+                ("itad_price_cache", "permanent", "BOOLEAN DEFAULT 1", "1"),
+                (
+                    "itad_price_cache",
+                    "lookup_method",
+                    "TEXT DEFAULT 'appid'",
+                    "'appid'",
+                ),
+                ("itad_price_cache", "steam_game_name", "TEXT", None),
+            ]
 
-                if column not in columns:
-                    logger.info(
-                        f"Database: Adding column '{column}' to table '{table}'."
-                    )
-                    try:
-                        cursor.execute(
-                            f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
-                        )
-                        if update_val is not None:
-                            cursor.execute(
-                                f"UPDATE {table} SET {column} = {update_val} WHERE {column} IS NULL"
-                            )
+            def _run_column_migrations(cursor: sqlite3.Cursor):
+                for table, column, definition, update_val in COLUMN_MIGRATIONS:
+                    cursor.execute(f"PRAGMA table_info({table})")
+                    columns = [col[1] for col in cursor.fetchall()]
+
+                    if column not in columns:
                         logger.info(
-                            f"Database: Successfully added '{column}' to '{table}'."
+                            f"Database: Adding column '{column}' to table '{table}'."
                         )
-                    except sqlite3.OperationalError as e:
-                        logger.error(
-                            f"Database: Failed to add '{column}' to '{table}': {e}"
-                        )
+                        try:
+                            cursor.execute(
+                                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+                            )
+                            if update_val is not None:
+                                cursor.execute(
+                                    f"UPDATE {table} SET {column} = {update_val} WHERE {column} IS NULL"
+                                )
+                            logger.info(
+                                f"Database: Successfully added '{column}' to '{table}'."
+                            )
+                        except sqlite3.OperationalError as e:
+                            logger.error(
+                                f"Database: Failed to add '{column}' to '{table}': {e}"
+                            )
+                            raise RuntimeError(
+                                f"Database migration failed: unable to add column '{column}' to table '{table}'. "
+                                f"Aborting initialization to prevent partial schema migration."
+                            ) from e
 
-        _run_column_migrations(cursor)
+            _run_column_migrations(cursor)
 
-        # --- END MIGRATIONS ---
+            # --- END MIGRATIONS ---
 
-        conn.commit()  # Final commit
+            conn.commit()  # Final commit
     except sqlite3.Error as e:
         logger.critical(f"Database initialization error: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 def _parse_family_config_entry(value) -> tuple[str, str | None]:
@@ -238,44 +310,40 @@ def sync_family_members_from_config():
     When using the legacy string format, preserves any existing discord_id from the database
     rather than clobbering it to NULL.
     """
-    conn = None
     try:
         from familybot.config import FAMILY_USER_DICT
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
 
-        for steam_id, value in FAMILY_USER_DICT.items():
-            friendly_name, discord_id = _parse_family_config_entry(value)
+            for steam_id, value in FAMILY_USER_DICT.items():
+                friendly_name, discord_id = _parse_family_config_entry(value)
 
-            # For legacy string format (discord_id is None), preserve existing discord_id
-            if discord_id is None:
+                # For legacy string format (discord_id is None), preserve existing discord_id
+                if discord_id is None:
+                    cursor.execute(
+                        "SELECT discord_id FROM family_members WHERE steam_id = ?",
+                        (steam_id,),
+                    )
+                    existing = cursor.fetchone()
+                    if existing and existing["discord_id"]:
+                        discord_id = existing["discord_id"]
+
                 cursor.execute(
-                    "SELECT discord_id FROM family_members WHERE steam_id = ?",
-                    (steam_id,),
+                    "INSERT OR REPLACE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                    (steam_id, friendly_name, discord_id),
                 )
-                existing = cursor.fetchone()
-                if existing and existing["discord_id"]:
-                    discord_id = existing["discord_id"]
+                logger.debug(
+                    "Synced family member: '%s' (Steam ID: %s, Discord ID: %s).",
+                    friendly_name,
+                    steam_id,
+                    discord_id,
+                )
 
-            cursor.execute(
-                "INSERT OR REPLACE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                (steam_id, friendly_name, discord_id),
-            )
-            logger.debug(
-                "Synced family member: '%s' (Steam ID: %s, Discord ID: %s).",
-                friendly_name,
-                steam_id,
-                discord_id,
-            )
-
-        conn.commit()
-        logger.info("Family members synchronized from config.yml to database.")
+            conn.commit()
+            logger.info("Family members synchronized from config.yml to database.")
     except Exception as e:
         logger.error(f"Error synchronizing family members from config: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 # === CACHE HELPER FUNCTIONS ===
@@ -283,7 +351,6 @@ def sync_family_members_from_config():
 
 def get_cached_game_details(appid: str):
     """Get cached game details. Returns None if not found. Permanent cache never expires."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -324,9 +391,6 @@ def get_cached_game_details(appid: str):
     except Exception as e:
         logger.error(f"Error getting cached game details for {appid}: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
@@ -350,6 +414,57 @@ def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
     return is_multiplayer, is_coop, is_family_shared
 
 
+def _do_cache_game_details(
+    cursor: sqlite3.Cursor,
+    appid: str,
+    game_data: dict,
+    permanent: bool,
+    cache_hours: int | None,
+    price_source: str,
+):
+    """Internal: cache game details using an existing cursor."""
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    expires_at_str = None
+    if not permanent and cache_hours:
+        expires_at = now + timedelta(hours=cache_hours)
+        expires_at_str = expires_at.isoformat().replace("+00:00", "Z")
+
+    categories = game_data.get("categories", [])
+    is_multiplayer, is_coop, is_family_shared = _analyze_game_categories(categories)
+
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO game_details_cache
+        (appid, name, type, is_free, categories, price_data, is_multiplayer, is_coop, is_family_shared, price_source, cached_at, expires_at, permanent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """,
+        (
+            appid,
+            game_data.get("name"),
+            game_data.get("type"),
+            game_data.get("is_free", False),
+            json.dumps(categories),
+            json.dumps(game_data.get("price_overview"))
+            if game_data.get("price_overview")
+            else None,
+            1 if is_multiplayer else 0,
+            1 if is_coop else 0,
+            1 if is_family_shared else 0,
+            price_source,
+            now.isoformat().replace("+00:00", "Z"),
+            expires_at_str,
+            1 if permanent else 0,
+        ),
+    )
+    cache_type = "permanently" if permanent else f"for {cache_hours} hours"
+    logger.debug(
+        f"Cached game details for {appid} {cache_type} (MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})"
+    )
+
+
 def cache_game_details(
     appid: str,
     game_data: dict,
@@ -358,66 +473,23 @@ def cache_game_details(
     price_source: str = "store_api",
     conn: sqlite3.Connection | None = None,
 ):
-    """Cache game details permanently by default, or for specified hours if permanent=False."""
-    close_conn = False
-    if conn is None:
-        conn = get_db_connection()
-        close_conn = True
+    """Cache game details permanently by default, or for specified hours if permanent=False.
 
-    try:
+    If conn is supplied, the caller owns the write lock. Otherwise, acquires it internally.
+    """
+    if conn is not None:
         cursor = conn.cursor()
-        import json
-        from datetime import datetime, timedelta, timezone
-
-        now = datetime.now(timezone.utc)
-        expires_at = None
-
-        if not permanent and cache_hours:
-            expires_at = now + timedelta(hours=cache_hours)
-            expires_at_str = expires_at.isoformat().replace("+00:00", "Z")
-        else:
-            expires_at_str = None  # NULL for permanent cache
-
-        # Analyze categories to determine multiplayer/co-op/family sharing status
-        categories = game_data.get("categories", [])
-        is_multiplayer, is_coop, is_family_shared = _analyze_game_categories(categories)
-
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO game_details_cache
-            (appid, name, type, is_free, categories, price_data, is_multiplayer, is_coop, is_family_shared, price_source, cached_at, expires_at, permanent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                appid,
-                game_data.get("name"),
-                game_data.get("type"),
-                game_data.get("is_free", False),
-                json.dumps(categories),
-                json.dumps(game_data.get("price_overview"))
-                if game_data.get("price_overview")
-                else None,
-                1 if is_multiplayer else 0,
-                1 if is_coop else 0,
-                1 if is_family_shared else 0,
-                price_source,
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at_str,
-                1 if permanent else 0,
-            ),
+        _do_cache_game_details(
+            cursor, appid, game_data, permanent, cache_hours, price_source
         )
-        if close_conn:
-            conn.commit()
-        cache_type = "permanently" if permanent else f"for {cache_hours} hours"
-        logger.debug(
-            f"Cached game details for {appid} {cache_type} (MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})"
-        )
-    except Exception as e:
-        logger.error(f"Error caching game details for {appid}: {e}")
-        raise e
-    finally:
-        if close_conn and conn:
-            conn.close()
+        conn.commit()
+    else:
+        with get_write_connection() as write_conn:
+            cursor = write_conn.cursor()
+            _do_cache_game_details(
+                cursor, appid, game_data, permanent, cache_hours, price_source
+            )
+            write_conn.commit()
 
 
 def force_update_game_cache(appid: str, game_data: dict):
@@ -428,7 +500,6 @@ def force_update_game_cache(appid: str, game_data: dict):
 
 def get_cached_user_games(steam_id: str):
     """Get cached user games if not expired, returns None if not found or expired."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -446,56 +517,50 @@ def get_cached_user_games(steam_id: str):
     except Exception as e:
         logger.error(f"Error getting cached user games for {steam_id}: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def cache_user_games(
     steam_id: str, appids: list, cache_hours: int = WISHLIST_CACHE_TTL
 ):
     """Cache user's game list for specified hours."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        # Clear existing cache for this user
-        cursor.execute("DELETE FROM user_games_cache WHERE steam_id = ?", (steam_id,))
-
-        # Insert new cache entries
-        cache_entries = [
-            (
-                steam_id,
-                str(appid),
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at.isoformat().replace("+00:00", "Z"),
+            # Clear existing cache for this user
+            cursor.execute(
+                "DELETE FROM user_games_cache WHERE steam_id = ?", (steam_id,)
             )
-            for appid in appids
-        ]
-        cursor.executemany(
-            """
-            INSERT INTO user_games_cache (steam_id, appid, cached_at, expires_at)
-            VALUES (?, ?, ?, ?)
-        """,
-            cache_entries,
-        )
-        conn.commit()
-        logger.debug(f"Cached {len(appids)} games for user {steam_id}")
+
+            # Insert new cache entries
+            cache_entries = [
+                (
+                    steam_id,
+                    str(appid),
+                    now.isoformat().replace("+00:00", "Z"),
+                    expires_at.isoformat().replace("+00:00", "Z"),
+                )
+                for appid in appids
+            ]
+            cursor.executemany(
+                """
+                INSERT INTO user_games_cache (steam_id, appid, cached_at, expires_at)
+                VALUES (?, ?, ?, ?)
+            """,
+                cache_entries,
+            )
+            conn.commit()
+            logger.debug(f"Cached {len(appids)} games for user {steam_id}")
     except Exception as e:
         logger.error(f"Error caching user games for {steam_id}: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_cached_discord_user(discord_id: str):
     """Get cached Discord user info if not expired, returns None if not found or expired."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -513,47 +578,39 @@ def get_cached_discord_user(discord_id: str):
     except Exception as e:
         logger.error(f"Error getting cached Discord user for {discord_id}: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
     """Cache Discord user info for specified hours."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO discord_users_cache
-            (discord_id, username, cached_at, expires_at)
-            VALUES (?, ?, ?, ?)
-        """,
-            (
-                discord_id,
-                username,
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at.isoformat().replace("+00:00", "Z"),
-            ),
-        )
-        conn.commit()
-        logger.debug(f"Cached Discord user {discord_id}: {username}")
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO discord_users_cache
+                (discord_id, username, cached_at, expires_at)
+                VALUES (?, ?, ?, ?)
+            """,
+                (
+                    discord_id,
+                    username,
+                    now.isoformat().replace("+00:00", "Z"),
+                    expires_at.isoformat().replace("+00:00", "Z"),
+                ),
+            )
+            conn.commit()
+            logger.debug(f"Cached Discord user {discord_id}: {username}")
     except Exception as e:
         logger.error(f"Error caching Discord user {discord_id}: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_cached_itad_price(appid: str):
     """Get cached ITAD price data. Returns None if not found. Permanent cache never expires."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -579,9 +636,49 @@ def get_cached_itad_price(appid: str):
     except Exception as e:
         logger.error(f"Error getting cached ITAD price for {appid}: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
+
+
+def _do_cache_itad_price(
+    cursor: sqlite3.Cursor,
+    appid: str,
+    price_data: dict,
+    permanent: bool,
+    cache_hours: int,
+    lookup_method: str,
+    steam_game_name: str | None,
+):
+    """Internal: cache ITAD price using an existing cursor."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    if permanent:
+        expires_at_str = None
+        permanent_val = 1
+    else:
+        expires_at = now + timedelta(hours=cache_hours)
+        expires_at_str = expires_at.isoformat().replace("+00:00", "Z")
+        permanent_val = 0
+
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO itad_price_cache
+        (appid, lowest_price, lowest_price_formatted, shop_name, lookup_method, steam_game_name, cached_at, expires_at, permanent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """,
+        (
+            appid,
+            price_data.get("lowest_price"),
+            price_data.get("lowest_price_formatted"),
+            price_data.get("shop_name"),
+            lookup_method,
+            steam_game_name,
+            now.isoformat().replace("+00:00", "Z"),
+            expires_at_str,
+            permanent_val,
+        ),
+    )
+    cache_type = "permanently" if permanent else f"for {cache_hours} hours"
+    logger.debug(f"Cached ITAD price for {appid} {cache_type}")
 
 
 def cache_itad_price(
@@ -593,53 +690,35 @@ def cache_itad_price(
     steam_game_name: str | None = None,
     conn: sqlite3.Connection | None = None,
 ):
-    """Cache ITAD price data. If permanent=True, cache never expires (expires_at=NULL, permanent=1)."""
-    close_conn = False
-    if conn is None:
-        conn = get_db_connection()
-        close_conn = True
+    """Cache ITAD price data. If permanent=True, cache never expires (expires_at=NULL, permanent=1).
 
-    try:
+    If conn is supplied, the caller owns the write lock. Otherwise, acquires it internally.
+    """
+    if conn is not None:
         cursor = conn.cursor()
-        from datetime import datetime, timedelta, timezone
-
-        now = datetime.now(timezone.utc)
-        if permanent:
-            expires_at_str = None
-            permanent_val = 1
-        else:
-            expires_at = now + timedelta(hours=cache_hours)
-            expires_at_str = expires_at.isoformat().replace("+00:00", "Z")
-            permanent_val = 0
-
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO itad_price_cache
-            (appid, lowest_price, lowest_price_formatted, shop_name, lookup_method, steam_game_name, cached_at, expires_at, permanent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
+        _do_cache_itad_price(
+            cursor,
+            appid,
+            price_data,
+            permanent,
+            cache_hours,
+            lookup_method,
+            steam_game_name,
+        )
+        conn.commit()
+    else:
+        with get_write_connection() as write_conn:
+            cursor = write_conn.cursor()
+            _do_cache_itad_price(
+                cursor,
                 appid,
-                price_data.get("lowest_price"),
-                price_data.get("lowest_price_formatted"),
-                price_data.get("shop_name"),
+                price_data,
+                permanent,
+                cache_hours,
                 lookup_method,
                 steam_game_name,
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at_str,
-                permanent_val,
-            ),
-        )
-        if close_conn:
-            conn.commit()
-        cache_type = "permanently" if permanent else f"for {cache_hours} hours"
-        logger.debug(f"Cached ITAD price for {appid} {cache_type}")
-    except Exception as e:
-        logger.error(f"Error caching ITAD price for {appid}: {e}")
-        raise e
-    finally:
-        if close_conn and conn:
-            conn.close()
+            )
+            write_conn.commit()
 
 
 def cache_itad_price_enhanced(
@@ -665,7 +744,6 @@ def cache_itad_price_enhanced(
 
 def get_cached_wishlist(steam_id: str):
     """Get cached wishlist data if not expired, returns None if not found or expired."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -683,54 +761,46 @@ def get_cached_wishlist(steam_id: str):
     except Exception as e:
         logger.error(f"Error getting cached wishlist for {steam_id}: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def cache_wishlist(steam_id: str, appids: list, cache_hours: int = WISHLIST_CACHE_TTL):
     """Cache user's wishlist for specified hours (wishlists change moderately)."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        # Clear existing cache for this user
-        cursor.execute("DELETE FROM wishlist_cache WHERE steam_id = ?", (steam_id,))
+            # Clear existing cache for this user
+            cursor.execute("DELETE FROM wishlist_cache WHERE steam_id = ?", (steam_id,))
 
-        # Insert new cache entries
-        cache_entries = [
-            (
-                steam_id,
-                str(appid),
-                now.isoformat().replace("+00:00", "Z"),
-                expires_at.isoformat().replace("+00:00", "Z"),
+            # Insert new cache entries
+            cache_entries = [
+                (
+                    steam_id,
+                    str(appid),
+                    now.isoformat().replace("+00:00", "Z"),
+                    expires_at.isoformat().replace("+00:00", "Z"),
+                )
+                for appid in appids
+            ]
+            cursor.executemany(
+                """
+                INSERT INTO wishlist_cache (steam_id, appid, cached_at, expires_at)
+                VALUES (?, ?, ?, ?)
+            """,
+                cache_entries,
             )
-            for appid in appids
-        ]
-        cursor.executemany(
-            """
-            INSERT INTO wishlist_cache (steam_id, appid, cached_at, expires_at)
-            VALUES (?, ?, ?, ?)
-        """,
-            cache_entries,
-        )
-        conn.commit()
-        logger.debug(f"Cached {len(appids)} wishlist items for user {steam_id}")
+            conn.commit()
+            logger.debug(f"Cached {len(appids)} wishlist items for user {steam_id}")
     except Exception as e:
         logger.error(f"Error caching wishlist for {steam_id}: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_cached_family_library():
     """Get cached family library data if not expired, returns None if not found or expired."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -761,94 +831,78 @@ def get_cached_family_library():
     except Exception as e:
         logger.error(f"Error getting cached family library: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def cache_family_library(
     family_apps: list, cache_hours: int = FAMILY_LIBRARY_CACHE_TTL
 ):
     """Cache family library data for specified hours (updates infrequently)."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        import json
-        from datetime import datetime, timedelta, timezone
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            import json
+            from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(hours=cache_hours)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=cache_hours)
 
-        # Clear existing cache
-        cursor.execute("DELETE FROM family_library_cache")
+            # Clear existing cache
+            cursor.execute("DELETE FROM family_library_cache")
 
-        # Insert new cache entries
-        cache_entries = []
-        for app in family_apps:
-            cache_entries.append(
-                (
-                    str(app.get("appid")),
-                    json.dumps(app.get("owner_steamids", [])),
-                    app.get("exclude_reason"),
-                    now.isoformat().replace("+00:00", "Z"),
-                    expires_at.isoformat().replace("+00:00", "Z"),
+            # Insert new cache entries
+            cache_entries = []
+            for app in family_apps:
+                cache_entries.append(
+                    (
+                        str(app.get("appid")),
+                        json.dumps(app.get("owner_steamids", [])),
+                        app.get("exclude_reason"),
+                        now.isoformat().replace("+00:00", "Z"),
+                        expires_at.isoformat().replace("+00:00", "Z"),
+                    )
                 )
-            )
 
-        cursor.executemany(
-            """
-            INSERT INTO family_library_cache (appid, owner_steamids, exclude_reason, cached_at, expires_at)
-            VALUES (?, ?, ?, ?, ?)
-        """,
-            cache_entries,
-        )
-        conn.commit()
-        logger.debug(
-            f"Cached {len(family_apps)} family library apps for {cache_hours} hours"
-        )
+            cursor.executemany(
+                """
+                INSERT INTO family_library_cache (appid, owner_steamids, exclude_reason, cached_at, expires_at)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                cache_entries,
+            )
+            conn.commit()
+            logger.debug(
+                f"Cached {len(family_apps)} family library apps for {cache_hours} hours"
+            )
     except Exception as e:
         logger.error(f"Error caching family library: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 def purge_wishlist_cache():
     """Purge all entries from the wishlist_cache table."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM wishlist_cache")
-        conn.commit()
-        logger.info("Purged all entries from wishlist_cache.")
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM wishlist_cache")
+            conn.commit()
+            logger.info("Purged all entries from wishlist_cache.")
     except Exception as e:
         logger.error(f"Error purging wishlist_cache: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 def purge_family_library_cache():
     """Purge all entries from the family_library_cache table."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM family_library_cache")
-        conn.commit()
-        logger.info("Purged all entries from family_library_cache.")
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM family_library_cache")
+            conn.commit()
+            logger.info("Purged all entries from family_library_cache.")
     except Exception as e:
         logger.error(f"Error purging family_library_cache: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_steam_id_from_friendly_name(friendly_name: str) -> str | None:
     """Retrieves the SteamID associated with a given friendly name from the family_members table."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -863,16 +917,12 @@ def get_steam_id_from_friendly_name(friendly_name: str) -> str | None:
     except Exception as e:
         logger.error(f"Error retrieving SteamID for friendly name {friendly_name}: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_steam_id_from_discord_id(discord_id: str) -> str | None:
     """Retrieves the SteamID associated with a given Discord ID.
     Checks family_members table first (for config-driven members with discord_id set),
     then falls back to users table (for !register users)."""
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -895,9 +945,6 @@ def get_steam_id_from_discord_id(discord_id: str) -> str | None:
     except Exception as e:
         logger.error(f"Error retrieving SteamID for Discord ID {discord_id}: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def cache_game_details_with_source(
@@ -911,50 +958,175 @@ def cache_game_details_with_source(
 
 def cleanup_expired_cache():
     """Remove expired cache entries from all cache tables."""
-    conn = None
+    try:
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+
+            tables = [
+                "game_details_cache",
+                "user_games_cache",
+                "wishlist_cache",
+                "discord_users_cache",
+                "family_library_cache",
+                "itad_price_cache",
+            ]
+
+            total_deleted = 0
+            for table in tables:
+                # Check if table has 'permanent' column
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = [col[1] for col in cursor.fetchall()]
+
+                query = f"DELETE FROM {table} WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"
+
+                if "permanent" in columns:
+                    # Protect permanent entries from deletion regardless of expires_at
+                    query += " AND (permanent != 1 OR permanent IS NULL)"
+
+                cursor.execute(query)
+                deleted = cursor.rowcount
+                total_deleted += deleted
+                if deleted > 0:
+                    logger.debug(f"Cleaned up {deleted} expired entries from {table}")
+
+            conn.commit()
+            if total_deleted > 0:
+                logger.info(f"Cache cleanup: removed {total_deleted} expired entries")
+    except Exception as e:
+        logger.error(f"Error during cache cleanup: {e}")
+
+
+# --- Database-backed migrations ---
+
+
+def _has_migration_run(migration_name: str) -> bool:
+    """Check if a named migration has already been applied."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM migrations WHERE name = ?", (migration_name,))
+        return cursor.fetchone() is not None
+    except sqlite3.OperationalError:
+        # Table doesn't exist yet
+        return False
+    except Exception:
+        return False
 
-        tables = [
-            "game_details_cache",
-            "user_games_cache",
-            "wishlist_cache",
-            "discord_users_cache",
-            "family_library_cache",
-            "itad_price_cache",
-        ]
 
-        total_deleted = 0
-        for table in tables:
-            # Check if table has 'permanent' column
-            cursor.execute(f"PRAGMA table_info({table})")
-            columns = [col[1] for col in cursor.fetchall()]
-
-            query = f"DELETE FROM {table} WHERE expires_at <= STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"
-
-            if "permanent" in columns:
-                # Protect permanent entries from deletion regardless of expires_at
-                query += " AND (permanent != 1 OR permanent IS NULL)"
-
-            cursor.execute(query)
-            deleted = cursor.rowcount
-            total_deleted += deleted
-            if deleted > 0:
-                logger.debug(f"Cleaned up {deleted} expired entries from {table}")
-
-        conn.commit()
-        if total_deleted > 0:
-            logger.info(f"Cache cleanup: removed {total_deleted} expired entries")
+def _mark_migration_run(migration_name: str) -> None:
+    """Record that a named migration has been applied."""
+    try:
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR IGNORE INTO migrations (name, applied_at) VALUES (?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))",
+                (migration_name,),
+            )
+            conn.commit()
     except Exception as e:
-        logger.error(f"Error during cache cleanup: {e}")
-    finally:
-        if conn:
-            conn.close()
+        logger.error(f"Error marking migration '{migration_name}': {e}")
 
 
-# --- Migration Flag for Family Members ---
-_family_members_migrated_this_run = False
+_NORMALIZED_DEFAULTS = {
+    "name": "Unknown",
+    "type": "unknown",
+    "is_free": False,
+    "categories": [],
+    "price_overview": None,
+    "is_multiplayer": False,
+    "is_coop": False,
+    "is_family_shared": False,
+}
+
+_NORMALIZED_KEYS = frozenset(_NORMALIZED_DEFAULTS.keys())
+
+
+def normalize_game_data(raw: dict) -> dict:
+    """Normalize game data from any source into a consistent shape.
+
+    Ensures all consumers get a predictable dict structure regardless of
+    whether data came from the Steam Store API or from the cache.
+
+    Returns a dict with these guaranteed keys:
+        - name: str
+        - type: str
+        - is_free: bool
+        - categories: list
+        - price_overview: dict | None
+        - is_multiplayer: bool
+        - is_coop: bool
+        - is_family_shared: bool
+    """
+    if raw is None:
+        return dict(_NORMALIZED_DEFAULTS)
+
+    # If already fully normalized (has all guaranteed keys), return as-is
+    if _NORMALIZED_KEYS.issubset(raw):
+        return raw
+
+    # Merge raw into defaults so missing fields are filled
+    categories = raw.get("categories", [])
+    is_multiplayer, is_coop, is_family_shared = _analyze_game_categories(categories)
+
+    return {
+        "name": raw.get("name", "Unknown"),
+        "type": raw.get("type", "unknown"),
+        "is_free": bool(raw.get("is_free", False)),
+        "categories": categories,
+        "price_overview": raw.get("price_overview"),
+        "is_multiplayer": is_multiplayer,
+        "is_coop": is_coop,
+        "is_family_shared": is_family_shared,
+    }
+
+
+def _migrate_family_members_from_config(conn: sqlite3.Connection) -> None:
+    """Helper: migrate family members from config.yml under an existing write connection."""
+    from familybot.config import FAMILY_USER_DICT
+
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM migrations WHERE name = ?",
+        ("family_members_from_config",),
+    )
+    if cursor.fetchone() is not None:
+        logger.debug(
+            "Database: Migration 'family_members_from_config' already applied. Skipping."
+        )
+        return
+
+    if FAMILY_USER_DICT:
+        logger.info(
+            "Database: Migration 'family_members_from_config' not found. Migrating from config.yml."
+        )
+        config_members_to_insert = []
+        for steam_id, value in FAMILY_USER_DICT.items():
+            friendly_name, discord_id = _parse_family_config_entry(value)
+            config_members_to_insert.append((steam_id, friendly_name, discord_id))
+
+        if config_members_to_insert:
+            cursor.executemany(
+                "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                config_members_to_insert,
+            )
+            conn.commit()
+            logger.info(
+                f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
+            )
+        else:
+            logger.info(
+                "Database: No family members found in config.yml for migration."
+            )
+    else:
+        logger.debug(
+            "Database: config.yml is empty. Skipping family members migration."
+        )
+
+    cursor.execute(
+        "INSERT OR IGNORE INTO migrations (name, applied_at) VALUES (?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))",
+        ("family_members_from_config",),
+    )
+    conn.commit()
 
 
 def load_family_members_from_db() -> dict:
@@ -962,55 +1134,26 @@ def load_family_members_from_db() -> dict:
     Loads family member data (steam_id: friendly_name) from the database,
     performing a one-time migration from config.yml if necessary.
     """
-    global _family_members_migrated_this_run
     from familybot.config import FAMILY_USER_DICT
     from steam.steamid import SteamID
 
     members = {}
-    conn = None
+
+    # Check and run migration in a single write transaction to avoid TOCTOU race
+    if not _has_migration_run("family_members_from_config"):
+        with get_write_connection() as write_conn:
+            # Re-check under the write lock to handle concurrent startup
+            cursor = write_conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM migrations WHERE name = ?",
+                ("family_members_from_config",),
+            )
+            if cursor.fetchone() is None:
+                _migrate_family_members_from_config(write_conn)
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        if not _family_members_migrated_this_run:
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
-                logger.info(
-                    "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
-                )
-                config_members_to_insert = []
-                for steam_id, value in FAMILY_USER_DICT.items():
-                    friendly_name, discord_id = _parse_family_config_entry(value)
-                    config_members_to_insert.append(
-                        (steam_id, friendly_name, discord_id)
-                    )
-
-                try:
-                    if config_members_to_insert:
-                        cursor.executemany(
-                            "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                            config_members_to_insert,
-                        )
-                        conn.commit()
-                        logger.info(
-                            f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
-                        )
-                        _family_members_migrated_this_run = True
-                    else:
-                        logger.info(
-                            "Database: No family members found in config.yml for migration."
-                        )
-                        _family_members_migrated_this_run = True
-                except sqlite3.Error as e:
-                    logger.error(
-                        f"Database: Error during family_members migration from config.yml: {e}"
-                    )
-            else:
-                logger.debug(
-                    "Database: 'family_members' table already has data or config.yml is empty. Skipping config.yml migration."
-                )
-                _family_members_migrated_this_run = True
-
         cursor.execute("SELECT steam_id, friendly_name FROM family_members")
         for row in cursor.fetchall():
             steam_id = row["steam_id"]
@@ -1031,16 +1174,13 @@ def load_family_members_from_db() -> dict:
         logger.debug(f"Loaded {len(members)} valid family members from database.")
     except sqlite3.Error as e:
         logger.error(f"Error reading family members from DB: {e}")
-    finally:
-        if conn:
-            conn.close()
+
     return members
 
 
 def load_all_registered_users_from_db() -> dict:
     """Loads all registered users (discord_id: steam_id) from the database."""
     users = {}
-    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1050,7 +1190,5 @@ def load_all_registered_users_from_db() -> dict:
         logger.debug(f"Loaded {len(users)} registered users from database.")
     except sqlite3.Error as e:
         logger.error(f"Error reading all registered users from DB: {e}")
-    finally:
-        if conn:
-            conn.close()
+
     return users

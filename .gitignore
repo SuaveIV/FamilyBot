@@ -68,9 +68,9 @@ main.py
 .git/credentials
 
 # Database file
-bot_data.db
+bot_data.*
 converted.json
-bot_data.db-journal
+
 
 # Browser profile for token_sender plugin (contains login session data)
 FamilyBotBrowserProfile/

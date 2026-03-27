@@ -141,17 +141,17 @@ The most touched file. Multiple improvements here should be batched together.
 
 ## Recommended Execution Order
 
-### Sprint 1: Critical (all touch different files, can be parallelized)
+### ~~Sprint 1: Critical~~ ✅ COMPLETE (PR #12)
 
-1. `config.py` — add validation (1.4)
-2. `steam_family.py` + `plugin_admin_actions.py` — remove API keys from URLs (1.1)
-3. `family_utils.py` — wrap sync I/O calls (1.3)
+1. ~~`config.py` — add validation (1.4)~~ ✅
+2. ~~`steam_family.py` + `plugin_admin_actions.py` — remove API keys from URLs (1.1)~~ ✅
+3. ~~`family_utils.py` — wrap sync I/O calls (1.3)~~ ✅ (already complete)
 
-### Sprint 2: Database overhaul (batch changes to `database.py`)
+### Sprint 2: Database overhaul (batch changes to `database.py`) — ✅ COMPLETE (PR #13)
 
-1. `database.py` — thread safety + connection pooling (1.2 + 2.1)
-2. `database.py` — migration state table (2.3)
-3. `database.py` — normalize game data function (2.2)
+1. ~~`database.py` — thread safety + connection pooling (1.2 + 2.1)~~
+2. ~~`database.py` — migration state table (2.3)~~
+3. ~~`database.py` — normalize game data function (2.2)~~
 
 ### Sprint 3: Performance
 
