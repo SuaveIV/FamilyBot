@@ -161,6 +161,8 @@ class PricePopulator:
                 )
 
             self.last_adjustment[api_type] = current_time
+            self.success_counts[api_type] = 0
+            self.error_counts[api_type] = 0
 
     async def rate_limited_request(self, api_type: str):
         """Async rate limiting."""
@@ -325,6 +327,9 @@ class PricePopulator:
                     api_type="itad",
                 )
 
+                if lookup_response is None:
+                    return app_id, "error", {}, "itad_request_failed"
+
                 if lookup_response is not None:
                     lookup_data = self.handle_api_response(
                         f"ITAD Lookup ({app_id})", lookup_response
@@ -345,6 +350,9 @@ class PricePopulator:
                                 params={"key": ITAD_API_KEY, "country": "US"},
                                 api_type="itad",
                             )
+
+                            if prices_response is None:
+                                return app_id, "error", {}, "itad_request_failed"
 
                             if prices_response is not None:
                                 prices_data = self.handle_api_response(
@@ -373,6 +381,7 @@ class PricePopulator:
                                         return app_id, "cached", price_data, "appid"
             except Exception as e:
                 logger.debug("ITAD appid lookup failed for %s: %s", app_id, e)
+                return app_id, "error", {}, "itad_exception"
 
             # Strategy 2: Name-based search fallback
             try:
@@ -387,6 +396,9 @@ class PricePopulator:
                         params={"key": ITAD_API_KEY, "title": game_name},
                         api_type="itad",
                     )
+
+                    if search_response is None:
+                        return app_id, "error", {}, "itad_request_failed"
 
                     if search_response is not None:
                         search_data = self.handle_api_response(
@@ -406,6 +418,9 @@ class PricePopulator:
                                     params={"key": ITAD_API_KEY, "country": "US"},
                                     api_type="itad",
                                 )
+
+                                if prices_response is None:
+                                    return app_id, "error", {}, "itad_request_failed"
 
                                 if prices_response is not None:
                                     prices_data = self.handle_api_response(
@@ -439,6 +454,7 @@ class PricePopulator:
                                             )
             except Exception as e:
                 logger.debug("ITAD name search failed for %s: %s", app_id, e)
+                return app_id, "error", {}, "itad_exception"
 
             return app_id, "not_found", {}, "failed"
 
@@ -795,10 +811,6 @@ async def main():
     if args.itad_only and args.refresh_current:
         parser.error(
             "--refresh-current applies to Steam only, incompatible with --itad-only"
-        )
-    if args.itad_only and args.force_refresh:
-        parser.error(
-            "--force-refresh applies to Steam only, incompatible with --itad-only"
         )
 
     print("FamilyBot Price Population Script\n" + "=" * 60)
