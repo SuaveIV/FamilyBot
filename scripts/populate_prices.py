@@ -469,10 +469,18 @@ class PricePopulator:
                         continue
 
                     # Extract historical low
-                    history_low = price_entry.get("historyLow", {}).get("all", {})
+                    history_low_raw = price_entry.get("historyLow")
+                    history_low = (
+                        history_low_raw.get("all", {})
+                        if history_low_raw
+                        else {}
+                    )
                     hist_amount = history_low.get("amount")
-                    hist_shop = history_low.get("shop", {}).get(
-                        "name", "Historical Low (All Stores)"
+                    shop_obj = history_low.get("shop") if history_low else None
+                    hist_shop = (
+                        shop_obj.get("name", "Historical Low (All Stores)")
+                        if shop_obj
+                        else "Historical Low (All Stores)"
                     )
 
                     # Extract current Steam deal from deals array
@@ -481,11 +489,14 @@ class PricePopulator:
                     original_price = None
                     steam_deal_found = False
 
-                    for deal in price_entry.get("deals", []):
-                        if deal.get("shop", {}).get("name") == "Steam":
-                            current_price = deal.get("price", {}).get("amount")
-                            current_discount = deal.get("cut", 0)
-                            original_price = deal.get("regular", {}).get("amount")
+                    for deal in price_entry.get("deals") or []:
+                        shop = deal.get("shop") if deal else None
+                        if shop and shop.get("name") == "Steam":
+                            price_obj = deal.get("price") if deal else None
+                            regular_obj = deal.get("regular") if deal else None
+                            current_price = price_obj.get("amount") if price_obj else None
+                            current_discount = deal.get("cut", 0) if deal else 0
+                            original_price = regular_obj.get("amount") if regular_obj else None
                             steam_deal_found = True
                             break
 
@@ -798,38 +809,46 @@ class PricePopulator:
                 ):
                     app_id, success, game_data, source = await task
                     if success:
+                        price_overview = game_data.get("price_overview") if game_data else None
                         steam_fallback_data[app_id] = {
                             "data": {
                                 "lowest_price": str(
-                                    game_data.get("price_overview", {}).get("final", 0)
-                                    / 100
+                                    price_overview.get("final", 0) / 100
+                                    if price_overview
+                                    else 0
                                 ),
-                                "lowest_price_formatted": game_data.get(
-                                    "price_overview", {}
-                                ).get("final_formatted", "N/A"),
+                                "lowest_price_formatted": (
+                                    price_overview.get("final_formatted", "N/A")
+                                    if price_overview
+                                    else "N/A"
+                                ),
                                 "shop_name": "Steam",
                             },
                             "method": "steam_fallback",
-                            "game_name": game_data.get("name"),
+                            "game_name": game_data.get("name") if game_data else None,
                         }
             else:
                 completed = 0
                 for coro in asyncio.as_completed(tasks):
                     app_id, success, game_data, source = await coro
                     if success:
+                        price_overview = game_data.get("price_overview") if game_data else None
                         steam_fallback_data[app_id] = {
                             "data": {
                                 "lowest_price": str(
-                                    game_data.get("price_overview", {}).get("final", 0)
-                                    / 100
+                                    price_overview.get("final", 0) / 100
+                                    if price_overview
+                                    else 0
                                 ),
-                                "lowest_price_formatted": game_data.get(
-                                    "price_overview", {}
-                                ).get("final_formatted", "N/A"),
+                                "lowest_price_formatted": (
+                                    price_overview.get("final_formatted", "N/A")
+                                    if price_overview
+                                    else "N/A"
+                                ),
                                 "shop_name": "Steam",
                             },
                             "method": "steam_fallback",
-                            "game_name": game_data.get("name"),
+                            "game_name": game_data.get("name") if game_data else None,
                         }
                     completed += 1
                     if completed % 10 == 0:
