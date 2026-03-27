@@ -14,8 +14,8 @@ from familybot.lib.constants import (
     DEFAULT_PROGRESS_INTERVAL,
     MIN_ELAPSED_TIME_FOR_ESTIMATION,
     SECONDS_PER_MINUTE,
-)
-from familybot.lib.database import cache_itad_price, get_cached_itad_price
+)  # ITAD_CACHE_TTL is still needed here
+from familybot.lib.itad_price_repository import cache_itad_price, get_cached_itad_price
 from familybot.lib.logging_config import get_logger
 
 # Setup enhanced logging for this specific module
