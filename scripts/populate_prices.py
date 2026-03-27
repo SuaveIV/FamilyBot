@@ -64,6 +64,8 @@ class PricePopulator:
 
     def __init__(self, max_concurrent: int = 50, rate_limit_mode: str = "adaptive"):
         """Initialize with async capabilities and configurable concurrency."""
+        if max_concurrent < 1:
+            raise ValueError(f"max_concurrent must be >= 1, got {max_concurrent}")
         self.max_concurrent = max_concurrent
         self.rate_limit_mode = rate_limit_mode
 
@@ -192,8 +194,12 @@ class PricePopulator:
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
 
-                if response.status_code == 429 or not (
-                    200 <= response.status_code < 300
+                # Retry only transient errors: 429 (rate limited) or 5xx (server errors)
+                # Optionally retry 408 (request timeout). Client errors (4xx) fail fast.
+                if (
+                    response.status_code == 429
+                    or (500 <= response.status_code < 600)
+                    or response.status_code == 408
                 ):
                     if attempt < max_retries:
                         backoff_time = (2**attempt) + random.uniform(0, 1)
@@ -209,6 +215,15 @@ class PricePopulator:
                         self.adaptive_rate_limit(api_type, False)
                         continue
                     logger.warning("Max retries exceeded for %s", url.split("?")[0])
+                    self.adaptive_rate_limit(api_type, False)
+                    return None
+                # Permanent client error (4xx excluding 429/408) - fail fast
+                if 400 <= response.status_code < 500:
+                    logger.debug(
+                        "Permanent client error HTTP %d from %s - not retrying",
+                        response.status_code,
+                        url.split("?")[0],
+                    )
                     self.adaptive_rate_limit(api_type, False)
                     return None
 
@@ -765,6 +780,22 @@ async def main():
         help="Show what would be done without making changes",
     )
     args = parser.parse_args()
+
+    # Validate --concurrent
+    if args.concurrent < 1:
+        parser.error("--concurrent must be >= 1")
+
+    # Validate incompatible flag combinations
+    if args.steam_only and args.itad_only:
+        parser.error("--steam-only and --itad-only are mutually exclusive")
+    if args.itad_only and args.refresh_current:
+        parser.error(
+            "--refresh-current applies to Steam only, incompatible with --itad-only"
+        )
+    if args.itad_only and args.force_refresh:
+        parser.error(
+            "--force-refresh applies to Steam only, incompatible with --itad-only"
+        )
 
     print("FamilyBot Price Population Script\n" + "=" * 60)
     if args.dry_run:
