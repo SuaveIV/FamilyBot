@@ -42,6 +42,20 @@ def get_db_connection():
         except sqlite3.Error as e:
             logger.critical(f"Database connection error: {e}")
             raise
+    else:
+        # Check if the existing connection is still usable (not closed)
+        try:
+            _local.conn.execute("SELECT 1")
+        except sqlite3.ProgrammingError:
+            # Connection was closed, create a new one
+            try:
+                conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=WAL")
+                _local.conn = conn
+            except sqlite3.Error as e:
+                logger.critical(f"Database connection error: {e}")
+                raise
     return _local.conn
 
 
