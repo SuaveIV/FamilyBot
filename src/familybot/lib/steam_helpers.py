@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import re
 from datetime import datetime
 
 from familybot.config import ADMIN_DISCORD_ID
@@ -16,6 +17,32 @@ from familybot.lib.itad_price_repository import get_cached_itad_price
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 from familybot.lib.steam_api_manager import SteamAPIManager
+
+
+def parse_price_string(price: str) -> float | None:
+    """Parse a price string (e.g., "$1,234.56", "€9,99") to a float. Returns None on error or N/A."""
+    if not price or price == "N/A":
+        return None
+
+    # Remove currency symbols and grouping, handle both "." and "," as decimal/grouping
+    price_clean = re.sub(r"[^\d.,]", "", price)
+    # If both . and , exist, assume . is decimal, , is grouping
+    if "." in price_clean and "," in price_clean:
+        if price_clean.rfind(".") > price_clean.rfind(","):
+            price_clean = price_clean.replace(",", "")
+        else:
+            price_clean = price_clean.replace(".", "").replace(",", ".")
+    # If only , exists, treat as decimal if at end (e.g., "9,99")
+    elif "," in price_clean and "." not in price_clean:
+        if price_clean.count(",") == 1 and len(price_clean.split(",")[-1]) <= 2:
+            price_clean = price_clean.replace(",", ".")
+        else:
+            price_clean = price_clean.replace(",", "")
+    try:
+        return float(price_clean)
+    except (ValueError, TypeError):
+        return None
+
 
 logger = get_logger(__name__)
 
@@ -106,6 +133,14 @@ async def process_game_deal(
 
         # Try ITAD cache first — it has current price, discount, and historical low
         itad_cache = await asyncio.to_thread(get_cached_itad_price, app_id)
+
+        # Enforce family sharing requirement if needed
+        if require_family_shared and itad_cache:
+            is_family_shared = itad_cache.get("is_family_shared")
+            if is_family_shared is not True:
+                # Fallback to Steam API if ITAD cache does not confirm family sharing
+                itad_cache = None
+
         if itad_cache and itad_cache.get("current_price"):
             game_name = itad_cache.get("steam_game_name") or game_name
             discount_percent = itad_cache.get("discount_percent", 0)
@@ -117,12 +152,7 @@ async def process_game_deal(
             price_source = "itad"
 
             # Parse lowest_price for numeric comparison
-            if lowest_price != "N/A":
-                try:
-                    clean_price = lowest_price.replace("$", "").replace(",", "").strip()
-                    lowest_price_num = float(clean_price)
-                except (ValueError, TypeError):
-                    pass
+            lowest_price_num = parse_price_string(lowest_price)
         else:
             # Fallback: fetch from Steam Store API
             game_data = await fetch_game_details(
@@ -150,14 +180,7 @@ async def process_game_deal(
                 lowest_price = itad_cache.get(
                     "lowest_price_formatted"
                 ) or itad_cache.get("lowest_price", "N/A")
-                if lowest_price != "N/A":
-                    try:
-                        clean_price = (
-                            lowest_price.replace("$", "").replace(",", "").strip()
-                        )
-                        lowest_price_num = float(clean_price)
-                    except (ValueError, TypeError):
-                        pass
+                lowest_price_num = parse_price_string(lowest_price)
 
         # Early exit if the discount doesn't meet minimum thresholds
         if discount_percent < min(low_discount_threshold, high_discount_threshold):
@@ -173,20 +196,18 @@ async def process_game_deal(
         elif (
             discount_percent >= low_discount_threshold and lowest_price_num is not None
         ):
-            try:
-                current_price_num = float(
-                    current_price.replace("$", "").replace(",", "").strip()
-                )
-                if current_price_num <= lowest_price_num * historical_low_buffer:
-                    is_good_deal = True
-                    if historical_low_buffer > 1.1:
-                        deal_reason = (
-                            f"💎 **Near Historical Low** ({discount_percent}% off)"
-                        )
-                    else:
-                        deal_reason = f"💎 **Historical Low** ({discount_percent}% off)"
-            except (ValueError, TypeError):
-                pass
+            current_price_num = parse_price_string(current_price)
+            if (
+                current_price_num is not None
+                and current_price_num <= lowest_price_num * historical_low_buffer
+            ):
+                is_good_deal = True
+                if historical_low_buffer > 1.1:
+                    deal_reason = (
+                        f"💎 **Near Historical Low** ({discount_percent}% off)"
+                    )
+                else:
+                    deal_reason = f"💎 **Historical Low** ({discount_percent}% off)"
 
         if is_good_deal:
             return {

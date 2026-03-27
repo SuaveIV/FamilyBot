@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 def get_cached_itad_id(appid: str) -> str | None:
     """Get cached ITAD ID for a Steam AppID. Returns None if not found."""
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -23,6 +25,11 @@ def get_cached_itad_id(appid: str) -> str | None:
     except Exception as e:
         logger.error(f"Error getting cached ITAD ID for {appid}: {e}")
         return None
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 
 def get_cached_itad_ids_bulk(appids: list[str]) -> dict[str, str]:
@@ -33,6 +40,8 @@ def get_cached_itad_ids_bulk(appids: list[str]) -> dict[str, str]:
     if not appids:
         return {}
 
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -45,6 +54,11 @@ def get_cached_itad_ids_bulk(appids: list[str]) -> dict[str, str]:
     except Exception as e:
         logger.error(f"Error getting cached ITAD IDs in bulk: {e}")
         return {}
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 
 def cache_itad_mapping(

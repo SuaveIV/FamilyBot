@@ -22,6 +22,18 @@ _local = threading.local()
 _write_lock = threading.Lock()
 
 
+def _create_conn():
+    """Create a new SQLite connection with standard settings."""
+    try:
+        conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+    except sqlite3.Error as e:
+        logger.critical(f"Database connection error: {e}")
+        raise
+
+
 def get_db_connection():
     """Returns a thread-local SQLite connection, creating one if needed.
 
@@ -29,28 +41,14 @@ def get_db_connection():
     Writes are serialized via _write_lock to prevent concurrent write corruption.
     """
     if not hasattr(_local, "conn") or _local.conn is None:
-        try:
-            conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            _local.conn = conn
-        except sqlite3.Error as e:
-            logger.critical(f"Database connection error: {e}")
-            raise
+        _local.conn = _create_conn()
     else:
         # Check if the existing connection is still usable (not closed)
         try:
             _local.conn.execute("SELECT 1")
         except sqlite3.ProgrammingError:
             # Connection was closed, create a new one
-            try:
-                conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-                conn.row_factory = sqlite3.Row
-                conn.execute("PRAGMA journal_mode=WAL")
-                _local.conn = conn
-            except sqlite3.Error as e:
-                logger.critical(f"Database connection error: {e}")
-                raise
+            _local.conn = _create_conn()
     return _local.conn
 
 
@@ -196,7 +194,11 @@ def _create_tables(cursor: sqlite3.Cursor):
             mapped_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         )
     """)
-    logger.info("Database: 'steam_itad_mapping' table checked/created.")
+    # Add index for fast reverse lookups on itad_id
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_steam_itad_mapping_itad_id ON steam_itad_mapping(itad_id)
+    """)
+    logger.info("Database: 'steam_itad_mapping' table checked/created and indexed.")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS migrations (
@@ -271,6 +273,7 @@ def init_db():
             conn.commit()  # Final commit
     except sqlite3.Error as e:
         logger.critical(f"Database initialization error: {e}")
+        raise RuntimeError("Database initialization failed") from e
 
 
 # === CACHE HELPER FUNCTIONS ===
@@ -286,6 +289,7 @@ def cleanup_expired_cache():
                 "game_details_cache",
                 "user_games_cache",
                 "wishlist_cache",
+                "discord_users_cache",
                 "family_library_cache",
                 "itad_price_cache",
             ]

@@ -66,6 +66,38 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class PricePopulator:
     """High-performance async price populator with adaptive rate limiting."""
 
+    def _extract_steam_fallback_entry(
+        self, app_id: str, game_data: dict
+    ) -> dict | None:
+        """Extracts a Steam fallback entry in ITAD-style format from game_data."""
+        price_overview = game_data.get("price_overview")
+        is_free = game_data.get("is_free", False)
+        if not price_overview and not is_free:
+            return None
+        if price_overview and "final" in price_overview:
+            return {
+                "data": {
+                    "lowest_price": str(price_overview["final"] / 100),
+                    "lowest_price_formatted": price_overview.get(
+                        "final_formatted", "N/A"
+                    ),
+                    "shop_name": "Steam",
+                },
+                "method": "steam_fallback",
+                "game_name": game_data.get("name"),
+            }
+        elif is_free:
+            return {
+                "data": {
+                    "lowest_price": "0",
+                    "lowest_price_formatted": "Free",
+                    "shop_name": "Steam",
+                },
+                "method": "steam_fallback",
+                "game_name": game_data.get("name"),
+            }
+        return None
+
     def __init__(self, max_concurrent: int = 50, rate_limit_mode: str = "adaptive"):
         """Initialize with async capabilities and configurable concurrency."""
         if max_concurrent < 1:
@@ -212,11 +244,9 @@ class PricePopulator:
                     or response.status_code == 408
                 ):
                     if attempt < max_retries:
-                        backoff_time = (2**attempt) + random.uniform(0, 1)
-                        logger.debug(
-                            "HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
-                            response.status_code,
-                            url.split("?")[0],
+                        backoff_time = 2**attempt + random.uniform(0, 1)
+                        logger.warning(
+                            "Rate limited (429), retrying in %.1fs (attempt %d/%d)",
                             backoff_time,
                             attempt + 1,
                             max_retries + 1,
@@ -227,6 +257,7 @@ class PricePopulator:
                     logger.warning("Max retries exceeded for %s", url.split("?")[0])
                     self.adaptive_rate_limit(api_type, False)
                     return None
+
                 # Permanent client error (4xx excluding 429/408) - fail fast
                 if 400 <= response.status_code < 500:
                     logger.debug(
@@ -471,9 +502,7 @@ class PricePopulator:
                     # Extract historical low
                     history_low_raw = price_entry.get("historyLow")
                     history_low = (
-                        history_low_raw.get("all", {})
-                        if history_low_raw
-                        else {}
+                        history_low_raw.get("all", {}) if history_low_raw else {}
                     )
                     hist_amount = history_low.get("amount")
                     shop_obj = history_low.get("shop") if history_low else None
@@ -494,9 +523,13 @@ class PricePopulator:
                         if shop and shop.get("name") == "Steam":
                             price_obj = deal.get("price") if deal else None
                             regular_obj = deal.get("regular") if deal else None
-                            current_price = price_obj.get("amount") if price_obj else None
+                            current_price = (
+                                price_obj.get("amount") if price_obj else None
+                            )
                             current_discount = deal.get("cut", 0) if deal else 0
-                            original_price = regular_obj.get("amount") if regular_obj else None
+                            original_price = (
+                                regular_obj.get("amount") if regular_obj else None
+                            )
                             steam_deal_found = True
                             break
 
@@ -812,70 +845,17 @@ class PricePopulator:
                 ):
                     app_id, success, game_data, source = await task
                     if success and game_data:
-                        price_overview = game_data.get("price_overview")
-                        is_free = game_data.get("is_free", False)
-                        # Skip if no price_overview and game is not free
-                        if not price_overview and not is_free:
-                            continue
-                        if price_overview and "final" in price_overview:
-                            steam_fallback_data[app_id] = {
-                                "data": {
-                                    "lowest_price": str(price_overview["final"] / 100),
-                                    "lowest_price_formatted": price_overview.get(
-                                        "final_formatted", "N/A"
-                                    ),
-                                    "shop_name": "Steam",
-                                },
-                                "method": "steam_fallback",
-                                "game_name": game_data.get("name"),
-                            }
-                        elif is_free:
-                            steam_fallback_data[app_id] = {
-                                "data": {
-                                    "lowest_price": "0",
-                                    "lowest_price_formatted": "Free",
-                                    "shop_name": "Steam",
-                                },
-                                "method": "steam_fallback",
-                                "game_name": game_data.get("name"),
-                            }
+                        entry = self._extract_steam_fallback_entry(app_id, game_data)
+                        if entry:
+                            steam_fallback_data[app_id] = entry
             else:
                 completed = 0
                 for coro in asyncio.as_completed(tasks):
                     app_id, success, game_data, source = await coro
                     if success and game_data:
-                        price_overview = game_data.get("price_overview")
-                        is_free = game_data.get("is_free", False)
-                        # Skip if no price_overview and game is not free
-                        if not price_overview and not is_free:
-                            completed += 1
-                            if completed % 10 == 0:
-                                print(
-                                    f"   Steam Fallback Progress: {completed}/{len(fallback_ids)}"
-                                )
-                            continue
-                        if price_overview and "final" in price_overview:
-                            steam_fallback_data[app_id] = {
-                                "data": {
-                                    "lowest_price": str(price_overview["final"] / 100),
-                                    "lowest_price_formatted": price_overview.get(
-                                        "final_formatted", "N/A"
-                                    ),
-                                    "shop_name": "Steam",
-                                },
-                                "method": "steam_fallback",
-                                "game_name": game_data.get("name"),
-                            }
-                        elif is_free:
-                            steam_fallback_data[app_id] = {
-                                "data": {
-                                    "lowest_price": "0",
-                                    "lowest_price_formatted": "Free",
-                                    "shop_name": "Steam",
-                                },
-                                "method": "steam_fallback",
-                                "game_name": game_data.get("name"),
-                            }
+                        entry = self._extract_steam_fallback_entry(app_id, game_data)
+                        if entry:
+                            steam_fallback_data[app_id] = entry
                     completed += 1
                     if completed % 10 == 0:
                         print(
@@ -883,7 +863,21 @@ class PricePopulator:
                         )
 
         # Merge ITAD data with Steam fallback data
-        all_data = {**itad_data, **steam_fallback_data}
+        all_data = dict(itad_data)
+        # For appids in no_steam_deal, inject Steam's current price into ITAD records if present
+        for appid, steam_entry in steam_fallback_data.items():
+            if appid in itad_data:
+                # Merge non-destructively: add steam_current_price to ITAD record
+                itad_entry = all_data[appid]
+                if "data" in itad_entry and "data" in steam_entry:
+                    itad_entry["data"]["steam_current_price"] = steam_entry["data"].get(
+                        "lowest_price"
+                    )
+                    itad_entry["data"]["steam_current_price_formatted"] = steam_entry[
+                        "data"
+                    ].get("lowest_price_formatted")
+            else:
+                all_data[appid] = steam_entry
 
         # Phase 4: Safe database writing
         print("   Phase 4: Safe database writing...")

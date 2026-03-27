@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 import httpx
 
 from steam.webapi import WebAPI
@@ -100,7 +100,14 @@ class DatabasePopulator:
         await self.client.aclose()
 
     async def make_request_with_retry(
-        self, url: str, api_type: str = "steam"
+        self,
+        url: str,
+        api_type: str = "steam",
+        method: str = "GET",
+        params: Optional[dict] = None,
+        json: Optional[dict | list] = None,
+        timeout: Optional[float] = None,
+        headers: Optional[dict] = None,
     ) -> Optional[httpx.Response]:
         """Make HTTP request with retry logic for 429 errors."""
         bucket = self.steam_bucket if api_type == "steam" else self.store_bucket
@@ -115,7 +122,14 @@ class DatabasePopulator:
                 await asyncio.sleep(jitter)
 
                 # Make the request
-                response = await self.client.get(url)
+                if method.upper() == "POST":
+                    response = await self.client.post(
+                        url, json=json, params=params, timeout=timeout, headers=headers
+                    )
+                else:
+                    response = await self.client.get(
+                        url, params=params, timeout=timeout, headers=headers
+                    )
 
                 # Check for rate limiting
                 if response.status_code == 429:
@@ -189,7 +203,7 @@ class DatabasePopulator:
             written += batch_written
         except Exception as e:
             conn.rollback()
-            logger.error(f"Batch write failed: {e}")
+            logger.error("Batch write failed: %s", e)
             # Fallback to individual writes to save what we can
             for app_id, data in games_data.items():
                 try:
@@ -431,8 +445,8 @@ class DatabasePopulator:
                 if user_appids:
                     cache_user_games(steam_id, user_appids)
 
-                user_cached, user_skipped, games_to_fetch = self._process_user_games(
-                    games, total_processed
+                user_cached, user_skipped, games_to_fetch, total_processed = (
+                    self._process_user_games(games, total_processed)
                 )
 
                 if games_to_fetch:
@@ -493,8 +507,8 @@ class DatabasePopulator:
                 if user_appids:
                     cache_user_games(steam_id, user_appids)
 
-                user_cached, user_skipped, games_to_fetch = self._process_user_games(
-                    games, total_processed
+                user_cached, user_skipped, games_to_fetch, total_processed = (
+                    self._process_user_games(games, total_processed)
                 )
 
                 if games_to_fetch:
@@ -522,7 +536,7 @@ class DatabasePopulator:
         return total_cached
 
     def _process_user_games(self, games, total_processed):
-        """Process user games and return cached, skipped counts and games to fetch."""
+        """Process user games and return cached, skipped counts, games to fetch, and updated count."""
         user_cached = 0
         user_skipped = 0
         games_to_fetch = []
@@ -539,7 +553,7 @@ class DatabasePopulator:
             else:
                 games_to_fetch.append(app_id)
 
-        return user_cached, user_skipped, games_to_fetch
+        return user_cached, user_skipped, games_to_fetch, total_processed
 
     async def _fetch_games_with_progress(
         self, games_to_fetch, name, *, user_cached, user_skipped, progress_lock
@@ -702,6 +716,84 @@ class DatabasePopulator:
 
         return total_cached
 
+    async def _process_itad_chunk(
+        self,
+        chunk: list[str],
+        new_mappings: dict[str, str],
+        failed_count: int,
+        pbar_update: Optional[Callable[[int], None]] = None,
+    ) -> int:
+        """Process a chunk of ITAD ID lookups.
+
+        Args:
+            chunk: List of app IDs to look up
+            new_mappings: Dictionary to update with new mappings
+            failed_count: Current failure count to update
+            pbar_update: Optional callback to update progress bar
+
+        Returns:
+            Updated failed_count
+        """
+        shop_queries = [f"app/{app_id}" for app_id in chunk]
+        lookup_url = "https://api.isthereanydeal.com/lookup/id/shop/61/v1"
+        try:
+            # Use retry logic for POST (rate limiting handled by make_request_with_retry)
+            response = await self.make_request_with_retry(
+                lookup_url,
+                api_type="store",
+                method="POST",
+                json=shop_queries,
+                params={"key": ITAD_API_KEY},
+                timeout=30,
+            )
+
+            if response is None:
+                failed_count += len(chunk)
+                if pbar_update:
+                    pbar_update(len(chunk))
+                return failed_count
+
+            if hasattr(response, "status_code") and response.status_code == 429:
+                logger.warning("Rate limited during ITAD lookup, skipping chunk")
+                failed_count += len(chunk)
+                if pbar_update:
+                    pbar_update(len(chunk))
+                return failed_count
+
+            lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
+            if lookup_data is None:
+                failed_count += len(chunk)
+                if pbar_update:
+                    pbar_update(len(chunk))
+                return failed_count
+
+            for shop_query, itad_id in lookup_data.items():
+                app_id = shop_query.replace("app/", "")
+                if itad_id:
+                    new_mappings[app_id] = itad_id
+                else:
+                    failed_count += 1
+
+            if pbar_update:
+                pbar_update(len(chunk))
+
+        except (ValueError, ImportError) as e:
+            logger.error("ITAD bulk lookup chunk failed: %s", e)
+            failed_count += len(chunk)
+            if pbar_update:
+                pbar_update(len(chunk))
+        except KeyboardInterrupt:
+            raise
+        except httpx.RequestError as e:
+            logger.error("ITAD bulk lookup chunk failed: %s", e)
+            failed_count += len(chunk)
+            if pbar_update:
+                pbar_update(len(chunk))
+        except Exception:
+            raise
+
+        return failed_count
+
     async def resolve_itad_ids(self, dry_run: bool = False) -> int:
         """Resolve and cache ITAD IDs for all known games using bulk lookup."""
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
@@ -716,10 +808,15 @@ class DatabasePopulator:
 
         # Collect all known app IDs from the database
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT appid FROM game_details_cache")
-        all_appids = [row["appid"] for row in cursor.fetchall()]
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT appid FROM game_details_cache")
+                all_appids = [row["appid"] for row in cursor.fetchall()]
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
 
         if not all_appids:
             print("   ⚠️  No games found in database")
@@ -746,79 +843,64 @@ class DatabasePopulator:
         if TQDM_AVAILABLE:
             pbar = tqdm(
                 total=len(uncached),
-                desc="🔗 Resolving ITAD IDs",
+                desc="Resolving ITAD IDs",
                 unit="game",
                 leave=True,
             )
-
-        for i in range(0, len(uncached), chunk_size):
-            chunk = uncached[i : i + chunk_size]
-            shop_queries = [f"app/{app_id}" for app_id in chunk]
-
             try:
-                lookup_url = "https://api.isthereanydeal.com/lookup/id/shop/61/v1"
-                response = await self.make_request_with_retry(
-                    lookup_url, api_type="store"
-                )
 
-                if response is None:
-                    failed_count += len(chunk)
-                    if TQDM_AVAILABLE:
-                        pbar.update(len(chunk))
-                    continue
-
-                # POST request for bulk lookup
-                response = await self.client.post(
-                    lookup_url,
-                    json=shop_queries,
-                    params={"key": ITAD_API_KEY},
-                )
-
-                if response.status_code == 429:
-                    logger.warning("Rate limited during ITAD lookup, skipping chunk")
-                    failed_count += len(chunk)
-                    if TQDM_AVAILABLE:
-                        pbar.update(len(chunk))
-                    continue
-
-                lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
-                if lookup_data is None:
-                    failed_count += len(chunk)
-                    if TQDM_AVAILABLE:
-                        pbar.update(len(chunk))
-                    continue
-
-                for shop_query, itad_id in lookup_data.items():
-                    app_id = shop_query.replace("app/", "")
-                    if itad_id:
-                        new_mappings[app_id] = itad_id
-                    else:
-                        failed_count += 1
-
-                if TQDM_AVAILABLE:
-                    pbar.update(len(chunk))
+                def pbar_update(size: int):
+                    pbar.update(size)
                     pbar.set_postfix_str(
                         f"Mapped: {len(new_mappings)}, Failed: {failed_count}"
                     )
 
-            except Exception as e:
-                logger.error("ITAD bulk lookup chunk failed: %s", e)
-                failed_count += len(chunk)
-                if TQDM_AVAILABLE:
-                    pbar.update(len(chunk))
-
-        if TQDM_AVAILABLE:
-            pbar.close()
+                for i in range(0, len(uncached), chunk_size):
+                    chunk = uncached[i : i + chunk_size]
+                    failed_count = await self._process_itad_chunk(
+                        chunk, new_mappings, failed_count, pbar_update
+                    )
+            finally:
+                pbar.close()
+        else:
+            for i in range(0, len(uncached), chunk_size):
+                chunk = uncached[i : i + chunk_size]
+                failed_count = await self._process_itad_chunk(
+                    chunk, new_mappings, failed_count
+                )
 
         # Cache new mappings
         if new_mappings:
             bulk_cache_itad_mappings(new_mappings)
 
-        print(f"\n🔗 ITAD ID resolution complete!")
+        print("\n🔗 ITAD ID resolution complete!")
         print(f"   ✅ New mappings cached: {len(new_mappings)}")
         print(f"   ❌ Failed to resolve: {failed_count}")
 
         return len(new_mappings)
+
+    async def _fetch_wishlist_item(self, app_id: str):
+        """Fetch a single wishlist item's game details."""
+        try:
+            game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+            response = await self.make_request_with_retry(game_url, api_type="store")
+
+            if response:
+                game_info = self.handle_api_response(f"AppDetails ({app_id})", response)
+                if game_info:
+                    game_data = game_info.get(str(app_id), {}).get("data")
+                    if game_data:
+                        return (app_id, game_data)
+
+                    # Fallback
+                    fallback_data = await self.get_fallback_game_info(app_id)
+                    if fallback_data:
+                        return (app_id, fallback_data)
+            return None
+        except Exception as e:
+            if not TQDM_AVAILABLE:
+                print(f"   ⚠️  Error processing game {app_id}: {e}")
+            return None
 
     async def populate_wishlists(
         self, family_members: dict[str, str], dry_run: bool = False
@@ -935,34 +1017,8 @@ class DatabasePopulator:
             batch = games_to_fetch[i : i + batch_size]
             batch_data = {}
 
-            async def fetch_wishlist_item(app_id):
-                try:
-                    game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
-                    response = await self.make_request_with_retry(
-                        game_url, api_type="store"
-                    )
-
-                    if response:
-                        game_info = self.handle_api_response(
-                            f"AppDetails ({app_id})", response
-                        )
-                        if game_info:
-                            game_data = game_info.get(str(app_id), {}).get("data")
-                            if game_data:
-                                return (app_id, game_data)
-
-                            # Fallback
-                            fallback_data = await self.get_fallback_game_info(app_id)
-                            if fallback_data:
-                                return (app_id, fallback_data)
-                    return None
-                except Exception as e:
-                    if not TQDM_AVAILABLE:
-                        print(f"   ⚠️  Error processing game {app_id}: {e}")
-                    return None
-
             # Run batch concurrently
-            tasks = [fetch_wishlist_item(app_id) for app_id in batch]
+            tasks = [self._fetch_wishlist_item(app_id) for app_id in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for res in results:
