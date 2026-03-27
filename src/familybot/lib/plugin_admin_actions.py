@@ -18,9 +18,7 @@ from familybot.lib.constants import (
     STEAM_API_RATE_LIMIT,
     STEAM_STORE_API_RATE_LIMIT,
 )
-from familybot.lib.database import (
-    load_family_members_from_db,
-)
+from familybot.lib.user_repository import load_family_members_from_db
 from familybot.lib.family_library_repository import (
     cache_family_library,
     get_cached_family_library,

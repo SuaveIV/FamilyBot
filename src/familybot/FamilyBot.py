@@ -23,9 +23,8 @@ from familybot.config import (
     WEB_UI_HOST,
     WEB_UI_PORT,
 )
-from familybot.lib.database import (
-    get_db_connection,
-    init_db,
+from familybot.lib.database import get_db_connection, init_db
+from familybot.lib.user_repository import (
     sync_family_members_from_config,
 )
 from familybot.lib.logging_config import setup_bot_logging
