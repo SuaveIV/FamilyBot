@@ -33,6 +33,7 @@ from familybot.lib.deal_service import (
 # Re-export from cache_service
 from familybot.lib.cache_service import (
     purge_game_details_cache as purge_game_details_cache_action,
+    purge_itad_cache as purge_itad_cache_action,
 )
 
 # Re-export from api_utils
@@ -55,6 +56,7 @@ __all__ = [
     "force_deals_action",
     # Cache functions
     "purge_game_details_cache_action",
+    "purge_itad_cache_action",
     # API utilities
     "_handle_api_response",
 ]

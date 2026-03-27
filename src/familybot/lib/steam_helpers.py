@@ -135,13 +135,21 @@ async def process_game_deal(
         itad_cache = await asyncio.to_thread(get_cached_itad_price, app_id)
 
         # Enforce family sharing requirement if needed
+        # Note: We don't null out itad_cache here, so downstream code can still
+        # read ITAD historical_low even when family sharing is not confirmed.
+        # Instead we track the family_shared flag separately for the Steam fallback path.
+        itad_family_shared = True
         if require_family_shared and itad_cache:
             is_family_shared = itad_cache.get("is_family_shared")
-            if is_family_shared is not True:
-                # Fallback to Steam API if ITAD cache does not confirm family sharing
-                itad_cache = None
+            if not bool(is_family_shared):
+                # Flag is missing, False, or invalid — mark as not confirmed
+                itad_family_shared = False
 
         if itad_cache and itad_cache.get("current_price"):
+            # Check family sharing requirement before using ITAD data
+            if require_family_shared and not itad_family_shared:
+                return None
+
             game_name = itad_cache.get("steam_game_name") or game_name
             discount_percent = itad_cache.get("discount_percent", 0)
             current_price = itad_cache.get("current_price_formatted", "N/A")

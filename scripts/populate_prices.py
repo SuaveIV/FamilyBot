@@ -66,9 +66,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class PricePopulator:
     """High-performance async price populator with adaptive rate limiting."""
 
-    def _extract_steam_fallback_entry(
-        self, app_id: str, game_data: dict
-    ) -> dict | None:
+    def _extract_steam_fallback_entry(self, game_data: dict) -> dict | None:
         """Extracts a Steam fallback entry in ITAD-style format from game_data."""
         price_overview = game_data.get("price_overview")
         is_free = game_data.get("is_free", False)
@@ -246,7 +244,9 @@ class PricePopulator:
                     if attempt < max_retries:
                         backoff_time = 2**attempt + random.uniform(0, 1)
                         logger.warning(
-                            "Rate limited (429), retrying in %.1fs (attempt %d/%d)",
+                            "Retryable HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
+                            response.status_code,
+                            url.split("?")[0],
                             backoff_time,
                             attempt + 1,
                             max_retries + 1,
@@ -845,7 +845,7 @@ class PricePopulator:
                 ):
                     app_id, success, game_data, source = await task
                     if success and game_data:
-                        entry = self._extract_steam_fallback_entry(app_id, game_data)
+                        entry = self._extract_steam_fallback_entry(game_data)
                         if entry:
                             steam_fallback_data[app_id] = entry
             else:
@@ -853,7 +853,7 @@ class PricePopulator:
                 for coro in asyncio.as_completed(tasks):
                     app_id, success, game_data, source = await coro
                     if success and game_data:
-                        entry = self._extract_steam_fallback_entry(app_id, game_data)
+                        entry = self._extract_steam_fallback_entry(game_data)
                         if entry:
                             steam_fallback_data[app_id] = entry
                     completed += 1

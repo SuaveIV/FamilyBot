@@ -27,7 +27,16 @@ def _create_conn():
     try:
         conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        result = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        if not result or result[0].lower() != "wal":
+            result_val = result[0] if result else None
+            logger.critical(
+                "Failed to set WAL mode: PRAGMA journal_mode=WAL returned %r",
+                result_val,
+            )
+            raise RuntimeError(
+                f"Database WAL mode not enabled: PRAGMA returned {result_val!r}"
+            )
         return conn
     except sqlite3.Error as e:
         logger.critical(f"Database connection error: {e}")

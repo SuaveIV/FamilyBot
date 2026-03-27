@@ -721,7 +721,7 @@ class DatabasePopulator:
         chunk: list[str],
         new_mappings: dict[str, str],
         failed_count: int,
-        pbar_update: Optional[Callable[[int], None]] = None,
+        pbar_update: Optional[Callable[[int, int], None]] = None,
     ) -> int:
         """Process a chunk of ITAD ID lookups.
 
@@ -748,23 +748,17 @@ class DatabasePopulator:
             )
 
             if response is None:
+                # 429s are handled by make_request_with_retry and cause None to be returned after retries
                 failed_count += len(chunk)
                 if pbar_update:
-                    pbar_update(len(chunk))
-                return failed_count
-
-            if hasattr(response, "status_code") and response.status_code == 429:
-                logger.warning("Rate limited during ITAD lookup, skipping chunk")
-                failed_count += len(chunk)
-                if pbar_update:
-                    pbar_update(len(chunk))
+                    pbar_update(len(chunk), failed_count)
                 return failed_count
 
             lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
             if lookup_data is None:
                 failed_count += len(chunk)
                 if pbar_update:
-                    pbar_update(len(chunk))
+                    pbar_update(len(chunk), failed_count)
                 return failed_count
 
             for shop_query, itad_id in lookup_data.items():
@@ -775,22 +769,20 @@ class DatabasePopulator:
                     failed_count += 1
 
             if pbar_update:
-                pbar_update(len(chunk))
+                pbar_update(len(chunk), failed_count)
 
         except (ValueError, ImportError) as e:
             logger.error("ITAD bulk lookup chunk failed: %s", e)
             failed_count += len(chunk)
             if pbar_update:
-                pbar_update(len(chunk))
+                pbar_update(len(chunk), failed_count)
         except KeyboardInterrupt:
             raise
         except httpx.RequestError as e:
             logger.error("ITAD bulk lookup chunk failed: %s", e)
             failed_count += len(chunk)
             if pbar_update:
-                pbar_update(len(chunk))
-        except Exception:
-            raise
+                pbar_update(len(chunk), failed_count)
 
         return failed_count
 
@@ -849,7 +841,7 @@ class DatabasePopulator:
             )
             try:
 
-                def pbar_update(size: int):
+                def pbar_update(size: int, failed_count: int):
                     pbar.update(size)
                     pbar.set_postfix_str(
                         f"Mapped: {len(new_mappings)}, Failed: {failed_count}"
@@ -898,8 +890,7 @@ class DatabasePopulator:
                         return (app_id, fallback_data)
             return None
         except Exception as e:
-            if not TQDM_AVAILABLE:
-                print(f"   ⚠️  Error processing game {app_id}: {e}")
+            logger.warning("Error processing game %s: %s", app_id, e)
             return None
 
     async def populate_wishlists(

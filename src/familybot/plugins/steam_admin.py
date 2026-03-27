@@ -408,6 +408,30 @@ class steam_admin(Extension):
         else:
             await send_admin_dm(self.bot, f"Cache purge error: {result['message']}")
 
+    @prefixed_command(name="purge_prices")
+    async def purge_prices_command(self, ctx: PrefixedContext):
+        """
+        Admin command to purge ITAD price cache and Steam-ITAD mapping cache.
+        """
+        if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
+            await ctx.send(
+                "You do not have permission to use this command, or it must be used in DMs."
+            )
+            return
+
+        await ctx.send("🗑️ **Purging price cache...**")
+        from familybot.lib.plugin_admin_actions import purge_itad_cache_action
+
+        result = await purge_itad_cache_action()
+        await ctx.send(result["message"])
+        if result["success"]:
+            logger.info("Admin purged ITAD price cache via command.")
+            await self.bot.send_log_dm("Price Cache Purge")
+        else:
+            await send_admin_dm(
+                self.bot, f"Price cache purge error: {result['message']}"
+            )
+
     @prefixed_command(name="full_library_scan")
     async def full_library_scan_command(self, ctx: PrefixedContext):
         """

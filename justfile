@@ -133,6 +133,12 @@ purge-all-cache:
     mise exec -- uv run python src/familybot/FamilyBot.py --purge-all
     @echo "✅ All cache data purged"
 
+# Purge price cache (ITAD prices and mappings)
+purge-prices:
+    @echo "🧹 Purging price cache..."
+    mise exec -- uv run python src/familybot/FamilyBot.py --purge-prices
+    @echo "✅ Price cache purged"
+
 # Check price cache status (permanent vs TTL-based entries)
 check-price-cache:
     @echo "🔍 Checking price cache status..."

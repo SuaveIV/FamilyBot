@@ -327,8 +327,8 @@ async def on_disconnect():
 # --- Command Line Utilities ---
 def purge_game_cache() -> None:
     """Purge the game details cache from command line."""
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Get count before deletion
@@ -351,7 +351,6 @@ def purge_game_cache() -> None:
             # Clear the game details cache
             cursor.execute("DELETE FROM game_details_cache")
             conn.commit()
-            conn.close()
 
             print(
                 f"✅ Cache purge complete! Deleted {cache_count} cached game entries."
@@ -373,12 +372,14 @@ def purge_game_cache() -> None:
         logger.error(
             "Unexpected error purging cache from command line: %s", e, exc_info=True
         )
+    finally:
+        conn.close()
 
 
 def purge_wishlist_cache() -> None:
     """Purge the wishlist cache from command line."""
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Get count before deletion
@@ -405,7 +406,6 @@ def purge_wishlist_cache() -> None:
             # Clear the wishlist cache
             cursor.execute("DELETE FROM wishlist_cache")
             conn.commit()
-            conn.close()
 
             print(
                 f"✅ Wishlist cache purge complete! Deleted {total_count} entries from {user_count} users."
@@ -430,12 +430,14 @@ def purge_wishlist_cache() -> None:
             e,
             exc_info=True,
         )
+    finally:
+        conn.close()
 
 
 def purge_family_library_cache_cli() -> None:
     """Purge the family library cache from command line."""
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Get count before deletion
@@ -457,7 +459,6 @@ def purge_family_library_cache_cli() -> None:
         if confirm in ["y", "yes"]:
             purge_family_library_cache()  # Call the function from the repository
             conn.commit()
-            conn.close()
 
             print(
                 f"✅ Family library cache purge complete! Deleted {cache_count} entries."
@@ -480,12 +481,72 @@ def purge_family_library_cache_cli() -> None:
             e,
             exc_info=True,
         )
+    finally:
+        conn.close()
+
+
+def purge_prices_cache() -> None:
+    """Purge the ITAD price cache and Steam-ITAD mapping cache from command line."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+
+        # Get counts before deletion
+        cursor.execute("SELECT COUNT(*) FROM itad_price_cache")
+        price_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM steam_itad_mapping")
+        mapping_count = cursor.fetchone()[0]
+
+        total_count = price_count + mapping_count
+
+        if total_count == 0:
+            print("✅ Price caches are already empty.")
+            return
+
+        # Confirm deletion
+        print(
+            f"⚠️  Found {price_count} price entries and {mapping_count} mapping entries."
+        )
+        confirm = (
+            input("Are you sure you want to purge all price cache data? (y/N): ")
+            .strip()
+            .lower()
+        )
+
+        if confirm in ["y", "yes"]:
+            # Clear the price caches
+            cursor.execute("DELETE FROM itad_price_cache")
+            cursor.execute("DELETE FROM steam_itad_mapping")
+            conn.commit()
+
+            print(
+                f"✅ Price cache purge complete! Deleted {price_count} price entries and {mapping_count} mapping entries."
+            )
+            print("\n🔄 Next steps:")
+            print("- Run 'just populate-prices' to rebuild price cache")
+        else:
+            print("❌ Price cache purge cancelled.")
+    except sqlite3.Error as e:
+        print(f"❌ Error purging price cache: {e}")
+        logger.error(
+            "Error purging price cache from command line: %s", e, exc_info=True
+        )
+    except Exception as e:  # pylint: disable=broad-except
+        # General catch for unexpected errors
+        print(f"❌ Unexpected error purging price cache: {e}")
+        logger.error(
+            "Unexpected error purging price cache from command line: %s",
+            e,
+            exc_info=True,
+        )
+    finally:
+        conn.close()
 
 
 def purge_all_cache() -> None:
     """Purge all cache data from command line."""
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Get counts before deletion
@@ -531,7 +592,6 @@ def purge_all_cache() -> None:
             cursor.execute("DELETE FROM user_games_cache")
             cursor.execute("DELETE FROM itad_price_cache")
             conn.commit()
-            conn.close()
 
             print(f"✅ All cache purge complete! Deleted {total_count} total entries.")
             print("\n🔄 Next steps:")
@@ -551,6 +611,8 @@ def purge_all_cache() -> None:
         logger.error(
             "Unexpected error purging all cache from command line: %s", e, exc_info=True
         )
+    finally:
+        conn.close()
 
 
 def _parse_and_dispatch() -> None:
@@ -577,6 +639,11 @@ def _parse_and_dispatch() -> None:
         "--purge-all",
         action="store_true",
         help="Purge all cache data (game details, wishlist, family library, etc.)",
+    )
+    parser.add_argument(
+        "--purge-prices",
+        action="store_true",
+        help="Purge ITAD price cache and Steam-ITAD mapping cache",
     )
     parser.add_argument(
         "--full-library-scan",
@@ -607,6 +674,10 @@ def _parse_and_dispatch() -> None:
     elif args.purge_all:
         print("🗑️ Purging all cache data...")
         purge_all_cache()
+        sys.exit(0)
+    elif args.purge_prices:
+        print("🗑️ Purging price cache...")
+        purge_prices_cache()
         sys.exit(0)
     elif args.full_library_scan:
         print("❌ Full library scan requires the bot to be running.")
