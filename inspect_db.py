@@ -6,6 +6,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(os.getcwd())
 DATABASE_FILE = PROJECT_ROOT / "bot_data.db"
 
+
 def inspect_database():
     print(f"Attempting to inspect database at: {DATABASE_FILE}")
     if not DATABASE_FILE.exists():
@@ -39,6 +40,7 @@ def inspect_database():
     finally:
         if conn:
             conn.close()
+
 
 if __name__ == "__main__":
     inspect_database()

@@ -470,12 +470,14 @@ def cache_game_details(
         _do_cache_game_details(
             cursor, appid, game_data, permanent, cache_hours, price_source
         )
+        conn.commit()
     else:
         with get_write_connection() as write_conn:
             cursor = write_conn.cursor()
             _do_cache_game_details(
                 cursor, appid, game_data, permanent, cache_hours, price_source
             )
+            write_conn.commit()
 
 
 def force_update_game_cache(appid: str, game_data: dict):
@@ -691,6 +693,7 @@ def cache_itad_price(
             lookup_method,
             steam_game_name,
         )
+        conn.commit()
     else:
         with get_write_connection() as write_conn:
             cursor = write_conn.cursor()
@@ -703,6 +706,7 @@ def cache_itad_price(
                 lookup_method,
                 steam_game_name,
             )
+            write_conn.commit()
 
 
 def cache_itad_price_enhanced(
@@ -1064,6 +1068,50 @@ def normalize_game_data(raw: dict) -> dict:
     }
 
 
+def _migrate_family_members_from_config(conn: sqlite3.Connection) -> None:
+    """Helper: migrate family members from config.yml under an existing write connection."""
+    from familybot.config import FAMILY_USER_DICT
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM family_members")
+    count = cursor.fetchone()[0]
+
+    if count == 0 and FAMILY_USER_DICT:
+        logger.info(
+            "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
+        )
+        config_members_to_insert = []
+        for steam_id, value in FAMILY_USER_DICT.items():
+            friendly_name, discord_id = _parse_family_config_entry(value)
+            config_members_to_insert.append((steam_id, friendly_name, discord_id))
+
+        if config_members_to_insert:
+            cursor.executemany(
+                "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                config_members_to_insert,
+            )
+            conn.commit()
+            logger.info(
+                f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
+            )
+        else:
+            logger.info(
+                "Database: No family members found in config.yml for migration."
+            )
+    elif count > 0:
+        logger.debug(
+            "Database: 'family_members' table already has data. Skipping config.yml migration."
+        )
+    else:
+        logger.debug("Database: config.yml is empty. Skipping config.yml migration.")
+
+    cursor.execute(
+        "INSERT OR IGNORE INTO migrations (name, applied_at) VALUES (?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))",
+        ("family_members_from_config",),
+    )
+    conn.commit()
+
+
 def load_family_members_from_db() -> dict:
     """
     Loads family member data (steam_id: friendly_name) from the database,
@@ -1074,51 +1122,17 @@ def load_family_members_from_db() -> dict:
 
     members = {}
 
+    # Check and run migration in a single write transaction to avoid TOCTOU race
     if not _has_migration_run("family_members_from_config"):
-        if FAMILY_USER_DICT:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM family_members")
-            if cursor.fetchone()[0] == 0:
-                logger.info(
-                    "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
-                )
-                config_members_to_insert = []
-                for steam_id, value in FAMILY_USER_DICT.items():
-                    friendly_name, discord_id = _parse_family_config_entry(value)
-                    config_members_to_insert.append(
-                        (steam_id, friendly_name, discord_id)
-                    )
-
-                if config_members_to_insert:
-                    try:
-                        with get_write_connection() as write_conn:
-                            write_cursor = write_conn.cursor()
-                            write_cursor.executemany(
-                                "INSERT OR IGNORE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                                config_members_to_insert,
-                            )
-                            write_conn.commit()
-                            logger.info(
-                                f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
-                            )
-                    except sqlite3.Error as e:
-                        logger.error(
-                            f"Database: Error during family_members migration from config.yml: {e}"
-                        )
-                else:
-                    logger.info(
-                        "Database: No family members found in config.yml for migration."
-                    )
-            else:
-                logger.debug(
-                    "Database: 'family_members' table already has data. Skipping config.yml migration."
-                )
-        else:
-            logger.debug(
-                "Database: config.yml is empty. Skipping config.yml migration."
+        with get_write_connection() as write_conn:
+            # Re-check under the write lock to handle concurrent startup
+            cursor = write_conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM migrations WHERE name = ?",
+                ("family_members_from_config",),
             )
-        _mark_migration_run("family_members_from_config")
+            if cursor.fetchone() is None:
+                _migrate_family_members_from_config(write_conn)
 
     try:
         conn = get_db_connection()

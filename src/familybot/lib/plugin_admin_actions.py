@@ -25,7 +25,6 @@ from familybot.lib.database import (
     get_cached_family_library,
     get_cached_game_details,
     get_cached_wishlist,
-    get_db_connection,
     load_family_members_from_db,
 )
 from familybot.lib.family_game_manager import get_saved_games, set_saved_games
@@ -125,16 +124,17 @@ async def purge_game_details_cache_action() -> dict[str, Any]:
     """
     Purges the game details cache table.
     """
+    from familybot.lib.database import get_write_connection
+
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(*) FROM game_details_cache")
-        cache_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM game_details_cache")
+            cache_count = cursor.fetchone()[0]
 
-        cursor.execute("DELETE FROM game_details_cache")
-        conn.commit()
-        conn.close()
+            cursor.execute("DELETE FROM game_details_cache")
+            conn.commit()
 
         logger.info(f"Admin purged game details cache: {cache_count} entries deleted")
         return {
