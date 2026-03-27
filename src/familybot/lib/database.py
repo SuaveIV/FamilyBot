@@ -7,10 +7,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 
-from familybot.config import (
-    FAMILY_LIBRARY_CACHE_TTL,
-    PROJECT_ROOT,
-)
+from familybot.config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -347,192 +344,6 @@ def sync_family_members_from_config():
 # === CACHE HELPER FUNCTIONS ===
 
 
-def get_cached_discord_user(discord_id: str):
-    """Get cached Discord user info if not expired, returns None if not found or expired."""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT username FROM discord_users_cache
-            WHERE discord_id = ? AND expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
-        """,
-            (discord_id,),
-        )
-        row = cursor.fetchone()
-        if row:
-            return row["username"]
-        return None
-    except Exception as e:
-        logger.error(f"Error getting cached Discord user for {discord_id}: {e}")
-        return None
-
-
-def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
-    """Cache Discord user info for specified hours."""
-    try:
-        with get_write_connection() as conn:
-            cursor = conn.cursor()
-            from datetime import datetime, timedelta, timezone
-
-            now = datetime.now(timezone.utc)
-            expires_at = now + timedelta(hours=cache_hours)
-
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO discord_users_cache
-                (discord_id, username, cached_at, expires_at)
-                VALUES (?, ?, ?, ?)
-            """,
-                (
-                    discord_id,
-                    username,
-                    now.isoformat().replace("+00:00", "Z"),
-                    expires_at.isoformat().replace("+00:00", "Z"),
-                ),
-            )
-            conn.commit()
-            logger.debug(f"Cached Discord user {discord_id}: {username}")
-    except Exception as e:
-        logger.error(f"Error caching Discord user {discord_id}: {e}")
-
-
-def get_cached_family_library():
-    """Get cached family library data if not expired, returns None if not found or expired."""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT appid, owner_steamids, exclude_reason FROM family_library_cache
-            WHERE expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
-        """,
-            (),
-        )
-        rows = cursor.fetchall()
-        if rows:
-            import json
-
-            family_apps = []
-            for row in rows:
-                family_apps.append(
-                    {
-                        "appid": int(row["appid"]),
-                        "owner_steamids": json.loads(row["owner_steamids"])
-                        if row["owner_steamids"]
-                        else [],
-                        "exclude_reason": row["exclude_reason"],
-                    }
-                )
-            return family_apps
-        return None
-    except Exception as e:
-        logger.error(f"Error getting cached family library: {e}")
-        return None
-
-
-def cache_family_library(
-    family_apps: list, cache_hours: int = FAMILY_LIBRARY_CACHE_TTL
-):
-    """Cache family library data for specified hours (updates infrequently)."""
-    try:
-        with get_write_connection() as conn:
-            cursor = conn.cursor()
-            import json
-            from datetime import datetime, timedelta, timezone
-
-            now = datetime.now(timezone.utc)
-            expires_at = now + timedelta(hours=cache_hours)
-
-            # Clear existing cache
-            cursor.execute("DELETE FROM family_library_cache")
-
-            # Insert new cache entries
-            cache_entries = []
-            for app in family_apps:
-                cache_entries.append(
-                    (
-                        str(app.get("appid")),
-                        json.dumps(app.get("owner_steamids", [])),
-                        app.get("exclude_reason"),
-                        now.isoformat().replace("+00:00", "Z"),
-                        expires_at.isoformat().replace("+00:00", "Z"),
-                    )
-                )
-
-            cursor.executemany(
-                """
-                INSERT INTO family_library_cache (appid, owner_steamids, exclude_reason, cached_at, expires_at)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                cache_entries,
-            )
-            conn.commit()
-            logger.debug(
-                f"Cached {len(family_apps)} family library apps for {cache_hours} hours"
-            )
-    except Exception as e:
-        logger.error(f"Error caching family library: {e}")
-
-
-def purge_family_library_cache():
-    """Purge all entries from the family_library_cache table."""
-    try:
-        with get_write_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM family_library_cache")
-            conn.commit()
-            logger.info("Purged all entries from family_library_cache.")
-    except Exception as e:
-        logger.error(f"Error purging family_library_cache: {e}")
-
-
-def get_steam_id_from_friendly_name(friendly_name: str) -> str | None:
-    """Retrieves the SteamID associated with a given friendly name from the family_members table."""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT steam_id FROM family_members WHERE friendly_name = ?",
-            (friendly_name,),
-        )
-        result = cursor.fetchone()
-        if result:
-            return result["steam_id"]
-        return None
-    except Exception as e:
-        logger.error(f"Error retrieving SteamID for friendly name {friendly_name}: {e}")
-        return None
-
-
-def get_steam_id_from_discord_id(discord_id: str) -> str | None:
-    """Retrieves the SteamID associated with a given Discord ID.
-    Checks family_members table first (for config-driven members with discord_id set),
-    then falls back to users table (for !register users)."""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # First check family_members table (config-driven members with discord_id)
-        cursor.execute(
-            "SELECT steam_id FROM family_members WHERE discord_id = ?", (discord_id,)
-        )
-        result = cursor.fetchone()
-        if result:
-            return result["steam_id"]
-
-        # Fall back to users table (!register users)
-        cursor.execute("SELECT steam_id FROM users WHERE discord_id = ?", (discord_id,))
-        result = cursor.fetchone()
-        if result:
-            return result["steam_id"]
-
-        return None
-    except Exception as e:
-        logger.error(f"Error retrieving SteamID for Discord ID {discord_id}: {e}")
-        return None
-
-
 def cleanup_expired_cache():
     """Remove expired cache entries from all cache tables."""
     try:
@@ -543,7 +354,6 @@ def cleanup_expired_cache():
                 "game_details_cache",
                 "user_games_cache",
                 "wishlist_cache",
-                "discord_users_cache",
                 "family_library_cache",
                 "itad_price_cache",
             ]

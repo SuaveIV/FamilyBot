@@ -13,7 +13,7 @@ import httpx
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from familybot.config import STEAMWORKS_API_KEY
-from familybot.lib.database import (
+from familybot.lib.family_library_repository import (
     cache_family_library,
 )
 from familybot.lib.user_games_repository import cache_user_games

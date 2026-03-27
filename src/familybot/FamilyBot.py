@@ -32,6 +32,9 @@ from familybot.lib.logging_config import setup_bot_logging
 from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import split_message
 from familybot.web.api import app as web_app
+from familybot.lib.family_library_repository import (
+    purge_family_library_cache,
+)
 from familybot.web.api import set_bot_client
 
 if TYPE_CHECKING:
@@ -430,7 +433,7 @@ def purge_wishlist_cache() -> None:
         )
 
 
-def purge_family_library_cache() -> None:
+def purge_family_library_cache_cli() -> None:
     """Purge the family library cache from command line."""
     try:
         conn = get_db_connection()
@@ -453,8 +456,7 @@ def purge_family_library_cache() -> None:
         )
 
         if confirm in ["y", "yes"]:
-            # Clear the family library cache
-            cursor.execute("DELETE FROM family_library_cache")
+            purge_family_library_cache()  # Call the function from the repository
             conn.commit()
             conn.close()
 
@@ -570,7 +572,7 @@ def _parse_and_dispatch() -> None:
     parser.add_argument(
         "--purge-family-library",
         action="store_true",
-        help="Purge family library cache to force fresh family game data",
+        help="Purge family library cache to force fresh family game data (CLI)",
     )
     parser.add_argument(
         "--purge-all",
@@ -601,7 +603,7 @@ def _parse_and_dispatch() -> None:
         sys.exit(0)
     elif args.purge_family_library:
         print("🗑️ Purging family library cache...")
-        purge_family_library_cache()
+        purge_family_library_cache_cli()
         sys.exit(0)
     elif args.purge_all:
         print("🗑️ Purging all cache data...")
