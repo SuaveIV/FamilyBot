@@ -68,10 +68,18 @@ def get_write_connection():
             cursor = conn.cursor()
             cursor.execute("INSERT ...")
             conn.commit()
+
+    If an exception is raised inside the with-block, the transaction is
+    automatically rolled back to prevent leaving an open transaction on
+    the reused thread-local connection.
     """
     conn = get_db_connection()
     with _write_lock:
-        yield conn
+        try:
+            yield conn
+        except BaseException:
+            conn.rollback()
+            raise
 
 
 def close_db_connection():
@@ -264,6 +272,10 @@ def init_db():
                             logger.error(
                                 f"Database: Failed to add '{column}' to '{table}': {e}"
                             )
+                            raise RuntimeError(
+                                f"Database migration failed: unable to add column '{column}' to table '{table}'. "
+                                f"Aborting initialization to prevent partial schema migration."
+                            ) from e
 
             _run_column_migrations(cursor)
 
@@ -1073,12 +1085,19 @@ def _migrate_family_members_from_config(conn: sqlite3.Connection) -> None:
     from familybot.config import FAMILY_USER_DICT
 
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM family_members")
-    count = cursor.fetchone()[0]
+    cursor.execute(
+        "SELECT 1 FROM migrations WHERE name = ?",
+        ("family_members_from_config",),
+    )
+    if cursor.fetchone() is not None:
+        logger.debug(
+            "Database: Migration 'family_members_from_config' already applied. Skipping."
+        )
+        return
 
-    if count == 0 and FAMILY_USER_DICT:
+    if FAMILY_USER_DICT:
         logger.info(
-            "Database: 'family_members' table is empty. Attempting to migrate from config.yml."
+            "Database: Migration 'family_members_from_config' not found. Migrating from config.yml."
         )
         config_members_to_insert = []
         for steam_id, value in FAMILY_USER_DICT.items():
@@ -1098,12 +1117,10 @@ def _migrate_family_members_from_config(conn: sqlite3.Connection) -> None:
             logger.info(
                 "Database: No family members found in config.yml for migration."
             )
-    elif count > 0:
-        logger.debug(
-            "Database: 'family_members' table already has data. Skipping config.yml migration."
-        )
     else:
-        logger.debug("Database: config.yml is empty. Skipping config.yml migration.")
+        logger.debug(
+            "Database: config.yml is empty. Skipping family members migration."
+        )
 
     cursor.execute(
         "INSERT OR IGNORE INTO migrations (name, applied_at) VALUES (?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))",
