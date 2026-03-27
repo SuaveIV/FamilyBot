@@ -220,7 +220,7 @@ tqdm==4.66.6
     # via familybot (pyproject.toml)
 types-pyyaml==6.0.12.20250915
     # via familybot (pyproject.toml)
-types-requests==2.32.4.20260324
+types-requests==2.33.0.20260327
     # via
     #   familybot (pyproject.toml)
     #   types-tqdm
