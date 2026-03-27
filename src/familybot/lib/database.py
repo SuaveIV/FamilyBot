@@ -3,6 +3,8 @@
 import logging
 import os
 import sqlite3
+import threading
+from contextlib import contextmanager
 
 from familybot.config import (
     FAMILY_LIBRARY_CACHE_TTL,
@@ -19,17 +21,52 @@ if not logger.handlers:
 
 DATABASE_FILE = os.path.join(PROJECT_ROOT, "bot_data.db")
 
+# --- Connection pool: single connection per thread with write serialization ---
+_local = threading.local()
+_write_lock = threading.Lock()
+
 
 def get_db_connection():
-    """Establishes and returns a new SQLite database connection."""
-    try:
-        # Allow the connection to be used across multiple threads, necessary for FastAPI.
-        conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-    except sqlite3.Error as e:
-        logger.critical(f"Database connection error: {e}")
-        raise
+    """Returns a thread-local SQLite connection, creating one if needed.
+
+    Uses a single connection per thread to avoid repeated setup overhead.
+    Writes are serialized via _write_lock to prevent concurrent write corruption.
+    """
+    if not hasattr(_local, "conn") or _local.conn is None:
+        try:
+            conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            _local.conn = conn
+        except sqlite3.Error as e:
+            logger.critical(f"Database connection error: {e}")
+            raise
+    return _local.conn
+
+
+@contextmanager
+def get_write_connection():
+    """Context manager that provides a connection with write lock held.
+
+    Usage:
+        with get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT ...")
+            conn.commit()
+    """
+    conn = get_db_connection()
+    with _write_lock:
+        yield conn
+
+
+def close_db_connection():
+    """Close the thread-local database connection if it exists."""
+    if hasattr(_local, "conn") and _local.conn is not None:
+        try:
+            _local.conn.close()
+        except sqlite3.Error:
+            pass
+        _local.conn = None
 
 
 def init_db():
@@ -151,6 +188,15 @@ def init_db():
             )
         """)
         logger.info("Database: 'itad_price_cache' table checked/created.")
+
+        # Create 'migrations' table for tracking applied migrations
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS migrations (
+                name TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+            )
+        """)
+        logger.info("Database: 'migrations' table checked/created.")
 
         # --- DECLARATIVE MIGRATIONS for adding columns to existing tables ---
 
@@ -360,12 +406,13 @@ def cache_game_details(
 ):
     """Cache game details permanently by default, or for specified hours if permanent=False."""
     close_conn = False
-    if conn is None:
-        conn = get_db_connection()
+    db_conn = conn
+    if db_conn is None:
+        db_conn = get_db_connection()
         close_conn = True
 
     try:
-        cursor = conn.cursor()
+        cursor = db_conn.cursor()
         import json
         from datetime import datetime, timedelta, timezone
 
@@ -407,7 +454,7 @@ def cache_game_details(
             ),
         )
         if close_conn:
-            conn.commit()
+            db_conn.commit()
         cache_type = "permanently" if permanent else f"for {cache_hours} hours"
         logger.debug(
             f"Cached game details for {appid} {cache_type} (MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})"
@@ -416,8 +463,8 @@ def cache_game_details(
         logger.error(f"Error caching game details for {appid}: {e}")
         raise e
     finally:
-        if close_conn and conn:
-            conn.close()
+        if close_conn and db_conn:
+            db_conn.close()
 
 
 def force_update_game_cache(appid: str, game_data: dict):
@@ -595,12 +642,13 @@ def cache_itad_price(
 ):
     """Cache ITAD price data. If permanent=True, cache never expires (expires_at=NULL, permanent=1)."""
     close_conn = False
-    if conn is None:
-        conn = get_db_connection()
+    db_conn = conn
+    if db_conn is None:
+        db_conn = get_db_connection()
         close_conn = True
 
     try:
-        cursor = conn.cursor()
+        cursor = db_conn.cursor()
         from datetime import datetime, timedelta, timezone
 
         now = datetime.now(timezone.utc)
@@ -631,15 +679,15 @@ def cache_itad_price(
             ),
         )
         if close_conn:
-            conn.commit()
+            db_conn.commit()
         cache_type = "permanently" if permanent else f"for {cache_hours} hours"
         logger.debug(f"Cached ITAD price for {appid} {cache_type}")
     except Exception as e:
         logger.error(f"Error caching ITAD price for {appid}: {e}")
         raise e
     finally:
-        if close_conn and conn:
-            conn.close()
+        if close_conn and db_conn:
+            db_conn.close()
 
 
 def cache_itad_price_enhanced(
@@ -953,8 +1001,91 @@ def cleanup_expired_cache():
             conn.close()
 
 
-# --- Migration Flag for Family Members ---
-_family_members_migrated_this_run = False
+# --- Database-backed migrations ---
+
+
+def _has_migration_run(migration_name: str) -> bool:
+    """Check if a named migration has already been applied."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM migrations WHERE name = ?", (migration_name,))
+        return cursor.fetchone() is not None
+    except sqlite3.OperationalError:
+        # Table doesn't exist yet
+        return False
+    except Exception:
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
+def _mark_migration_run(migration_name: str) -> None:
+    """Record that a named migration has been applied."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO migrations (name, applied_at) VALUES (?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))",
+            (migration_name,),
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error marking migration '{migration_name}': {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def normalize_game_data(raw: dict) -> dict:
+    """Normalize game data from any source into a consistent shape.
+
+    Ensures all consumers get a predictable dict structure regardless of
+    whether data came from the Steam Store API or from the cache.
+
+    Returns a dict with these guaranteed keys:
+        - name: str
+        - type: str
+        - is_free: bool
+        - categories: list
+        - price_overview: dict | None
+        - is_multiplayer: bool
+        - is_coop: bool
+        - is_family_shared: bool
+    """
+    if raw is None:
+        return {
+            "name": "Unknown",
+            "type": "unknown",
+            "is_free": False,
+            "categories": [],
+            "price_overview": None,
+            "is_multiplayer": False,
+            "is_coop": False,
+            "is_family_shared": False,
+        }
+
+    # If already normalized (has our boolean fields), return as-is
+    if "is_multiplayer" in raw and "is_family_shared" in raw:
+        return raw
+
+    # Analyze categories from raw API response
+    categories = raw.get("categories", [])
+    is_multiplayer, is_coop, is_family_shared = _analyze_game_categories(categories)
+
+    return {
+        "name": raw.get("name", "Unknown"),
+        "type": raw.get("type", "unknown"),
+        "is_free": bool(raw.get("is_free", False)),
+        "categories": categories,
+        "price_overview": raw.get("price_overview"),
+        "is_multiplayer": is_multiplayer,
+        "is_coop": is_coop,
+        "is_family_shared": is_family_shared,
+    }
 
 
 def load_family_members_from_db() -> dict:
@@ -962,7 +1093,6 @@ def load_family_members_from_db() -> dict:
     Loads family member data (steam_id: friendly_name) from the database,
     performing a one-time migration from config.yml if necessary.
     """
-    global _family_members_migrated_this_run
     from familybot.config import FAMILY_USER_DICT
     from steam.steamid import SteamID
 
@@ -972,7 +1102,7 @@ def load_family_members_from_db() -> dict:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        if not _family_members_migrated_this_run:
+        if not _has_migration_run("family_members_from_config"):
             cursor.execute("SELECT COUNT(*) FROM family_members")
             if cursor.fetchone()[0] == 0 and FAMILY_USER_DICT:
                 logger.info(
@@ -995,12 +1125,10 @@ def load_family_members_from_db() -> dict:
                         logger.info(
                             f"Database: Migrated {len(config_members_to_insert)} family members from config.yml."
                         )
-                        _family_members_migrated_this_run = True
                     else:
                         logger.info(
                             "Database: No family members found in config.yml for migration."
                         )
-                        _family_members_migrated_this_run = True
                 except sqlite3.Error as e:
                     logger.error(
                         f"Database: Error during family_members migration from config.yml: {e}"
@@ -1009,7 +1137,7 @@ def load_family_members_from_db() -> dict:
                 logger.debug(
                     "Database: 'family_members' table already has data or config.yml is empty. Skipping config.yml migration."
                 )
-                _family_members_migrated_this_run = True
+            _mark_migration_run("family_members_from_config")
 
         cursor.execute("SELECT steam_id, friendly_name FROM family_members")
         for row in cursor.fetchall():
