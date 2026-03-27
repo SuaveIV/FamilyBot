@@ -10,15 +10,21 @@ from familybot.config import (
     FAMILY_STEAM_ID,
     STEAMWORKS_API_KEY,
 )
-from familybot.lib.database import (
+from familybot.lib.family_library_repository import (
     cache_family_library,
-    cache_game_details,
-    cache_wishlist,
     get_cached_family_library,
+)
+from familybot.lib.game_details_repository import (
+    cache_game_details,
     get_cached_game_details,
-    get_cached_wishlist,
+)
+from familybot.lib.user_repository import (
     get_steam_id_from_friendly_name,
     load_family_members_from_db,
+)
+from familybot.lib.wishlist_repository import (
+    cache_wishlist,
+    get_cached_wishlist,
 )
 
 # Import enhanced logging configuration
@@ -365,7 +371,7 @@ class steam_family(Extension):
 
         try:
             # Get the SteamID of the user who called the command
-            from familybot.lib.database import get_steam_id_from_discord_id
+            from familybot.lib.user_repository import get_steam_id_from_discord_id
 
             user_steam_id = get_steam_id_from_discord_id(str(ctx.author_id))
 

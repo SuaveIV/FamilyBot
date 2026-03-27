@@ -29,16 +29,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
-    cache_game_details,  # pylint: disable=wrong-import-position
-    cache_game_details_with_source,  # pylint: disable=wrong-import-position
-    cache_itad_price_enhanced,
-    get_cached_game_details,  # pylint: disable=wrong-import-position
-    get_cached_itad_price,
-    get_cached_wishlist,  # pylint: disable=wrong-import-position
     get_db_connection,
     init_db,  # pylint: disable=wrong-import-position
-    load_family_members_from_db,
-)  # pylint: disable=wrong-import-position
+)
+from familybot.lib.game_details_repository import (
+    cache_game_details,  # pylint: disable=wrong-import-position
+    cache_game_details_with_source,  # pylint: disable=wrong-import-position
+    get_cached_game_details,  # pylint: disable=wrong-import-position
+)
+from familybot.lib.itad_price_repository import (
+    cache_itad_price_enhanced,
+    get_cached_itad_price,
+)
+from familybot.lib.user_repository import load_family_members_from_db
+from familybot.lib.wishlist_repository import get_cached_wishlist  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
 
 # Setup enhanced logging for this script

@@ -29,7 +29,8 @@ from typing import Any
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from familybot.lib.database import cache_game_details, get_db_connection, init_db
+from familybot.lib.database import get_db_connection, init_db
+from familybot.lib.game_details_repository import cache_game_details
 
 # Configure logging
 logging.basicConfig(

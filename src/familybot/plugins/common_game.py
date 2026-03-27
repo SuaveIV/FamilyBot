@@ -10,14 +10,20 @@ from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
 from familybot.config import ADMIN_DISCORD_ID, PROJECT_ROOT, STEAMWORKS_API_KEY
 from familybot.lib.database import (
-    cache_discord_user,
-    cache_game_details,
-    cache_user_games,
     cleanup_expired_cache,
-    get_cached_discord_user,
-    get_cached_game_details,
-    get_cached_user_games,
     get_db_connection,
+)
+from familybot.lib.discord_user_repository import (
+    cache_discord_user,
+    get_cached_discord_user,
+)
+from familybot.lib.game_details_repository import (
+    cache_game_details,
+    get_cached_game_details,
+)
+from familybot.lib.user_games_repository import (
+    cache_user_games,
+    get_cached_user_games,
 )
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient

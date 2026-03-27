@@ -10,11 +10,9 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from familybot.lib.admin_commands import DatabasePopulator
-from familybot.lib.database import (
-    load_family_members_from_db,
-    purge_family_library_cache,
-    purge_wishlist_cache,
-)
+from familybot.lib.family_library_repository import purge_family_library_cache
+from familybot.lib.user_repository import load_family_members_from_db
+from familybot.lib.wishlist_repository import purge_wishlist_cache
 from familybot.lib.plugin_admin_actions import (
     force_new_game_action,
     force_wishlist_action,

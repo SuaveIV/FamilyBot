@@ -13,9 +13,9 @@ import aiohttp
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from familybot.lib.database import (
+from familybot.lib.family_library_repository import get_cached_family_library
+from familybot.lib.game_details_repository import (
     cache_game_details,
-    get_cached_family_library,
     get_cached_game_details,
 )
 from familybot.web.dependencies import get_db

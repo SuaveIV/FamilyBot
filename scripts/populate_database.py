@@ -16,19 +16,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from familybot.config import STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
-    cache_family_library,
-    cache_game_details,  # pylint: disable=wrong-import-position
-    cache_user_games,
-    cache_wishlist,
-    get_cached_game_details,
-    get_cached_wishlist,
     get_db_connection,
     init_db,
-    load_family_members_from_db,
 )
+from familybot.lib.family_library_repository import cache_family_library
 from familybot.lib.family_utils import get_family_game_list_url  # pylint: disable=wrong-import-position
+from familybot.lib.game_details_repository import (
+    cache_game_details,
+    get_cached_game_details,
+)
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
-from familybot.lib.utils import TokenBucket, add_to_wishlist  # pylint: disable=wrong-import-position
+from familybot.lib.user_games_repository import cache_user_games
+from familybot.lib.user_repository import load_family_members_from_db
+from familybot.lib.utils import TokenBucket  # pylint: disable=wrong-import-position
+from familybot.lib.wishlist_repository import (
+    cache_wishlist,
+    get_cached_wishlist,
+)
+from familybot.lib.wishlist_service import add_to_wishlist  # pylint: disable=wrong-import-position
 
 try:
     from tqdm import tqdm
