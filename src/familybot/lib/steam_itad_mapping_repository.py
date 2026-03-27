@@ -61,7 +61,7 @@ def cache_itad_mapping(
 
     if conn is not None:
         _do_insert(conn.cursor())
-        conn.commit()
+        # Caller owns the connection and transaction; do not commit here
     else:
         with get_write_connection() as write_conn:
             _do_insert(write_conn.cursor())
@@ -90,7 +90,7 @@ def bulk_cache_itad_mappings(
 
     if conn is not None:
         _do_bulk_insert(conn.cursor())
-        conn.commit()
+        # Caller owns the connection and transaction; do not commit here
     else:
         with get_write_connection() as write_conn:
             _do_bulk_insert(write_conn.cursor())

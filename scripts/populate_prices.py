@@ -794,7 +794,10 @@ class PricePopulator:
         # AppIDs with ITAD data but no Steam deal listed
         fallback_ids.update(no_steam_deal)
 
-        fallback_ids = fallback_ids - itad_appids_with_data  # Don't double-fetch
+        # Only remove appids that have ITAD data AND have a Steam deal
+        # (keep appids in no_steam_deal so we can get their current price from Steam)
+        remove_set = itad_appids_with_data - no_steam_deal
+        fallback_ids = fallback_ids - remove_set
 
         print(f"   Phase 3: Steam API fallback for {len(fallback_ids)} games...")
         steam_fallback_data = {}
@@ -808,48 +811,71 @@ class PricePopulator:
                     unit="game",
                 ):
                     app_id, success, game_data, source = await task
-                    if success:
-                        price_overview = game_data.get("price_overview") if game_data else None
-                        steam_fallback_data[app_id] = {
-                            "data": {
-                                "lowest_price": str(
-                                    price_overview.get("final", 0) / 100
-                                    if price_overview
-                                    else 0
-                                ),
-                                "lowest_price_formatted": (
-                                    price_overview.get("final_formatted", "N/A")
-                                    if price_overview
-                                    else "N/A"
-                                ),
-                                "shop_name": "Steam",
-                            },
-                            "method": "steam_fallback",
-                            "game_name": game_data.get("name") if game_data else None,
-                        }
+                    if success and game_data:
+                        price_overview = game_data.get("price_overview")
+                        is_free = game_data.get("is_free", False)
+                        # Skip if no price_overview and game is not free
+                        if not price_overview and not is_free:
+                            continue
+                        if price_overview and "final" in price_overview:
+                            steam_fallback_data[app_id] = {
+                                "data": {
+                                    "lowest_price": str(price_overview["final"] / 100),
+                                    "lowest_price_formatted": price_overview.get(
+                                        "final_formatted", "N/A"
+                                    ),
+                                    "shop_name": "Steam",
+                                },
+                                "method": "steam_fallback",
+                                "game_name": game_data.get("name"),
+                            }
+                        elif is_free:
+                            steam_fallback_data[app_id] = {
+                                "data": {
+                                    "lowest_price": "0",
+                                    "lowest_price_formatted": "Free",
+                                    "shop_name": "Steam",
+                                },
+                                "method": "steam_fallback",
+                                "game_name": game_data.get("name"),
+                            }
             else:
                 completed = 0
                 for coro in asyncio.as_completed(tasks):
                     app_id, success, game_data, source = await coro
-                    if success:
-                        price_overview = game_data.get("price_overview") if game_data else None
-                        steam_fallback_data[app_id] = {
-                            "data": {
-                                "lowest_price": str(
-                                    price_overview.get("final", 0) / 100
-                                    if price_overview
-                                    else 0
-                                ),
-                                "lowest_price_formatted": (
-                                    price_overview.get("final_formatted", "N/A")
-                                    if price_overview
-                                    else "N/A"
-                                ),
-                                "shop_name": "Steam",
-                            },
-                            "method": "steam_fallback",
-                            "game_name": game_data.get("name") if game_data else None,
-                        }
+                    if success and game_data:
+                        price_overview = game_data.get("price_overview")
+                        is_free = game_data.get("is_free", False)
+                        # Skip if no price_overview and game is not free
+                        if not price_overview and not is_free:
+                            completed += 1
+                            if completed % 10 == 0:
+                                print(
+                                    f"   Steam Fallback Progress: {completed}/{len(fallback_ids)}"
+                                )
+                            continue
+                        if price_overview and "final" in price_overview:
+                            steam_fallback_data[app_id] = {
+                                "data": {
+                                    "lowest_price": str(price_overview["final"] / 100),
+                                    "lowest_price_formatted": price_overview.get(
+                                        "final_formatted", "N/A"
+                                    ),
+                                    "shop_name": "Steam",
+                                },
+                                "method": "steam_fallback",
+                                "game_name": game_data.get("name"),
+                            }
+                        elif is_free:
+                            steam_fallback_data[app_id] = {
+                                "data": {
+                                    "lowest_price": "0",
+                                    "lowest_price_formatted": "Free",
+                                    "shop_name": "Steam",
+                                },
+                                "method": "steam_fallback",
+                                "game_name": game_data.get("name"),
+                            }
                     completed += 1
                     if completed % 10 == 0:
                         print(
