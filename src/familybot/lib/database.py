@@ -190,6 +190,15 @@ def _create_tables(cursor: sqlite3.Cursor):
     logger.info("Database: 'itad_price_cache' table checked/created.")
 
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS steam_itad_mapping (
+            appid TEXT PRIMARY KEY,
+            itad_id TEXT NOT NULL,
+            mapped_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+        )
+    """)
+    logger.info("Database: 'steam_itad_mapping' table checked/created.")
+
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS migrations (
             name TEXT PRIMARY KEY,
             applied_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
