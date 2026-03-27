@@ -14,7 +14,7 @@ from steam.webapi import WebAPI
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from familybot.config import STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import STEAMWORKS_API_KEY, ITAD_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     get_db_connection,
     init_db,
@@ -26,6 +26,10 @@ from familybot.lib.game_details_repository import (
     get_cached_game_details,
 )
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
+from familybot.lib.steam_itad_mapping_repository import (
+    get_cached_itad_ids_bulk,
+    bulk_cache_itad_mappings,
+)
 from familybot.lib.user_games_repository import cache_user_games
 from familybot.lib.user_repository import load_family_members_from_db
 from familybot.lib.utils import TokenBucket  # pylint: disable=wrong-import-position
@@ -698,6 +702,124 @@ class DatabasePopulator:
 
         return total_cached
 
+    async def resolve_itad_ids(self, dry_run: bool = False) -> int:
+        """Resolve and cache ITAD IDs for all known games using bulk lookup."""
+        if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
+            print("\n⚠️  ITAD API key not configured. Skipping ITAD ID resolution.")
+            return 0
+
+        print("\n🔗 Starting ITAD ID resolution...")
+
+        if dry_run:
+            print("   🔍 Would resolve ITAD IDs for all cached games")
+            return 0
+
+        # Collect all known app IDs from the database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT appid FROM game_details_cache")
+        all_appids = [row["appid"] for row in cursor.fetchall()]
+        conn.close()
+
+        if not all_appids:
+            print("   ⚠️  No games found in database")
+            return 0
+
+        print(f"   📊 Found {len(all_appids)} games to check")
+
+        # Check which ones already have ITAD mappings
+        cached_mappings = get_cached_itad_ids_bulk(all_appids)
+        uncached = [aid for aid in all_appids if aid not in cached_mappings]
+
+        print(f"   💾 Already mapped: {len(cached_mappings)}")
+        print(f"   🔍 Need lookup: {len(uncached)}")
+
+        if not uncached:
+            print("   ✅ All games already have ITAD ID mappings")
+            return 0
+
+        # Bulk lookup in chunks of 100
+        new_mappings = {}
+        failed_count = 0
+        chunk_size = 100
+
+        if TQDM_AVAILABLE:
+            pbar = tqdm(
+                total=len(uncached),
+                desc="🔗 Resolving ITAD IDs",
+                unit="game",
+                leave=True,
+            )
+
+        for i in range(0, len(uncached), chunk_size):
+            chunk = uncached[i : i + chunk_size]
+            shop_queries = [f"app/{app_id}" for app_id in chunk]
+
+            try:
+                lookup_url = "https://api.isthereanydeal.com/lookup/id/shop/61/v1"
+                response = await self.make_request_with_retry(
+                    lookup_url, api_type="store"
+                )
+
+                if response is None:
+                    failed_count += len(chunk)
+                    if TQDM_AVAILABLE:
+                        pbar.update(len(chunk))
+                    continue
+
+                # POST request for bulk lookup
+                response = await self.client.post(
+                    lookup_url,
+                    json=shop_queries,
+                    params={"key": ITAD_API_KEY},
+                )
+
+                if response.status_code == 429:
+                    logger.warning("Rate limited during ITAD lookup, skipping chunk")
+                    failed_count += len(chunk)
+                    if TQDM_AVAILABLE:
+                        pbar.update(len(chunk))
+                    continue
+
+                lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
+                if lookup_data is None:
+                    failed_count += len(chunk)
+                    if TQDM_AVAILABLE:
+                        pbar.update(len(chunk))
+                    continue
+
+                for shop_query, itad_id in lookup_data.items():
+                    app_id = shop_query.replace("app/", "")
+                    if itad_id:
+                        new_mappings[app_id] = itad_id
+                    else:
+                        failed_count += 1
+
+                if TQDM_AVAILABLE:
+                    pbar.update(len(chunk))
+                    pbar.set_postfix_str(
+                        f"Mapped: {len(new_mappings)}, Failed: {failed_count}"
+                    )
+
+            except Exception as e:
+                logger.error("ITAD bulk lookup chunk failed: %s", e)
+                failed_count += len(chunk)
+                if TQDM_AVAILABLE:
+                    pbar.update(len(chunk))
+
+        if TQDM_AVAILABLE:
+            pbar.close()
+
+        # Cache new mappings
+        if new_mappings:
+            bulk_cache_itad_mappings(new_mappings)
+
+        print(f"\n🔗 ITAD ID resolution complete!")
+        print(f"   ✅ New mappings cached: {len(new_mappings)}")
+        print(f"   ❌ Failed to resolve: {failed_count}")
+
+        return len(new_mappings)
+
     async def populate_wishlists(
         self, family_members: dict[str, str], dry_run: bool = False
     ) -> int:
@@ -938,6 +1060,9 @@ async def main():
             total_wishlist_cached = await populator.populate_wishlists(
                 family_members, args.dry_run
             )
+
+        # Resolve ITAD IDs for all discovered games
+        await populator.resolve_itad_ids(args.dry_run)
 
         # Final summary
         end_time = datetime.now()

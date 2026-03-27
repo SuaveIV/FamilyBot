@@ -338,6 +338,16 @@ class PricePopulator:
         failed_appids = []
         chunk_size = 100
 
+        if ASYNC_TQDM_AVAILABLE:
+            pbar = atqdm(
+                total=len(uncached_appids),
+                desc="ITAD ID Lookup",
+                unit="game",
+                leave=False,
+            )
+        else:
+            pbar = None
+
         for i in range(0, len(uncached_appids), chunk_size):
             chunk = uncached_appids[i : i + chunk_size]
             shop_queries = [f"app/{app_id}" for app_id in chunk]
@@ -354,11 +364,15 @@ class PricePopulator:
 
                 if response is None:
                     failed_appids.extend(chunk)
+                    if pbar:
+                        pbar.update(len(chunk))
                     continue
 
                 lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
                 if lookup_data is None:
                     failed_appids.extend(chunk)
+                    if pbar:
+                        pbar.update(len(chunk))
                     continue
 
                 for shop_query, itad_id in lookup_data.items():
@@ -374,9 +388,20 @@ class PricePopulator:
                     if app_id not in resolved_in_chunk and app_id not in new_mappings:
                         failed_appids.append(app_id)
 
+                if pbar:
+                    pbar.update(len(chunk))
+                    pbar.set_postfix_str(
+                        f"Found: {len(new_mappings)}, Failed: {len(failed_appids)}"
+                    )
+
             except Exception as e:
                 logger.error("ITAD bulk lookup chunk failed: %s", e)
                 failed_appids.extend(chunk)
+                if pbar:
+                    pbar.update(len(chunk))
+
+        if pbar:
+            pbar.close()
 
         # Step 3: Cache new mappings permanently
         if new_mappings:
@@ -398,6 +423,16 @@ class PricePopulator:
         no_steam_deal = set()
         chunk_size = 50
 
+        if ASYNC_TQDM_AVAILABLE:
+            pbar = atqdm(
+                total=len(itad_ids),
+                desc="ITAD Prices",
+                unit="game",
+                leave=False,
+            )
+        else:
+            pbar = None
+
         for i in range(0, len(itad_ids), chunk_size):
             chunk = itad_ids[i : i + chunk_size]
 
@@ -415,16 +450,22 @@ class PricePopulator:
                     logger.warning(
                         "ITAD prices chunk failed, skipping %d IDs", len(chunk)
                     )
+                    if pbar:
+                        pbar.update(len(chunk))
                     continue
 
                 prices_data = self.handle_api_response("ITAD Bulk Prices", response)
                 if prices_data is None:
+                    if pbar:
+                        pbar.update(len(chunk))
                     continue
 
+                chunk_processed = 0
                 for price_entry in prices_data:
                     itad_id = price_entry.get("id")
                     app_id = itad_id_to_appid.get(itad_id)
                     if not app_id:
+                        chunk_processed += 1
                         continue
 
                     # Extract historical low
@@ -469,9 +510,21 @@ class PricePopulator:
                             "method": "bulk",
                             "game_name": None,
                         }
+                    chunk_processed += 1
+
+                if pbar:
+                    pbar.update(chunk_processed)
+                    pbar.set_postfix_str(
+                        f"Prices: {len(itad_data)}, No Steam: {len(no_steam_deal)}"
+                    )
 
             except Exception as e:
                 logger.error("ITAD prices bulk chunk failed: %s", e)
+                if pbar:
+                    pbar.update(len(chunk))
+
+        if pbar:
+            pbar.close()
 
         return itad_data, no_steam_deal
 
