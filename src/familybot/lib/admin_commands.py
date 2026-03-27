@@ -69,7 +69,7 @@ class DatabasePopulator:
         await self.client.aclose()
 
     async def make_request_with_retry(
-        self, url: str, api_type: str = "steam"
+        self, url: str, api_type: str = "steam", params: dict | None = None
     ) -> httpx.Response | None:
         """Make HTTP request with retry logic for 429 errors."""
         bucket = self.steam_bucket if api_type == "steam" else self.store_bucket
@@ -85,7 +85,7 @@ class DatabasePopulator:
                     await asyncio.sleep(jitter)
 
                 # Make the request
-                response = await self.client.get(url)
+                response = await self.client.get(url, params=params)
 
                 # Check for rate limiting
                 if response.status_code == 429:
@@ -200,14 +200,22 @@ class DatabasePopulator:
             logger.info(f"Processing {name}'s library...")
 
             try:
-                owned_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&include_appinfo=1&include_played_free_games=1"
+                owned_games_url = (
+                    "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
+                )
+                owned_games_params = {
+                    "key": STEAMWORKS_API_KEY,
+                    "steamid": steam_id,
+                    "include_appinfo": 1,
+                    "include_played_free_games": 1,
+                }
 
                 if dry_run:
                     logger.info(f"Would fetch owned games for {name}")
                     continue
 
                 response = await self.make_request_with_retry(
-                    owned_games_url, api_type="steam"
+                    owned_games_url, api_type="steam", params=owned_games_params
                 )
                 if response is None:
                     logger.warning(f"Failed to get games for {name}")
@@ -344,10 +352,16 @@ class DatabasePopulator:
                     logger.info(f"Would fetch wishlist for {name}")
                     continue
 
-                wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}"
+                wishlist_url = (
+                    "https://api.steampowered.com/IWishlistService/GetWishlist/v1/"
+                )
+                wishlist_params = {
+                    "key": STEAMWORKS_API_KEY,
+                    "steamid": steam_id,
+                }
 
                 response = await self.make_request_with_retry(
-                    wishlist_url, api_type="steam"
+                    wishlist_url, api_type="steam", params=wishlist_params
                 )
                 if response is None:
                     logger.warning(f"Failed to get wishlist for {name}")

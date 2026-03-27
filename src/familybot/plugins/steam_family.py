@@ -398,7 +398,13 @@ class steam_family(Extension):
                     return
 
                 try:
-                    wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
+                    wishlist_url = (
+                        "https://api.steampowered.com/IWishlistService/GetWishlist/v1/"
+                    )
+                    wishlist_params = {
+                        "key": STEAMWORKS_API_KEY,
+                        "steamid": user_steam_id,
+                    }
                     wishlist_json = None
                     max_retries = 3
 
@@ -408,6 +414,7 @@ class steam_family(Extension):
                                 await self.steam_api_manager.rate_limit_steam_api()
                                 async with session.get(
                                     wishlist_url,
+                                    params=wishlist_params,
                                     timeout=aiohttp.ClientTimeout(total=15),
                                 ) as response:
                                     response.raise_for_status()
