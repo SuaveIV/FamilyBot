@@ -85,6 +85,170 @@ def close_db_connection():
         _local.conn = None
 
 
+def _create_tables(cursor: sqlite3.Cursor):
+    """Creates all necessary database tables if they do not already exist."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            discord_id TEXT PRIMARY KEY,
+            steam_id TEXT NOT NULL UNIQUE
+        )
+    """)
+    logger.info("Database: 'users' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS saved_games (
+            appid TEXT PRIMARY KEY,
+            detected_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+        )
+    """)
+    logger.info("Database: 'saved_games' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS family_members (
+            steam_id TEXT PRIMARY KEY,
+            friendly_name TEXT NOT NULL,
+            discord_id TEXT
+        )
+    """)
+    logger.info("Database: 'family_members' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS game_details_cache (
+            appid TEXT PRIMARY KEY,
+            name TEXT,
+            type TEXT,
+            is_free BOOLEAN,
+            categories TEXT,
+            price_data TEXT,
+            is_multiplayer BOOLEAN DEFAULT 0,
+            is_coop BOOLEAN DEFAULT 0,
+            is_family_shared BOOLEAN DEFAULT 0,
+            cached_at TEXT NOT NULL,
+            expires_at TEXT,
+            permanent BOOLEAN DEFAULT 1,
+            price_source TEXT DEFAULT 'store_api'
+        )
+    """)
+    logger.info("Database: 'game_details_cache' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_games_cache (
+            steam_id TEXT,
+            appid TEXT,
+            cached_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            PRIMARY KEY (steam_id, appid)
+        )
+    """)
+    logger.info("Database: 'user_games_cache' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS wishlist_cache (
+            steam_id TEXT,
+            appid TEXT,
+            cached_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            PRIMARY KEY (steam_id, appid)
+        )
+    """)
+    logger.info("Database: 'wishlist_cache' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS discord_users_cache (
+            discord_id TEXT PRIMARY KEY,
+            username TEXT,
+            cached_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        )
+    """)
+    logger.info("Database: 'discord_users_cache' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS family_library_cache (
+            appid TEXT PRIMARY KEY,
+            owner_steamids TEXT,
+            exclude_reason INTEGER,
+            cached_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        )
+    """)
+    logger.info("Database: 'family_library_cache' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS itad_price_cache (
+            appid TEXT PRIMARY KEY,
+            lowest_price TEXT,
+            lowest_price_formatted TEXT,
+            shop_name TEXT,
+            cached_at TEXT NOT NULL,
+            expires_at TEXT,
+            permanent BOOLEAN DEFAULT 1,
+            lookup_method TEXT DEFAULT 'appid',
+            steam_game_name TEXT
+        )
+    """)
+    logger.info("Database: 'itad_price_cache' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS migrations (
+            name TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+        )
+    """)
+    logger.info("Database: 'migrations' table checked/created.")
+
+
+def _run_column_migrations(cursor: sqlite3.Cursor):
+    """Applies declarative column migrations to existing tables."""
+    # List of (table_name, column_name, column_definition, default_value_for_update)
+    # default_value_for_update is used to populate existing rows if not NULL.
+    COLUMN_MIGRATIONS = [
+        (
+            "saved_games",
+            "detected_at",
+            "TEXT",
+            "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')",
+        ),
+        ("game_details_cache", "is_multiplayer", "BOOLEAN DEFAULT 0", "0"),
+        ("game_details_cache", "is_coop", "BOOLEAN DEFAULT 0", "0"),
+        ("game_details_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
+        (
+            "game_details_cache",
+            "price_source",
+            "TEXT DEFAULT 'store_api'",
+            "'store_api'",
+        ),
+        ("itad_price_cache", "permanent", "BOOLEAN DEFAULT 1", "1"),
+        (
+            "itad_price_cache",
+            "lookup_method",
+            "TEXT DEFAULT 'appid'",
+            "'appid'",
+        ),
+        ("itad_price_cache", "steam_game_name", "TEXT", None),
+    ]
+
+    for table, column, definition, update_val in COLUMN_MIGRATIONS:
+        cursor.execute(f"PRAGMA table_info({table})")
+        columns = [col[1] for col in cursor.fetchall()]
+
+        if column not in columns:
+            logger.info(f"Database: Adding column '{column}' to table '{table}'.")
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+                if update_val is not None:
+                    cursor.execute(
+                        f"UPDATE {table} SET {column} = {update_val} WHERE {column} IS NULL"
+                    )
+                logger.info(f"Database: Successfully added '{column}' to '{table}'.")
+            except sqlite3.OperationalError as e:
+                logger.error(f"Database: Failed to add '{column}' to '{table}': {e}")
+                raise RuntimeError(
+                    f"Database migration failed: unable to add column '{column}' to table '{table}'. "
+                    f"Aborting initialization to prevent partial schema migration."
+                ) from e
+
+
 def init_db():
     """Initializes the database schema by creating tables if they don't exist
     and adding new columns if they are missing (for schema evolution)."""
@@ -92,189 +256,8 @@ def init_db():
         with get_write_connection() as conn:
             cursor = conn.cursor()
 
-            # Create 'users' table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    discord_id TEXT PRIMARY KEY,
-                    steam_id TEXT NOT NULL UNIQUE
-                )
-            """)
-            logger.info("Database: 'users' table checked/created.")
-
-            # Create 'saved_games' table with detected_at timestamp if it doesn't exist
-            # The DEFAULT (STRFTIME...) works perfectly when creating a new table.
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS saved_games (
-                    appid TEXT PRIMARY KEY,
-                    detected_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
-                )
-            """)
-            logger.info("Database: 'saved_games' table checked/created.")
-
-            # Create 'family_members' table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS family_members (
-                    steam_id TEXT PRIMARY KEY,
-                    friendly_name TEXT NOT NULL,
-                    discord_id TEXT
-                )
-            """)
-            logger.info("Database: 'family_members' table checked/created.")
-
-            # Create 'game_details_cache' table for Steam Store API responses
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS game_details_cache (
-                    appid TEXT PRIMARY KEY,
-                    name TEXT,
-                    type TEXT,
-                    is_free BOOLEAN,
-                    categories TEXT,
-                    price_data TEXT,
-                    is_multiplayer BOOLEAN DEFAULT 0,
-                    is_coop BOOLEAN DEFAULT 0,
-                    is_family_shared BOOLEAN DEFAULT 0,
-                    cached_at TEXT NOT NULL,
-                    expires_at TEXT,
-                    permanent BOOLEAN DEFAULT 1,
-                    price_source TEXT DEFAULT 'store_api'
-                )
-            """)
-            logger.info("Database: 'game_details_cache' table checked/created.")
-
-            # Create 'user_games_cache' table for Steam GetOwnedGames responses
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS user_games_cache (
-                    steam_id TEXT,
-                    appid TEXT,
-                    cached_at TEXT NOT NULL,
-                    expires_at TEXT NOT NULL,
-                    PRIMARY KEY (steam_id, appid)
-                )
-            """)
-            logger.info("Database: 'user_games_cache' table checked/created.")
-
-            # Create 'wishlist_cache' table for Steam wishlist data
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS wishlist_cache (
-                    steam_id TEXT,
-                    appid TEXT,
-                    cached_at TEXT NOT NULL,
-                    expires_at TEXT NOT NULL,
-                    PRIMARY KEY (steam_id, appid)
-                )
-            """)
-            logger.info("Database: 'wishlist_cache' table checked/created.")
-
-            # Create 'discord_users_cache' table for Discord user info
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS discord_users_cache (
-                    discord_id TEXT PRIMARY KEY,
-                    username TEXT,
-                    cached_at TEXT NOT NULL,
-                    expires_at TEXT NOT NULL
-                )
-            """)
-            logger.info("Database: 'discord_users_cache' table checked/created.")
-
-            # Create 'family_library_cache' table for family shared library
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS family_library_cache (
-                    appid TEXT PRIMARY KEY,
-                    owner_steamids TEXT,
-                    exclude_reason INTEGER,
-                    cached_at TEXT NOT NULL,
-                    expires_at TEXT NOT NULL
-                )
-            """)
-            logger.info("Database: 'family_library_cache' table checked/created.")
-
-            # Create 'itad_price_cache' table for ITAD price data (historical prices are permanent)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS itad_price_cache (
-                    appid TEXT PRIMARY KEY,
-                    lowest_price TEXT,
-                    lowest_price_formatted TEXT,
-                    shop_name TEXT,
-                    cached_at TEXT NOT NULL,
-                    expires_at TEXT,
-                    permanent BOOLEAN DEFAULT 1,
-                    lookup_method TEXT DEFAULT 'appid',
-                    steam_game_name TEXT
-                )
-            """)
-            logger.info("Database: 'itad_price_cache' table checked/created.")
-
-            # Create 'migrations' table for tracking applied migrations
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS migrations (
-                    name TEXT PRIMARY KEY,
-                    applied_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
-                )
-            """)
-            logger.info("Database: 'migrations' table checked/created.")
-
-            # --- DECLARATIVE MIGRATIONS for adding columns to existing tables ---
-
-            # List of (table_name, column_name, column_definition, default_value_for_update)
-            # default_value_for_update is used to populate existing rows if not NULL.
-            COLUMN_MIGRATIONS = [
-                (
-                    "saved_games",
-                    "detected_at",
-                    "TEXT",
-                    "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')",
-                ),
-                ("game_details_cache", "is_multiplayer", "BOOLEAN DEFAULT 0", "0"),
-                ("game_details_cache", "is_coop", "BOOLEAN DEFAULT 0", "0"),
-                ("game_details_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
-                (
-                    "game_details_cache",
-                    "price_source",
-                    "TEXT DEFAULT 'store_api'",
-                    "'store_api'",
-                ),
-                ("itad_price_cache", "permanent", "BOOLEAN DEFAULT 1", "1"),
-                (
-                    "itad_price_cache",
-                    "lookup_method",
-                    "TEXT DEFAULT 'appid'",
-                    "'appid'",
-                ),
-                ("itad_price_cache", "steam_game_name", "TEXT", None),
-            ]
-
-            def _run_column_migrations(cursor: sqlite3.Cursor):
-                for table, column, definition, update_val in COLUMN_MIGRATIONS:
-                    cursor.execute(f"PRAGMA table_info({table})")
-                    columns = [col[1] for col in cursor.fetchall()]
-
-                    if column not in columns:
-                        logger.info(
-                            f"Database: Adding column '{column}' to table '{table}'."
-                        )
-                        try:
-                            cursor.execute(
-                                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
-                            )
-                            if update_val is not None:
-                                cursor.execute(
-                                    f"UPDATE {table} SET {column} = {update_val} WHERE {column} IS NULL"
-                                )
-                            logger.info(
-                                f"Database: Successfully added '{column}' to '{table}'."
-                            )
-                        except sqlite3.OperationalError as e:
-                            logger.error(
-                                f"Database: Failed to add '{column}' to '{table}': {e}"
-                            )
-                            raise RuntimeError(
-                                f"Database migration failed: unable to add column '{column}' to table '{table}'. "
-                                f"Aborting initialization to prevent partial schema migration."
-                            ) from e
-
+            _create_tables(cursor)
             _run_column_migrations(cursor)
-
-            # --- END MIGRATIONS ---
 
             conn.commit()  # Final commit
     except sqlite3.Error as e:
@@ -352,19 +335,3 @@ def _mark_migration_run(migration_name: str) -> None:
             conn.commit()
     except Exception as e:
         logger.error(f"Error marking migration '{migration_name}': {e}")
-
-
-def load_all_registered_users_from_db() -> dict:
-    """Loads all registered users (discord_id: steam_id) from the database."""
-    users = {}
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT discord_id, steam_id FROM users")
-        for row in cursor.fetchall():
-            users[row["discord_id"]] = row["steam_id"]
-        logger.debug(f"Loaded {len(users)} registered users from database.")
-    except sqlite3.Error as e:
-        logger.error(f"Error reading all registered users from DB: {e}")
-
-    return users

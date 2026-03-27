@@ -209,3 +209,19 @@ def get_steam_id_from_discord_id(discord_id: str) -> str | None:
     except Exception as e:
         logger.error(f"Error retrieving SteamID for Discord ID {discord_id}: {e}")
         return None
+
+
+def load_all_registered_users_from_db() -> dict:
+    """Loads all registered users (discord_id: steam_id) from the database."""
+    users = {}
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT discord_id, steam_id FROM users")
+        for row in cursor.fetchall():
+            users[row["discord_id"]] = row["steam_id"]
+        logger.debug(f"Loaded {len(users)} registered users from database.")
+    except sqlite3.Error as e:
+        logger.error(f"Error reading all registered users from DB: {e}")
+
+    return users
