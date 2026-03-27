@@ -870,7 +870,7 @@ class PricePopulator:
         # For appids in no_steam_deal, inject Steam's current price into ITAD records if present
         for appid, steam_entry in steam_fallback_data.items():
             if appid in itad_data:
-                # Merge non-destructively: add steam_current_price to ITAD record
+                # Merge non-destructively: add steam_current_price and game_name to ITAD record
                 itad_entry = all_data[appid]
                 if "data" in itad_entry and "data" in steam_entry:
                     itad_entry["data"]["steam_current_price"] = steam_entry["data"].get(
@@ -879,6 +879,9 @@ class PricePopulator:
                     itad_entry["data"]["steam_current_price_formatted"] = steam_entry[
                         "data"
                     ].get("lowest_price_formatted")
+                # Update game_name from Steam entry if not already set
+                if not itad_entry.get("game_name") and steam_entry.get("game_name"):
+                    itad_entry["game_name"] = steam_entry["game_name"]
             else:
                 all_data[appid] = steam_entry
 
@@ -923,7 +926,7 @@ async def main():
     parser.add_argument(
         "--refresh-current",
         action="store_true",
-        help="Force refresh current Steam prices (useful during sales)",
+        help="Run ITAD population then refresh current Steam prices (useful during sales). Example: python scripts/populate_prices.py --refresh-current",
     )
     parser.add_argument(
         "--force-refresh",
@@ -996,29 +999,45 @@ async def main():
             print("No games found to process. Run populate_database.py first.")
             return 1
 
-        # Default: ITAD only. Use --with-steam or --steam-only for Steam prices.
+        # --refresh-current enables Steam refresh even without explicit Steam mode flags
+        # This allows refreshing current prices during sales without full Steam population
+
         if args.steam_only:
-            total_steam_cached = (
-                await populator.refresh_current_prices(all_game_ids, args.dry_run)
-                if args.refresh_current
-                else await populator.populate_steam_prices(
+            # Steam-only mode: only run Steam prices
+            if args.refresh_current:
+                total_steam_cached = await populator.refresh_current_prices(
+                    all_game_ids, args.dry_run
+                )
+            else:
+                total_steam_cached = await populator.populate_steam_prices(
                     all_game_ids, args.dry_run, args.force_refresh
                 )
-            )
-        else:
-            # ITAD first (default)
+        elif args.with_steam:
+            # ITAD + Steam mode
             total_itad_cached = await populator.populate_itad_prices(
                 all_game_ids, args.dry_run, args.force_refresh
             )
-            # Optionally also run Steam prices
-            if args.with_steam:
-                total_steam_cached = (
-                    await populator.refresh_current_prices(all_game_ids, args.dry_run)
-                    if args.refresh_current
-                    else await populator.populate_steam_prices(
-                        all_game_ids, args.dry_run, args.force_refresh
-                    )
+            if args.refresh_current:
+                total_steam_cached = await populator.refresh_current_prices(
+                    all_game_ids, args.dry_run
                 )
+            else:
+                total_steam_cached = await populator.populate_steam_prices(
+                    all_game_ids, args.dry_run, args.force_refresh
+                )
+        elif args.refresh_current:
+            # --refresh-current without explicit Steam flag: enable Steam refresh
+            total_itad_cached = await populator.populate_itad_prices(
+                all_game_ids, args.dry_run, args.force_refresh
+            )
+            total_steam_cached = await populator.refresh_current_prices(
+                all_game_ids, args.dry_run
+            )
+        else:
+            # Default: ITAD only
+            total_itad_cached = await populator.populate_itad_prices(
+                all_game_ids, args.dry_run, args.force_refresh
+            )
     finally:
         await populator.aclose()
 

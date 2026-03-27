@@ -8,10 +8,12 @@ from familybot.lib.database import get_db_connection, get_write_connection
 
 logger = logging.getLogger(__name__)
 
+# Safe limit below SQLITE_MAX_VARIABLE_NUMBER (999)
+MAX_CHUNK_SIZE = 900
+
 
 def get_cached_itad_id(appid: str) -> str | None:
     """Get cached ITAD ID for a Steam AppID. Returns None if not found."""
-    conn = None
     cursor = None
     try:
         conn = get_db_connection()
@@ -28,37 +30,42 @@ def get_cached_itad_id(appid: str) -> str | None:
     finally:
         if cursor is not None:
             cursor.close()
-        if conn is not None:
-            conn.close()
 
 
 def get_cached_itad_ids_bulk(appids: list[str]) -> dict[str, str]:
     """Get cached ITAD IDs for multiple Steam AppIDs in one query.
 
     Returns dict of appid -> itad_id for only the found entries.
+    Chunked to respect SQLITE_MAX_VARIABLE_NUMBER (default 999).
     """
     if not appids:
         return {}
 
+    result = {}
     conn = None
     cursor = None
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        placeholders = ",".join("?" * len(appids))
-        cursor.execute(
-            f"SELECT appid, itad_id FROM steam_itad_mapping WHERE appid IN ({placeholders})",
-            appids,
-        )
-        return {row["appid"]: row["itad_id"] for row in cursor.fetchall()}
+
+        # Process appids in chunks to avoid exceeding SQLite variable limit
+        for i in range(0, len(appids), MAX_CHUNK_SIZE):
+            chunk = appids[i : i + MAX_CHUNK_SIZE]
+            placeholders = ",".join("?" * len(chunk))
+            cursor.execute(
+                f"SELECT appid, itad_id FROM steam_itad_mapping WHERE appid IN ({placeholders})",
+                chunk,
+            )
+            result.update({row["appid"]: row["itad_id"] for row in cursor.fetchall()})
+
+        return result
     except Exception as e:
         logger.error(f"Error getting cached ITAD IDs in bulk: {e}")
         return {}
     finally:
         if cursor is not None:
             cursor.close()
-        if conn is not None:
-            conn.close()
 
 
 def cache_itad_mapping(

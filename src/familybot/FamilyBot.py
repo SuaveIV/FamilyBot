@@ -23,7 +23,7 @@ from familybot.config import (
     WEB_UI_HOST,
     WEB_UI_PORT,
 )
-from familybot.lib.database import get_db_connection, init_db
+from familybot.lib.database import get_db_connection, get_write_connection, init_db
 from familybot.lib.user_repository import (
     sync_family_members_from_config,
 )
@@ -487,15 +487,19 @@ def purge_family_library_cache_cli() -> None:
 
 def purge_prices_cache() -> None:
     """Purge the ITAD price cache and Steam-ITAD mapping cache from command line."""
-    conn = get_db_connection()
+    # Use read connection for counts (no write lock held during input())
+    # Then use write connection only after user confirmation
     try:
-        cursor = conn.cursor()
-
-        # Get counts before deletion
-        cursor.execute("SELECT COUNT(*) FROM itad_price_cache")
-        price_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM steam_itad_mapping")
-        mapping_count = cursor.fetchone()[0]
+        # Step 1: Query counts with a read connection (no write lock)
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM itad_price_cache")
+            price_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM steam_itad_mapping")
+            mapping_count = cursor.fetchone()[0]
+        finally:
+            conn.close()
 
         total_count = price_count + mapping_count
 
@@ -503,7 +507,7 @@ def purge_prices_cache() -> None:
             print("✅ Price caches are already empty.")
             return
 
-        # Confirm deletion
+        # Step 2: Confirm deletion (no connection held)
         print(
             f"⚠️  Found {price_count} price entries and {mapping_count} mapping entries."
         )
@@ -514,10 +518,12 @@ def purge_prices_cache() -> None:
         )
 
         if confirm in ["y", "yes"]:
-            # Clear the price caches
-            cursor.execute("DELETE FROM itad_price_cache")
-            cursor.execute("DELETE FROM steam_itad_mapping")
-            conn.commit()
+            # Step 3: Open write connection only after confirmation
+            with get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM itad_price_cache")
+                cursor.execute("DELETE FROM steam_itad_mapping")
+                conn.commit()
 
             print(
                 f"✅ Price cache purge complete! Deleted {price_count} price entries and {mapping_count} mapping entries."
@@ -539,8 +545,6 @@ def purge_prices_cache() -> None:
             e,
             exc_info=True,
         )
-    finally:
-        conn.close()
 
 
 def purge_all_cache() -> None:

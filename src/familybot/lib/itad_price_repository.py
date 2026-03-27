@@ -17,7 +17,9 @@ def get_cached_itad_price(appid: str):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT lowest_price, lowest_price_formatted, shop_name, permanent
+            SELECT lowest_price, lowest_price_formatted, shop_name, permanent,
+                   current_price, current_price_formatted, discount_percent,
+                   original_price, is_family_shared, steam_game_name, lookup_method
             FROM itad_price_cache
             WHERE appid = ? AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         """,
@@ -25,6 +27,10 @@ def get_cached_itad_price(appid: str):
         )
         row = cursor.fetchone()
         if row:
+            # Null-handling policy:
+            # - Numeric fields (discount_percent): default to 0
+            # - Boolean fields (permanent, is_family_shared): default to False
+            # - Optional string fields (current_price, original_price, steam_game_name, lookup_method): preserve None
             return {
                 "lowest_price": row["lowest_price"],
                 "lowest_price_formatted": row["lowest_price_formatted"],
@@ -32,6 +38,17 @@ def get_cached_itad_price(appid: str):
                 "permanent": bool(row["permanent"])
                 if row["permanent"] is not None
                 else False,
+                "current_price": row["current_price"],
+                "current_price_formatted": row["current_price_formatted"],
+                "discount_percent": row["discount_percent"]
+                if row["discount_percent"] is not None
+                else 0,
+                "original_price": row["original_price"],
+                "is_family_shared": bool(row["is_family_shared"])
+                if row["is_family_shared"] is not None
+                else False,
+                "steam_game_name": row["steam_game_name"],
+                "lookup_method": row["lookup_method"],
             }
         return None
     except Exception as e:
@@ -61,8 +78,10 @@ def _do_cache_itad_price(
     cursor.execute(
         """
         INSERT OR REPLACE INTO itad_price_cache
-        (appid, lowest_price, lowest_price_formatted, shop_name, lookup_method, steam_game_name, cached_at, expires_at, permanent)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (appid, lowest_price, lowest_price_formatted, shop_name, lookup_method, steam_game_name,
+         current_price, current_price_formatted, discount_percent, original_price, is_family_shared,
+         cached_at, expires_at, permanent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         (
             appid,
@@ -71,6 +90,11 @@ def _do_cache_itad_price(
             price_data.get("shop_name"),
             lookup_method,
             steam_game_name,
+            price_data.get("current_price"),
+            price_data.get("current_price_formatted"),
+            price_data.get("discount_percent") or 0,
+            price_data.get("original_price"),
+            price_data.get("is_family_shared"),
             now.isoformat().replace("+00:00", "Z"),
             expires_at_str,
             permanent_val,

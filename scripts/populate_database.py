@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 import httpx
 
 from steam.webapi import WebAPI
@@ -125,14 +125,17 @@ class DatabasePopulator:
                 await asyncio.sleep(jitter)
 
                 # Make the request
+                # Only pass timeout if explicitly provided, otherwise use client default (15.0s)
+                request_kwargs: dict[str, Any] = {"params": params, "headers": headers}
+                if json is not None:
+                    request_kwargs["json"] = json
+                if timeout is not None:
+                    request_kwargs["timeout"] = timeout
+
                 if method.upper() == "POST":
-                    response = await self.client.post(
-                        url, json=json, params=params, timeout=timeout, headers=headers
-                    )
+                    response = await self.client.post(url, **request_kwargs)
                 else:
-                    response = await self.client.get(
-                        url, params=params, timeout=timeout, headers=headers
-                    )
+                    response = await self.client.get(url, **request_kwargs)
 
                 # Check for rate limiting
                 if response.status_code == 429:
@@ -196,8 +199,10 @@ class DatabasePopulator:
 
         conn = get_db_connection()
         written = 0
+        cursor = None
         try:
-            conn.execute("BEGIN TRANSACTION")
+            cursor = conn.cursor()
+            cursor.execute("BEGIN TRANSACTION")
             batch_written = 0
             for app_id, data in games_data.items():
                 cache_game_details(app_id, data, permanent=False, conn=conn)
@@ -215,7 +220,9 @@ class DatabasePopulator:
                 except Exception:
                     pass
         finally:
-            conn.close()
+            if cursor is not None:
+                cursor.close()
+            # Do not close the shared connection from get_db_connection()
         return written
 
     async def get_fallback_game_info(self, app_id: str) -> Optional[dict]:
@@ -260,14 +267,15 @@ class DatabasePopulator:
         if not self.steam_api:
             return None
 
+        # Capture steam_api in a local variable to satisfy type checker
+        steam_api = self.steam_api
+
         async with self._app_list_lock:
             if self._app_list_cache is None:
 
                 def get_app_list():
                     try:
-                        app_list_response = self.steam_api.call(
-                            "ISteamApps.GetAppList_v2"
-                        )
+                        app_list_response = steam_api.call("ISteamApps.GetAppList_v2")
                         if (
                             app_list_response
                             and "applist" in app_list_response
@@ -410,11 +418,11 @@ class DatabasePopulator:
         total_processed = 0
 
         if TQDM_AVAILABLE:
-            total_cached = await self._populate_libraries_with_tqdm(
+            total_cached, total_processed = await self._populate_libraries_with_tqdm(
                 family_members, dry_run, total_processed, total_cached
             )
         else:
-            total_cached = await self._populate_libraries_without_tqdm(
+            total_cached, total_processed = await self._populate_libraries_without_tqdm(
                 family_members, dry_run, total_processed, total_cached
             )
 
@@ -430,8 +438,8 @@ class DatabasePopulator:
         dry_run: bool,
         total_processed: int,
         total_cached: int,
-    ) -> int:
-        """Populate libraries using tqdm progress bars."""
+    ) -> tuple[int, int]:
+        """Populate libraries using tqdm progress bars. Returns (total_cached, total_processed)."""
         member_iterator_tqdm = tqdm(
             family_members.items(), desc="👥 Family Members", unit="member", leave=True
         )
@@ -484,7 +492,7 @@ class DatabasePopulator:
                 logger.warning("Error processing %s: %s", name, e)
                 continue
 
-        return total_cached
+        return total_cached, total_processed
 
     async def _populate_libraries_without_tqdm(
         self,
@@ -492,8 +500,8 @@ class DatabasePopulator:
         dry_run: bool,
         total_processed: int,
         total_cached: int,
-    ) -> int:
-        """Populate libraries without tqdm progress bars."""
+    ) -> tuple[int, int]:
+        """Populate libraries without tqdm progress bars. Returns (total_cached, total_processed)."""
         for steam_id, name in family_members.items():
             print(f"\n📊 Processing {name}...")
 
@@ -545,7 +553,7 @@ class DatabasePopulator:
                 print(f"   ❌ Error processing {name}: {e}")
                 continue
 
-        return total_cached
+        return total_cached, total_processed
 
     def _process_user_games(self, games, total_processed):
         """Process user games and return cached, skipped counts, games to fetch, and updated count."""
