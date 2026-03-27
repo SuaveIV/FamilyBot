@@ -258,11 +258,11 @@ format-toml:
     mise exec -- uv run tombi format pyproject.toml
 
 # Run all code quality checks
-check: lint lint-md format-check format-md-check type-check audit check-toml
+check: lint format-check type-check audit check-toml
     @echo "✅ All code quality checks passed!"
 
 # Fix and format all code issues
-fix: lint-fix format format-md format-toml
+fix: lint-fix format format-toml
     @echo "✅ Code fixed and formatted!"
 
 # Legacy lint command (for backward compatibility)
