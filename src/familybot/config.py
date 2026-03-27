@@ -1,6 +1,7 @@
 # In src/familybot/config.py
 
 import os  # Import os for path manipulation
+import sys
 from pathlib import Path
 
 import yaml
@@ -87,3 +88,76 @@ GAME_DETAILS_CACHE_TTL = (
 ITAD_CACHE_TTL = (
     config.get("steam_family", {}).get("cache_ttl_hours", {}).get("itad_prices", 336)
 )  # 14 days
+
+
+# -------------Config Validation---------------
+class ConfigurationError(Exception):
+    """Raised when config.yml has invalid or missing required values."""
+
+    pass
+
+
+def validate_config() -> None:
+    """Validate configuration values at startup.
+
+    Raises ConfigurationError with a clear message if any required
+    values are missing, contain placeholders, or have invalid types.
+    """
+    errors: list[str] = []
+
+    # --- Discord ---
+    if not DISCORD_API_KEY or DISCORD_API_KEY.strip() == "":
+        errors.append("discord.api_key is empty. Set your Discord bot token.")
+    if not isinstance(ADMIN_DISCORD_ID, int) or ADMIN_DISCORD_ID == 0:
+        errors.append(
+            "discord.admin_id must be a non-zero integer (your Discord user ID)."
+        )
+
+    # --- Steam Family ---
+    if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY.strip() == "":
+        errors.append(
+            "steam_family.steamworks_api_key is empty. Get one from steamcommunity.com/dev/apikey."
+        )
+    if not ITAD_API_KEY or ITAD_API_KEY.strip() == "":
+        errors.append(
+            "steam_family.itad_api_key is empty. Get one from isthereanydeal.com/apps/my/."
+        )
+    if not isinstance(FAMILY_STEAM_ID, int) or FAMILY_STEAM_ID == 0:
+        errors.append(
+            "steam_family.family_id must be a non-zero integer (your Steam Family Group ID)."
+        )
+
+    # --- Channel IDs ---
+    for name, value in [
+        ("steam_family.channel_id.new_game", NEW_GAME_CHANNEL_ID),
+        ("steam_family.channel_id.wishlist", WISHLIST_CHANNEL_ID),
+        ("free_epicgames.channel_id", EPIC_CHANNEL_ID),
+        ("help_message.channel_id", HELP_CHANNEL_ID),
+    ]:
+        if not isinstance(value, int) or value == 0:
+            errors.append(f"{name} must be a non-zero integer (Discord channel ID).")
+
+    # --- Token sender paths ---
+    if not TOKEN_SAVE_PATH:
+        errors.append("token_sender.token_save_path is empty.")
+
+    # --- Web UI ---
+    if WEB_UI_ENABLED:
+        if not isinstance(WEB_UI_PORT, int) or not (1 <= WEB_UI_PORT <= 65535):
+            errors.append(
+                f"web_ui.port must be an integer between 1 and 65535, got {WEB_UI_PORT!r}."
+            )
+
+    if errors:
+        error_list = "\n  - ".join(errors)
+        raise ConfigurationError(
+            f"Configuration validation failed with {len(errors)} error(s):\n  - {error_list}"
+        )
+
+
+# Run validation at import time
+try:
+    validate_config()
+except ConfigurationError as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    sys.exit(1)

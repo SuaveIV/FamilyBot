@@ -238,12 +238,22 @@ class common_games(Extension):
 
                 # If not cached, fetch from API
                 temp_game_list = []
-                steam_get_games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={STEAMWORKS_API_KEY}&steamid={steam_id}&format=json&include_appinfo=1"
+                steam_get_games_url = (
+                    "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
+                )
+                steam_get_games_params = {
+                    "key": STEAMWORKS_API_KEY,
+                    "steamid": steam_id,
+                    "format": "json",
+                    "include_appinfo": 1,
+                }
                 logger.info(f"Fetching games from API for Steam ID: {steam_id}")
                 response_data = None
                 try:
                     async with session.get(
-                        steam_get_games_url, timeout=aiohttp.ClientTimeout(total=10)
+                        steam_get_games_url,
+                        params=steam_get_games_params,
+                        timeout=aiohttp.ClientTimeout(total=10),
                     ) as answer:
                         answer.raise_for_status()
                         text_response = await answer.text()

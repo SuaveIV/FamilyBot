@@ -493,7 +493,11 @@ async def _collect_wishlists(
                 continue
 
         # If not cached or force_fresh is True, fetch from API
-        wishlist_url = f"https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key={STEAMWORKS_API_KEY}&steamid={user_steam_id}"
+        wishlist_url = "https://api.steampowered.com/IWishlistService/GetWishlist/v1/"
+        wishlist_params = {
+            "key": STEAMWORKS_API_KEY,
+            "steamid": user_steam_id,
+        }
         logger.info(
             f"Fetching wishlist from API for {user_name_for_log} (Steam ID: {user_steam_id})"
         )
@@ -502,7 +506,9 @@ async def _collect_wishlists(
         try:
             await _rate_limit_steam_api()  # Apply rate limit here
             async with session.get(
-                wishlist_url, timeout=aiohttp.ClientTimeout(total=15)
+                wishlist_url,
+                params=wishlist_params,
+                timeout=aiohttp.ClientTimeout(total=15),
             ) as wishlist_response:
                 text = await wishlist_response.text()
                 if text == '{"success":2}':
