@@ -15,10 +15,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from familybot.config import STEAMWORKS_API_KEY
 from familybot.lib.database import (
     cache_family_library,
-    cache_user_games,
-    cache_wishlist,
-    get_cached_wishlist,
+    cache_user_games,  # This import is still valid for user_games_cache
 )
+from familybot.lib.wishlist_repository import cache_wishlist, get_cached_wishlist
 from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
