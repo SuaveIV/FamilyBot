@@ -70,14 +70,18 @@ class PricePopulator:
         self.rate_limit_mode = rate_limit_mode
 
         # Adaptive rate limiting
+        # Steam: ~1 req/sec safe threshold, start conservative at 2s
+        # ITAD: heuristic-based, no hard limit but be respectful
         self.current_delays = {
-            "store": 0.1,
-            "itad": 0.05,
+            "store": 2.0,
+            "itad": 1.0,
         }
 
         # Rate limit bounds
-        self.min_delays = {"store": 0.05, "itad": 0.01}
-        self.max_delays = {"store": 3.0, "itad": 1.5}
+        # Store: min 1s (safe for ~60/min), max 10s for backoff
+        # ITAD: min 0.5s, max 5s for backoff
+        self.min_delays = {"store": 1.0, "itad": 0.5}
+        self.max_delays = {"store": 10.0, "itad": 5.0}
 
         # Error tracking for adaptive rate limiting
         self.error_counts = {"store": 0, "itad": 0}
@@ -765,8 +769,8 @@ async def main():
     parser.add_argument(
         "--concurrent",
         type=int,
-        default=50,
-        help="Max concurrent requests (default: 50)",
+        default=10,
+        help="Max concurrent requests (default: 10)",
     )
     parser.add_argument(
         "--rate-limit",
