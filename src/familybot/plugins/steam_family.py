@@ -294,9 +294,9 @@ class steam_family(Extension):
 
                             # Add pricing information if available
                             try:
-                                current_price = game_data.get("price_overview", {}).get(
-                                    "final_formatted", "N/A"
-                                )
+                                current_price = (
+                                    game_data.get("price_overview") or {}
+                                ).get("final_formatted", "N/A")
                                 lowest_price = await asyncio.to_thread(
                                     get_lowest_price, int(game_appid)
                                 )
@@ -487,7 +487,7 @@ class steam_family(Extension):
                     game_data = await fetch_game_details(
                         app_id, self.steam_api_manager, session=session
                     )
-                    if game_data and "price_overview" in game_data:
+                    if game_data and game_data.get("price_overview"):
                         # process_game_deal uses low_discount_threshold=25
                         if game_data["price_overview"].get("discount_percent", 0) >= 25:
                             filtered_app_ids.append(app_id)

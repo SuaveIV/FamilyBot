@@ -498,7 +498,9 @@ class AsyncPricePopulator:
                         try:
                             conn.rollback()
                         except Exception as rollback_error:
-                            logger.error(f"Individual rollback failed: {rollback_error}")
+                            logger.error(
+                                f"Individual rollback failed: {rollback_error}"
+                            )
                         logger.error(
                             f"Failed to write individual Steam record {app_id}: {individual_error}"
                         )
@@ -541,7 +543,7 @@ class AsyncPricePopulator:
                         cache_hours=ITAD_CACHE_TTL,
                         conn=conn,
                     )
-                
+
                 conn.commit()
                 written_count += len(batch)
                 logger.debug(f"Successfully wrote batch of {len(batch)} ITAD records")
@@ -574,7 +576,9 @@ class AsyncPricePopulator:
                         try:
                             conn.rollback()
                         except Exception as rollback_error:
-                            logger.error(f"Individual rollback failed: {rollback_error}")
+                            logger.error(
+                                f"Individual rollback failed: {rollback_error}"
+                            )
                         logger.error(
                             f"Failed to write individual ITAD record {app_id}: {individual_error}"
                         )
