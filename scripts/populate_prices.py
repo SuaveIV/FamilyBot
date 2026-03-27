@@ -48,6 +48,10 @@ from familybot.lib.itad_price_repository import (
     cache_itad_price_enhanced,
     get_cached_itad_price,
 )
+from familybot.lib.steam_itad_mapping_repository import (
+    get_cached_itad_ids_bulk,
+    bulk_cache_itad_mappings,
+)
 from familybot.lib.user_repository import load_family_members_from_db
 from familybot.lib.wishlist_repository import get_cached_wishlist  # pylint: disable=wrong-import-position
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
@@ -314,149 +318,162 @@ class PricePopulator:
 
             return app_id, False, {}, "failed"
 
-    async def fetch_itad_price_single(self, app_id: str) -> tuple[str, str, dict, str]:
-        """Fetch ITAD price for a single game with multiple strategies."""
-        async with self.semaphore:
-            # Strategy 1: ITAD lookup by Steam appid
+    async def _resolve_itad_ids_bulk(
+        self, app_ids: list[str]
+    ) -> tuple[dict[str, str], list[str]]:
+        """Resolve Steam AppIDs to ITAD IDs using cache and bulk lookup.
+
+        Returns (appid_to_itad_id dict, list of failed appids).
+        """
+        # Step 1: Check permanent cache
+        cached_mappings = get_cached_itad_ids_bulk(app_ids)
+        uncached_appids = [aid for aid in app_ids if aid not in cached_mappings]
+
+        if not uncached_appids:
+            return cached_mappings, []
+
+        # Step 2: Bulk lookup for uncached IDs via ITAD shop/61 (Steam) endpoint
+        print(f"   Resolving {len(uncached_appids)} unmapped AppIDs via ITAD lookup...")
+        new_mappings = {}
+        failed_appids = []
+        chunk_size = 100
+
+        for i in range(0, len(uncached_appids), chunk_size):
+            chunk = uncached_appids[i : i + chunk_size]
+            shop_queries = [f"app/{app_id}" for app_id in chunk]
+
             try:
-                lookup_url = "https://api.isthereanydeal.com/games/lookup/v1"
-                lookup_response = await self.make_request_with_retry(
+                lookup_url = "https://api.isthereanydeal.com/lookup/id/shop/61/v1"
+                response = await self.make_request_with_retry(
                     lookup_url,
-                    method="GET",
-                    params={"key": ITAD_API_KEY, "appid": app_id},
+                    method="POST",
+                    json_data=shop_queries,
+                    params={"key": ITAD_API_KEY},
                     api_type="itad",
                 )
 
-                if lookup_response is None:
-                    return app_id, "error", {}, "itad_request_failed"
+                if response is None:
+                    failed_appids.extend(chunk)
+                    continue
 
-                if lookup_response is not None:
-                    lookup_data = self.handle_api_response(
-                        f"ITAD Lookup ({app_id})", lookup_response
-                    )
+                lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
+                if lookup_data is None:
+                    failed_appids.extend(chunk)
+                    continue
 
-                    if lookup_data and lookup_data.get("found"):
-                        game_id = lookup_data.get("game", {}).get("id")
+                for shop_query, itad_id in lookup_data.items():
+                    app_id = shop_query.replace("app/", "")
+                    if itad_id:
+                        new_mappings[app_id] = itad_id
+                    else:
+                        failed_appids.append(app_id)
 
-                        if game_id:
-                            # Get price data using ITAD game ID
-                            prices_url = (
-                                "https://api.isthereanydeal.com/games/prices/v3"
-                            )
-                            prices_response = await self.make_request_with_retry(
-                                prices_url,
-                                method="POST",
-                                json_data=[game_id],
-                                params={"key": ITAD_API_KEY, "country": "US"},
-                                api_type="itad",
-                            )
+                # Any in chunk not in response are failures
+                resolved_in_chunk = {q.replace("app/", "") for q in lookup_data.keys()}
+                for app_id in chunk:
+                    if app_id not in resolved_in_chunk and app_id not in new_mappings:
+                        failed_appids.append(app_id)
 
-                            if prices_response is None:
-                                return app_id, "error", {}, "itad_request_failed"
-
-                            if prices_response is not None:
-                                prices_data = self.handle_api_response(
-                                    f"ITAD Prices ({app_id})", prices_response
-                                )
-
-                                if (
-                                    prices_data
-                                    and len(prices_data) > 0
-                                    and prices_data[0].get("historyLow")
-                                ):
-                                    history_low = prices_data[0]["historyLow"].get(
-                                        "all", {}
-                                    )
-                                    price_amount = history_low.get("amount")
-                                    shop_name = history_low.get("shop", {}).get(
-                                        "name", "Historical Low (All Stores)"
-                                    )
-
-                                    if price_amount is not None:
-                                        price_data = {
-                                            "lowest_price": str(price_amount),
-                                            "lowest_price_formatted": f"${price_amount}",
-                                            "shop_name": shop_name,
-                                        }
-                                        return app_id, "cached", price_data, "appid"
             except Exception as e:
-                logger.debug("ITAD appid lookup failed for %s: %s", app_id, e)
-                return app_id, "error", {}, "itad_exception"
+                logger.error("ITAD bulk lookup chunk failed: %s", e)
+                failed_appids.extend(chunk)
 
-            # Strategy 2: Name-based search fallback
+        # Step 3: Cache new mappings permanently
+        if new_mappings:
+            bulk_cache_itad_mappings(new_mappings)
+            logger.info("Cached %d new AppID->ITAD ID mappings", len(new_mappings))
+
+        # Merge cached + new
+        all_mappings = {**cached_mappings, **new_mappings}
+        return all_mappings, failed_appids
+
+    async def _fetch_itad_prices_bulk(
+        self, itad_ids: list[str], itad_id_to_appid: dict[str, str]
+    ) -> tuple[dict[str, dict], set[str]]:
+        """Bulk fetch prices from ITAD for a list of ITAD IDs.
+
+        Returns (appid -> price_info dict, set of appids with no Steam deal).
+        """
+        itad_data = {}
+        no_steam_deal = set()
+        chunk_size = 50
+
+        for i in range(0, len(itad_ids), chunk_size):
+            chunk = itad_ids[i : i + chunk_size]
+
             try:
-                cached_details = get_cached_game_details(app_id)
-                if cached_details and cached_details.get("name"):
-                    game_name = cached_details["name"]
+                prices_url = "https://api.isthereanydeal.com/games/prices/v3"
+                response = await self.make_request_with_retry(
+                    prices_url,
+                    method="POST",
+                    json_data=chunk,
+                    params={"key": ITAD_API_KEY, "country": "US"},
+                    api_type="itad",
+                )
 
-                    search_url = "https://api.isthereanydeal.com/games/search/v1"
-                    search_response = await self.make_request_with_retry(
-                        search_url,
-                        method="GET",
-                        params={"key": ITAD_API_KEY, "title": game_name},
-                        api_type="itad",
+                if response is None:
+                    logger.warning(
+                        "ITAD prices chunk failed, skipping %d IDs", len(chunk)
+                    )
+                    continue
+
+                prices_data = self.handle_api_response("ITAD Bulk Prices", response)
+                if prices_data is None:
+                    continue
+
+                for price_entry in prices_data:
+                    itad_id = price_entry.get("id")
+                    app_id = itad_id_to_appid.get(itad_id)
+                    if not app_id:
+                        continue
+
+                    # Extract historical low
+                    history_low = price_entry.get("historyLow", {}).get("all", {})
+                    hist_amount = history_low.get("amount")
+                    hist_shop = history_low.get("shop", {}).get(
+                        "name", "Historical Low (All Stores)"
                     )
 
-                    if search_response is None:
-                        return app_id, "error", {}, "itad_request_failed"
+                    # Extract current Steam deal from deals array
+                    current_price = None
+                    current_discount = None
+                    original_price = None
+                    steam_deal_found = False
 
-                    if search_response is not None:
-                        search_data = self.handle_api_response(
-                            f"ITAD Search ({game_name})", search_response
-                        )
+                    for deal in price_entry.get("deals", []):
+                        if deal.get("shop", {}).get("name") == "Steam":
+                            current_price = deal.get("price", {}).get("amount")
+                            current_discount = deal.get("cut", 0)
+                            original_price = deal.get("regular", {}).get("amount")
+                            steam_deal_found = True
+                            break
 
-                        if search_data and len(search_data) > 0:
-                            game_id = search_data[0].get("id")
-                            if game_id:
-                                prices_url = (
-                                    "https://api.isthereanydeal.com/games/prices/v3"
-                                )
-                                prices_response = await self.make_request_with_retry(
-                                    prices_url,
-                                    method="POST",
-                                    json_data=[game_id],
-                                    params={"key": ITAD_API_KEY, "country": "US"},
-                                    api_type="itad",
-                                )
+                    if not steam_deal_found:
+                        no_steam_deal.add(app_id)
 
-                                if prices_response is None:
-                                    return app_id, "error", {}, "itad_request_failed"
+                    if hist_amount is not None:
+                        price_data = {
+                            "lowest_price": str(hist_amount),
+                            "lowest_price_formatted": f"${hist_amount}",
+                            "shop_name": hist_shop,
+                        }
+                        if current_price is not None:
+                            price_data["current_price"] = str(current_price)
+                            price_data["current_price_formatted"] = f"${current_price}"
+                            price_data["discount_percent"] = current_discount
+                            if original_price is not None:
+                                price_data["original_price"] = str(original_price)
 
-                                if prices_response is not None:
-                                    prices_data = self.handle_api_response(
-                                        f"ITAD Prices ({game_name})", prices_response
-                                    )
+                        itad_data[app_id] = {
+                            "data": price_data,
+                            "method": "bulk",
+                            "game_name": None,
+                        }
 
-                                    if (
-                                        prices_data
-                                        and len(prices_data) > 0
-                                        and prices_data[0].get("historyLow")
-                                    ):
-                                        history_low = prices_data[0]["historyLow"].get(
-                                            "all", {}
-                                        )
-                                        price_amount = history_low.get("amount")
-                                        shop_name = history_low.get("shop", {}).get(
-                                            "name", "Historical Low (All Stores)"
-                                        )
-
-                                        if price_amount is not None:
-                                            price_data = {
-                                                "lowest_price": str(price_amount),
-                                                "lowest_price_formatted": f"${price_amount}",
-                                                "shop_name": shop_name,
-                                            }
-                                            return (
-                                                app_id,
-                                                "cached",
-                                                price_data,
-                                                "name_search",
-                                            )
             except Exception as e:
-                logger.debug("ITAD name search failed for %s: %s", app_id, e)
-                return app_id, "error", {}, "itad_exception"
+                logger.error("ITAD prices bulk chunk failed: %s", e)
 
-            return app_id, "not_found", {}, "failed"
+        return itad_data, no_steam_deal
 
     def batch_write_steam_data(
         self, steam_data: dict[str, dict], batch_size: int = 100
@@ -651,8 +668,8 @@ class PricePopulator:
     async def populate_itad_prices(
         self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
-        """Populate ITAD prices with async processing."""
-        print("\nStarting async ITAD price population...")
+        """Populate ITAD prices using bulk API calls with Steam API fallback."""
+        print("\nStarting bulk ITAD price population...")
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
             print("ITAD API key not configured. Skipping ITAD price population.")
             return 0
@@ -667,7 +684,6 @@ class PricePopulator:
 
         print(f"   Games to process: {len(games_to_process)}")
         print(f"   Games skipped (already have ITAD data): {games_skipped}")
-        print(f"   Processing with {self.max_concurrent} concurrent async requests")
 
         if dry_run:
             print("   DRY RUN: Would fetch ITAD price data")
@@ -676,75 +692,80 @@ class PricePopulator:
             print("   All games already have ITAD price data")
             return 0
 
-        # Phase 1: Async data collection
-        print("   Phase 1: Async API data collection...")
-        itad_data = {}
-        itad_errors = []
-        itad_not_found = []
+        # Phase 1: Resolve AppIDs to ITAD IDs (cache + bulk lookup)
+        print("   Phase 1: Resolving AppIDs to ITAD IDs...")
+        appid_to_itad, mapping_failures = await self._resolve_itad_ids_bulk(
+            games_to_process
+        )
 
-        tasks = [self.fetch_itad_price_single(app_id) for app_id in games_to_process]
+        print(
+            f"   Resolved: {len(appid_to_itad)} | Failed to map: {len(mapping_failures)}"
+        )
 
-        if ASYNC_TQDM_AVAILABLE:
-            for task in atqdm(
-                asyncio.as_completed(tasks),
-                total=len(tasks),
-                desc="ITAD API",
-                unit="game",
-            ):
-                app_id, status, price_data, lookup_method = await task
-                if status == "cached":
-                    game_name = None
-                    if lookup_method == "name_search":
-                        cached_details = get_cached_game_details(app_id)
-                        game_name = (
-                            cached_details.get("name") if cached_details else None
-                        )
+        # Phase 2: Bulk fetch prices from ITAD
+        print("   Phase 2: Bulk fetching prices from ITAD...")
+        itad_id_to_appid = {v: k for k, v in appid_to_itad.items()}
+        itad_ids = list(appid_to_itad.values())
 
-                    itad_data[app_id] = {
-                        "data": price_data,
-                        "method": lookup_method,
-                        "game_name": game_name,
-                    }
-                elif status == "not_found":
-                    itad_not_found.append(app_id)
-                else:
-                    itad_errors.append((app_id, status))
-        else:
-            completed = 0
+        itad_data, no_steam_deal = await self._fetch_itad_prices_bulk(
+            itad_ids, itad_id_to_appid
+        )
+
+        print(
+            f"   Prices received: {len(itad_data)} | No Steam deal: {len(no_steam_deal)}"
+        )
+
+        # Phase 3: Determine fallback set (mapping failures + no ITAD data + no Steam deal)
+        itad_appids_with_data = set(itad_data.keys())
+        fallback_ids = set()
+
+        # AppIDs that couldn't be mapped to ITAD IDs
+        fallback_ids.update(mapping_failures)
+
+        # AppIDs mapped but ITAD returned no price data
+        for appid in appid_to_itad:
+            if appid not in itad_appids_with_data:
+                fallback_ids.add(appid)
+
+        # AppIDs with ITAD data but no Steam deal listed
+        fallback_ids.update(no_steam_deal)
+
+        fallback_ids = fallback_ids - itad_appids_with_data  # Don't double-fetch
+
+        print(f"   Phase 3: Steam API fallback for {len(fallback_ids)} games...")
+        steam_fallback_data = {}
+        if fallback_ids:
+            tasks = [self.fetch_steam_price_single(app_id) for app_id in fallback_ids]
             for coro in asyncio.as_completed(tasks):
-                app_id, status, price_data, lookup_method = await coro
-                if status == "cached":
-                    game_name = None
-                    if lookup_method == "name_search":
-                        cached_details = get_cached_game_details(app_id)
-                        game_name = (
-                            cached_details.get("name") if cached_details else None
-                        )
-
-                    itad_data[app_id] = {
-                        "data": price_data,
-                        "method": lookup_method,
-                        "game_name": game_name,
+                app_id, success, game_data, source = await coro
+                if success:
+                    steam_fallback_data[app_id] = {
+                        "data": {
+                            "lowest_price": str(
+                                game_data.get("price_overview", {}).get("final", 0)
+                                / 100
+                            ),
+                            "lowest_price_formatted": game_data.get(
+                                "price_overview", {}
+                            ).get("final_formatted", "N/A"),
+                            "shop_name": "Steam",
+                        },
+                        "method": "steam_fallback",
+                        "game_name": game_data.get("name"),
                     }
-                elif status == "not_found":
-                    itad_not_found.append(app_id)
-                else:
-                    itad_errors.append((app_id, status))
 
-                completed += 1
-                if completed % 50 == 0:
-                    print(
-                        f"   API Progress: {completed}/{len(games_to_process)} | Success: {len(itad_data)} | Not Found: {len(itad_not_found)} | Errors: {len(itad_errors)}"
-                    )
+        # Merge ITAD data with Steam fallback data
+        all_data = {**itad_data, **steam_fallback_data}
 
-        # Phase 2: Safe database writing
-        print("   Phase 2: Safe database writing...")
-        itad_prices_cached = self.batch_write_itad_data(itad_data)
+        # Phase 4: Safe database writing
+        print("   Phase 4: Safe database writing...")
+        itad_prices_cached = self.batch_write_itad_data(all_data)
 
-        print("\nAsync ITAD price population complete!")
-        print(f"   Prices cached: {itad_prices_cached}")
-        print(f"   Games not found on ITAD: {len(itad_not_found)}")
-        print(f"   Errors: {len(itad_errors)}")
+        print("\nBulk ITAD price population complete!")
+        print(f"   ITAD prices cached: {len(itad_data)}")
+        print(f"   Steam fallback prices cached: {len(steam_fallback_data)}")
+        print(f"   Total prices cached: {itad_prices_cached}")
+        print(f"   Games not found on ITAD: {len(mapping_failures)}")
 
         return itad_prices_cached
 
