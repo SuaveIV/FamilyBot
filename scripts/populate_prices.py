@@ -1,40 +1,47 @@
+"""Consolidated async price population script for FamilyBot.
+
+Fetches Steam Store prices and ITAD historical prices with high-performance
+async processing. Uses adaptive rate limiting and batch database writes.
+
+Usage:
+    python scripts/populate_prices.py                    # Populate all prices
+    python scripts/populate_prices.py --steam-only       # Only Steam prices
+    python scripts/populate_prices.py --itad-only        # Only ITAD prices
+    python scripts/populate_prices.py --force-refresh    # Refresh all cached data
+    python scripts/populate_prices.py --dry-run          # Preview without changes
+"""
+
 import logging
 import argparse
 import json
 import os
 import random
 import sys
-import time
 import asyncio
 from datetime import datetime
 from typing import Optional
 
 import httpx
 
-from steam.webapi import WebAPI
-
-
 try:
     from tqdm.asyncio import tqdm as atqdm
 
     ASYNC_TQDM_AVAILABLE = True
 except ImportError:
-    print("⚠️  tqdm not available. Install with: uv pip install tqdm")
-    print("   Falling back to basic progress indicators...")
+    print("tqdm not available. Install with: uv pip install tqdm")
+    print("Falling back to basic progress indicators...")
     ASYNC_TQDM_AVAILABLE = False
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-
-from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     get_db_connection,
     init_db,  # pylint: disable=wrong-import-position
 )
 from familybot.lib.game_details_repository import (
     cache_game_details,  # pylint: disable=wrong-import-position
-    cache_game_details_with_source,  # pylint: disable=wrong-import-position
     get_cached_game_details,  # pylint: disable=wrong-import-position
 )
 from familybot.lib.itad_price_repository import (
@@ -46,55 +53,52 @@ from familybot.lib.wishlist_repository import get_cached_wishlist  # pylint: dis
 from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
 
 # Setup enhanced logging for this script
-logger = setup_script_logging("populate_prices_async", "INFO")
+logger = setup_script_logging("populate_prices", "INFO")
 
 # Suppress verbose HTTP request logging from other libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("steam").setLevel(logging.WARNING)
 
 
-class AsyncPricePopulator:
-    """High-performance async price populator with true async/await processing."""
+class PricePopulator:
+    """High-performance async price populator with adaptive rate limiting."""
 
     def __init__(self, max_concurrent: int = 50, rate_limit_mode: str = "adaptive"):
-        """Initialize with async capabilities and higher default concurrency."""
+        """Initialize with async capabilities and configurable concurrency."""
         self.max_concurrent = max_concurrent
         self.rate_limit_mode = rate_limit_mode
 
-        # Adaptive rate limiting - optimized for async
+        # Adaptive rate limiting
         self.current_delays = {
-            "steam_api": 0.05,  # Start very fast for async
             "store_api": 0.1,
             "itad_api": 0.05,
         }
 
-        # Rate limit bounds - more aggressive for async
-        self.min_delays = {"steam_api": 0.01, "store_api": 0.05, "itad_api": 0.01}
-        self.max_delays = {"steam_api": 2.0, "store_api": 3.0, "itad_api": 1.5}
+        # Rate limit bounds
+        self.min_delays = {"store_api": 0.05, "itad_api": 0.01}
+        self.max_delays = {"store_api": 3.0, "itad_api": 1.5}
 
         # Error tracking for adaptive rate limiting
-        self.error_counts = {"steam_api": 0, "store_api": 0, "itad_api": 0}
-        self.success_counts = {"steam_api": 0, "store_api": 0, "itad_api": 0}
-        self.last_adjustment = {"steam_api": 0.0, "store_api": 0.0, "itad_api": 0.0}
+        self.error_counts = {"store_api": 0, "itad_api": 0}
+        self.success_counts = {"store_api": 0, "itad_api": 0}
+        self.last_adjustment = {"store_api": 0.0, "itad_api": 0.0}
 
         # Async locks for rate limiting
         self.rate_limit_locks = {
-            "steam_api": asyncio.Lock(),
             "store_api": asyncio.Lock(),
             "itad_api": asyncio.Lock(),
         }
-        self.last_request_times = {"steam_api": 0.0, "store_api": 0.0, "itad_api": 0.0}
+        self.last_request_times = {"store_api": 0.0, "itad_api": 0.0}
 
-        # Async HTTP client with aggressive connection pooling
+        # Async HTTP client with connection pooling
         self.client = httpx.AsyncClient(
             timeout=15.0,
             limits=httpx.Limits(
-                max_keepalive_connections=100,  # High keepalive for async
-                max_connections=200,  # High total connections
-                keepalive_expiry=60.0,  # Keep connections alive longer
+                max_keepalive_connections=100,
+                max_connections=200,
+                keepalive_expiry=60.0,
             ),
             headers={
-                "User-Agent": "FamilyBot-AsyncPricePopulator/1.0",
+                "User-Agent": "FamilyBot-PricePopulator/1.0",
                 "Connection": "keep-alive",
             },
         )
@@ -102,22 +106,11 @@ class AsyncPricePopulator:
         # Async semaphore for concurrency control
         self.semaphore = asyncio.Semaphore(max_concurrent)
 
-        # Initialize Steam WebAPI if available (sync only)
-        self.steam_api = None
-        if STEAMWORKS_API_KEY and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE":
-            try:
-                self.steam_api = WebAPI(key=STEAMWORKS_API_KEY)
-                print("🔧 Steam WebAPI initialized successfully")
-            except (ValueError, TypeError, OSError, ImportError) as e:
-                logger.warning("Failed to initialize Steam WebAPI: %s", e)
-                self.steam_api = None
-
-        print("🚀 Async Price Populator initialized")
+        print("Price Populator initialized")
         print(f"   Max concurrent requests: {max_concurrent}")
         print(f"   Rate limiting: {rate_limit_mode}")
-        print("   Connection pool: 200 max, 100 keepalive")
         print(
-            f"   Initial delays - Steam: {self.current_delays['steam_api']}s, Store: {self.current_delays['store_api']}s, ITAD: {self.current_delays['itad_api']}s"
+            f"   Initial delays - Store: {self.current_delays['store_api']}s, ITAD: {self.current_delays['itad_api']}s"
         )
 
     async def aclose(self):
@@ -171,9 +164,7 @@ class AsyncPricePopulator:
             delay_needed = self.current_delays[api_type] - time_since_last
 
             if delay_needed > 0:
-                await asyncio.sleep(
-                    delay_needed + random.uniform(0, 0.02)
-                )  # Small jitter
+                await asyncio.sleep(delay_needed + random.uniform(0, 0.02))
 
             self.last_request_times[api_type] = time.time()
 
@@ -189,10 +180,8 @@ class AsyncPricePopulator:
 
         for attempt in range(max_retries + 1):
             try:
-                # Apply rate limiting
                 await self.rate_limited_request(api_type)
 
-                # Make the async request
                 if method == "GET":
                     response = await self.client.get(url)
                 elif method == "POST":
@@ -200,7 +189,6 @@ class AsyncPricePopulator:
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
 
-                # Check for rate limiting
                 if response.status_code == 429:
                     if attempt < max_retries:
                         backoff_time = (2**attempt) + random.uniform(0, 1)
@@ -217,7 +205,6 @@ class AsyncPricePopulator:
                     self.adaptive_rate_limit(api_type, False)
                     return None
 
-                # Success
                 self.adaptive_rate_limit(api_type, True)
                 return response
 
@@ -243,7 +230,7 @@ class AsyncPricePopulator:
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
-            if e.response.status_code != 429:  # Don't log 429s as errors
+            if e.response.status_code != 429:
                 logger.debug("HTTP error for %s: %s", api_name, e)
             return None
         except (
@@ -263,23 +250,22 @@ class AsyncPricePopulator:
     def collect_all_game_ids(self, family_members: dict[str, str]) -> set[str]:
         """Collect all unique game IDs from family wishlists."""
         all_game_ids = set()
-        print("\n📊 Collecting game IDs from family wishlists...")
+        print("\nCollecting game IDs from family wishlists...")
         for steam_id, name in family_members.items():
             cached_wishlist = get_cached_wishlist(steam_id)
             if cached_wishlist:
                 all_game_ids.update(cached_wishlist)
-                print(f"   📋 {name}: {len(cached_wishlist)} wishlist games")
+                print(f"   {name}: {len(cached_wishlist)} wishlist games")
             else:
-                print(f"   ⚠️  {name}: No cached wishlist found")
-        print(f"\n🎯 Total unique wishlist games to process: {len(all_game_ids)}")
+                print(f"   {name}: No cached wishlist found")
+        print(f"\nTotal unique wishlist games to process: {len(all_game_ids)}")
         return all_game_ids
 
     async def fetch_steam_price_single(
         self, app_id: str
     ) -> tuple[str, bool, dict, str]:
-        """Fetch Steam price for a single game with multiple strategies. Returns data instead of writing to DB."""
-        async with self.semaphore:  # Control concurrency
-            # Strategy 1: Steam Store API
+        """Fetch Steam price for a single game via Store API."""
+        async with self.semaphore:
             try:
                 game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
                 response = await self.make_request_with_retry(
@@ -295,36 +281,12 @@ class AsyncPricePopulator:
             except Exception as e:
                 logger.debug("Steam Store API failed for %s: %s", app_id, e)
 
-            # Strategy 2: Steam WebAPI fallback (sync call in async context)
-            if self.steam_api:
-                try:
-                    await self.rate_limited_request("steam_api")
-                    # Run sync Steam API call in thread pool
-                    loop = asyncio.get_event_loop()
-                    app_list = await loop.run_in_executor(
-                        None, self.steam_api.call, "ISteamApps.GetAppList"
-                    )
-
-                    if app_list and "applist" in app_list:
-                        for app in app_list["applist"]["apps"]:
-                            if str(app.get("appid")) == app_id:
-                                game_data = {
-                                    "name": app["name"],
-                                    "type": "game",
-                                    "is_free": False,
-                                    "categories": [],
-                                    "price_overview": None,
-                                }
-                                return app_id, True, game_data, "steam_library"
-                except Exception as e:
-                    logger.debug("Steam WebAPI failed for %s: %s", app_id, e)
-
             return app_id, False, {}, "failed"
 
     async def fetch_itad_price_single(self, app_id: str) -> tuple[str, str, dict, str]:
-        """Fetch ITAD price for a single game with multiple strategies. Returns data instead of writing to DB."""
-        async with self.semaphore:  # Control concurrency
-            # Strategy 1: ITAD App ID lookup
+        """Fetch ITAD price for a single game with multiple strategies."""
+        async with self.semaphore:
+            # Strategy 1: ITAD lookup by Steam appid
             try:
                 lookup_url = f"https://api.isthereanydeal.com/games/lookup/v1?key={ITAD_API_KEY}&appid={app_id}"
                 lookup_response = await self.make_request_with_retry(
@@ -335,55 +297,54 @@ class AsyncPricePopulator:
                     lookup_data = self.handle_api_response(
                         f"ITAD Lookup ({app_id})", lookup_response
                     )
-                    game_id = (
-                        lookup_data.get("game", {}).get("id") if lookup_data else None
-                    )
 
-                    if game_id:
-                        # Get price data
-                        prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
-                        prices_response = await self.make_request_with_retry(
-                            prices_url,
-                            method="POST",
-                            json_data=[game_id],
-                            api_type="itad",
-                        )
+                    if lookup_data and lookup_data.get("found"):
+                        game_id = lookup_data.get("game", {}).get("id")
 
-                        if prices_response is not None:
-                            prices_data = self.handle_api_response(
-                                f"ITAD Prices ({app_id})", prices_response
+                        if game_id:
+                            # Get price data using ITAD game ID
+                            prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US"
+                            prices_response = await self.make_request_with_retry(
+                                prices_url,
+                                method="POST",
+                                json_data=[game_id],
+                                api_type="itad",
                             )
 
-                            if (
-                                prices_data
-                                and len(prices_data) > 0
-                                and "historyLow" in prices_data[0]
-                            ):
-                                history_low = prices_data[0]["historyLow"].get(
-                                    "all", {}
-                                )
-                                price_amount = history_low.get("amount")
-                                shop_name = history_low.get("shop", {}).get(
-                                    "name", "Historical Low (All Stores)"
+                            if prices_response is not None:
+                                prices_data = self.handle_api_response(
+                                    f"ITAD Prices ({app_id})", prices_response
                                 )
 
-                                if price_amount is not None:
-                                    price_data = {
-                                        "lowest_price": str(price_amount),
-                                        "lowest_price_formatted": f"${price_amount}",
-                                        "shop_name": shop_name,
-                                    }
-                                    return app_id, "cached", price_data, "appid"
+                                if (
+                                    prices_data
+                                    and len(prices_data) > 0
+                                    and prices_data[0].get("historyLow")
+                                ):
+                                    history_low = prices_data[0]["historyLow"].get(
+                                        "all", {}
+                                    )
+                                    price_amount = history_low.get("amount")
+                                    shop_name = history_low.get("shop", {}).get(
+                                        "name", "Historical Low (All Stores)"
+                                    )
+
+                                    if price_amount is not None:
+                                        price_data = {
+                                            "lowest_price": str(price_amount),
+                                            "lowest_price_formatted": f"${price_amount}",
+                                            "shop_name": shop_name,
+                                        }
+                                        return app_id, "cached", price_data, "appid"
             except Exception as e:
-                logger.debug("ITAD App ID lookup failed for %s: %s", app_id, e)
+                logger.debug("ITAD appid lookup failed for %s: %s", app_id, e)
 
-            # Strategy 2: Name-based search (if we have Steam data)
+            # Strategy 2: Name-based search fallback
             try:
                 cached_details = get_cached_game_details(app_id)
                 if cached_details and cached_details.get("name"):
                     game_name = cached_details["name"]
 
-                    # Search by name
                     search_url = f"https://api.isthereanydeal.com/games/search/v1?key={ITAD_API_KEY}&title={game_name}"
                     search_response = await self.make_request_with_retry(
                         search_url, method="GET", api_type="itad"
@@ -397,8 +358,7 @@ class AsyncPricePopulator:
                         if search_data and len(search_data) > 0:
                             game_id = search_data[0].get("id")
                             if game_id:
-                                # Get price data
-                                prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US&shops=61"
+                                prices_url = f"https://api.isthereanydeal.com/games/prices/v3?key={ITAD_API_KEY}&country=US"
                                 prices_response = await self.make_request_with_retry(
                                     prices_url,
                                     method="POST",
@@ -414,7 +374,7 @@ class AsyncPricePopulator:
                                     if (
                                         prices_data
                                         and len(prices_data) > 0
-                                        and "historyLow" in prices_data[0]
+                                        and prices_data[0].get("historyLow")
                                     ):
                                         history_low = prices_data[0]["historyLow"].get(
                                             "all", {}
@@ -444,14 +404,14 @@ class AsyncPricePopulator:
     def batch_write_steam_data(
         self, steam_data: dict[str, dict], batch_size: int = 100
     ) -> int:
-        """Write Steam data to database in safe batches with proper error handling."""
+        """Write Steam data to database in safe batches."""
         if not steam_data:
             return 0
 
         written_count = 0
         items = list(steam_data.items())
 
-        print(f"   💾 Writing {len(items)} Steam records in batches of {batch_size}...")
+        print(f"   Writing {len(items)} Steam records in batches of {batch_size}...")
 
         for i in range(0, len(items), batch_size):
             batch = items[i : i + batch_size]
@@ -461,16 +421,7 @@ class AsyncPricePopulator:
                 conn.execute("BEGIN TRANSACTION")
                 for app_id, game_info in batch:
                     game_data = game_info["data"]
-                    source = game_info["source"]
-
-                    if source == "steam_library":
-                        cache_game_details_with_source(
-                            app_id, game_data, source, conn=conn
-                        )
-                    else:
-                        cache_game_details(
-                            app_id, game_data, permanent=False, conn=conn
-                        )
+                    cache_game_details(app_id, game_data, permanent=False, conn=conn)
 
                 conn.commit()
                 written_count += len(batch)
@@ -486,16 +437,9 @@ class AsyncPricePopulator:
                 for app_id, game_info in batch:
                     try:
                         game_data = game_info["data"]
-                        source = game_info["source"]
-
-                        if source == "steam_library":
-                            cache_game_details_with_source(
-                                app_id, game_data, source, conn=conn
-                            )
-                        else:
-                            cache_game_details(
-                                app_id, game_data, permanent=False, conn=conn
-                            )
+                        cache_game_details(
+                            app_id, game_data, permanent=False, conn=conn
+                        )
                         conn.commit()
                         written_count += 1
                     except Exception as individual_error:
@@ -512,20 +456,20 @@ class AsyncPricePopulator:
             finally:
                 conn.close()
 
-        print(f"   ✅ Successfully wrote {written_count} Steam records to database")
+        print(f"   Successfully wrote {written_count} Steam records to database")
         return written_count
 
     def batch_write_itad_data(
         self, itad_data: dict[str, dict], batch_size: int = 100
     ) -> int:
-        """Write ITAD data to database in safe batches with proper error handling."""
+        """Write ITAD data to database in safe batches."""
         if not itad_data:
             return 0
 
         written_count = 0
         items = list(itad_data.items())
 
-        print(f"   💾 Writing {len(items)} ITAD records in batches of {batch_size}...")
+        print(f"   Writing {len(items)} ITAD records in batches of {batch_size}...")
 
         for i in range(0, len(items), batch_size):
             batch = items[i : i + batch_size]
@@ -590,16 +534,16 @@ class AsyncPricePopulator:
             finally:
                 conn.close()
 
-        print(f"   ✅ Successfully wrote {written_count} ITAD records to database")
+        print(f"   Successfully wrote {written_count} ITAD records to database")
         return written_count
 
     async def populate_steam_prices(
         self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
-        """Populate Steam prices with async processing using cache-then-write pattern."""
-        print("\n💰 Starting async Steam price population...")
+        """Populate Steam prices with async processing."""
+        print("\nStarting async Steam price population...")
         if not game_ids:
-            print("❌ No game IDs to process")
+            print("No game IDs to process")
             return 0
 
         games_to_process = []
@@ -613,32 +557,30 @@ class AsyncPricePopulator:
 
         games_skipped = len(game_ids) - len(games_to_process)
 
-        print(f"   🎯 Games to process: {len(games_to_process)}")
-        print(f"   ⏭️   Games skipped (already have price data): {games_skipped}")
-        print(f"   🚀 Processing with {self.max_concurrent} concurrent async requests")
+        print(f"   Games to process: {len(games_to_process)}")
+        print(f"   Games skipped (already have price data): {games_skipped}")
+        print(f"   Processing with {self.max_concurrent} concurrent async requests")
 
         if dry_run:
-            print("   🔍 DRY RUN: Would fetch Steam price data")
+            print("   DRY RUN: Would fetch Steam price data")
             return 0
 
         if not games_to_process:
-            print("   ✅ All games already have Steam price data")
+            print("   All games already have Steam price data")
             return 0
 
         # Phase 1: Async data collection
-        print("   📡 Phase 1: Async API data collection...")
+        print("   Phase 1: Async API data collection...")
         steam_data = {}
         steam_errors = []
 
-        # Create async tasks for all games
         tasks = [self.fetch_steam_price_single(app_id) for app_id in games_to_process]
 
-        # Collect data with progress bar if available
         if ASYNC_TQDM_AVAILABLE:
             for task in atqdm(
                 asyncio.as_completed(tasks),
                 total=len(tasks),
-                desc="💰 Steam API",
+                desc="Steam API",
                 unit="game",
             ):
                 app_id, success, game_data, source = await task
@@ -658,32 +600,29 @@ class AsyncPricePopulator:
                 completed += 1
                 if completed % 50 == 0:
                     print(
-                        f"   📈 API Progress: {completed}/{len(games_to_process)} | Success: {len(steam_data)} | Errors: {len(steam_errors)}"
+                        f"   API Progress: {completed}/{len(games_to_process)} | Success: {len(steam_data)} | Errors: {len(steam_errors)}"
                     )
 
         # Phase 2: Safe database writing
-        print("   💾 Phase 2: Safe database writing...")
+        print("   Phase 2: Safe database writing...")
         steam_prices_cached = self.batch_write_steam_data(steam_data)
 
-        print("\n💰 Async Steam price population complete!")
-        print(f"   ✅ Prices cached: {steam_prices_cached}")
-        print(f"   ❌ Errors: {len(steam_errors)}")
-        print(
-            f"   ⚡ Async speed improvement: ~{self.max_concurrent}x faster than sequential"
-        )
+        print("\nAsync Steam price population complete!")
+        print(f"   Prices cached: {steam_prices_cached}")
+        print(f"   Errors: {len(steam_errors)}")
 
         return steam_prices_cached
 
     async def populate_itad_prices(
         self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
-        """Populate ITAD prices with async processing using cache-then-write pattern."""
-        print("\n📈 Starting async ITAD price population...")
+        """Populate ITAD prices with async processing."""
+        print("\nStarting async ITAD price population...")
         if not ITAD_API_KEY or ITAD_API_KEY == "YOUR_ITAD_API_KEY_HERE":
-            print("❌ ITAD API key not configured. Skipping ITAD price population.")
+            print("ITAD API key not configured. Skipping ITAD price population.")
             return 0
         if not game_ids:
-            print("❌ No game IDs to process")
+            print("No game IDs to process")
             return 0
 
         games_to_process = [
@@ -691,37 +630,34 @@ class AsyncPricePopulator:
         ]
         games_skipped = len(game_ids) - len(games_to_process)
 
-        print(f"   🎯 Games to process: {len(games_to_process)}")
-        print(f"   ⏭️   Games skipped (already have ITAD data): {games_skipped}")
-        print(f"   🚀 Processing with {self.max_concurrent} concurrent async requests")
+        print(f"   Games to process: {len(games_to_process)}")
+        print(f"   Games skipped (already have ITAD data): {games_skipped}")
+        print(f"   Processing with {self.max_concurrent} concurrent async requests")
 
         if dry_run:
-            print("   🔍 DRY RUN: Would fetch ITAD price data")
+            print("   DRY RUN: Would fetch ITAD price data")
             return 0
         if not games_to_process:
-            print("   ✅ All games already have ITAD price data")
+            print("   All games already have ITAD price data")
             return 0
 
         # Phase 1: Async data collection
-        print("   📡 Phase 1: Async API data collection...")
+        print("   Phase 1: Async API data collection...")
         itad_data = {}
         itad_errors = []
         itad_not_found = []
 
-        # Create async tasks for all games
         tasks = [self.fetch_itad_price_single(app_id) for app_id in games_to_process]
 
-        # Collect data with progress bar if available
         if ASYNC_TQDM_AVAILABLE:
             for task in atqdm(
                 asyncio.as_completed(tasks),
                 total=len(tasks),
-                desc="📈 ITAD API",
+                desc="ITAD API",
                 unit="game",
             ):
                 app_id, status, price_data, lookup_method = await task
                 if status == "cached":
-                    # Get game name for name_search method
                     game_name = None
                     if lookup_method == "name_search":
                         cached_details = get_cached_game_details(app_id)
@@ -736,14 +672,13 @@ class AsyncPricePopulator:
                     }
                 elif status == "not_found":
                     itad_not_found.append(app_id)
-                else:  # error or other status
+                else:
                     itad_errors.append((app_id, status))
         else:
             completed = 0
             for coro in asyncio.as_completed(tasks):
                 app_id, status, price_data, lookup_method = await coro
                 if status == "cached":
-                    # Get game name for name_search method
                     game_name = None
                     if lookup_method == "name_search":
                         cached_details = get_cached_game_details(app_id)
@@ -758,26 +693,23 @@ class AsyncPricePopulator:
                     }
                 elif status == "not_found":
                     itad_not_found.append(app_id)
-                else:  # error or other status
+                else:
                     itad_errors.append((app_id, status))
 
                 completed += 1
                 if completed % 50 == 0:
                     print(
-                        f"   📈 API Progress: {completed}/{len(games_to_process)} | Success: {len(itad_data)} | Not Found: {len(itad_not_found)} | Errors: {len(itad_errors)}"
+                        f"   API Progress: {completed}/{len(games_to_process)} | Success: {len(itad_data)} | Not Found: {len(itad_not_found)} | Errors: {len(itad_errors)}"
                     )
 
         # Phase 2: Safe database writing
-        print("   💾 Phase 2: Safe database writing...")
+        print("   Phase 2: Safe database writing...")
         itad_prices_cached = self.batch_write_itad_data(itad_data)
 
-        print("\n📈 Async ITAD price population complete!")
-        print(f"   ✅ Prices cached: {itad_prices_cached}")
-        print(f"   ❓ Games not found on ITAD: {len(itad_not_found)}")
-        print(f"   ❌ Errors: {len(itad_errors)}")
-        print(
-            f"   ⚡ Async speed improvement: ~{self.max_concurrent}x faster than sequential"
-        )
+        print("\nAsync ITAD price population complete!")
+        print(f"   Prices cached: {itad_prices_cached}")
+        print(f"   Games not found on ITAD: {len(itad_not_found)}")
+        print(f"   Errors: {len(itad_errors)}")
 
         return itad_prices_cached
 
@@ -785,12 +717,12 @@ class AsyncPricePopulator:
         self, game_ids: set[str], dry_run: bool = False
     ) -> int:
         """Refresh current Steam prices with force refresh."""
-        print("\n🔄 Refreshing current Steam prices with async optimization...")
+        print("\nRefreshing current Steam prices...")
         if not game_ids:
-            print("❌ No game IDs to process")
+            print("No game IDs to process")
             return 0
         if dry_run:
-            print(f"   🔍 DRY RUN: Would refresh {len(game_ids)} current prices")
+            print(f"   DRY RUN: Would refresh {len(game_ids)} current prices")
             return 0
         return await self.populate_steam_prices(
             game_ids, dry_run=False, force_refresh=True
@@ -798,9 +730,7 @@ class AsyncPricePopulator:
 
 
 async def main():
-    parser = argparse.ArgumentParser(
-        description="Async price data population for FamilyBot"
-    )
+    parser = argparse.ArgumentParser(description="Price data population for FamilyBot")
     parser.add_argument(
         "--steam-only", action="store_true", help="Only populate Steam Store prices"
     )
@@ -836,19 +766,19 @@ async def main():
     )
     args = parser.parse_args()
 
-    print("⚡ FamilyBot Async Price Population Script\n" + "=" * 60)
+    print("FamilyBot Price Population Script\n" + "=" * 60)
     if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
+        print("DRY RUN MODE - No changes will be made")
     if args.refresh_current:
-        print("🔄 REFRESH MODE - Will update current prices even if cached")
+        print("REFRESH MODE - Will update current prices even if cached")
     if args.force_refresh:
-        print("🔄 FORCE REFRESH MODE - Will update all price data even if cached")
+        print("FORCE REFRESH MODE - Will update all price data even if cached")
 
     try:
         init_db()
-        print("✅ Database initialized")
+        print("Database initialized")
     except (ValueError, TypeError, OSError) as e:
-        print(f"❌ Failed to initialize database or run migrations: {e}")
+        print(f"Failed to initialize database: {e}")
         return 1
 
     # Adjust concurrent requests based on rate limiting strategy
@@ -859,7 +789,7 @@ async def main():
     else:  # adaptive
         max_concurrent = args.concurrent
 
-    populator = AsyncPricePopulator(max_concurrent, args.rate_limit)
+    populator = PricePopulator(max_concurrent, args.rate_limit)
     total_steam_cached, total_itad_cached = 0, 0
     all_game_ids = set()
     start_time = datetime.now()
@@ -867,12 +797,12 @@ async def main():
     try:
         family_members = populator.load_family_members()
         if not family_members:
-            print("❌ No family members found. Check your configuration.")
+            print("No family members found. Check your configuration.")
             return 1
 
         all_game_ids = populator.collect_all_game_ids(family_members)
         if not all_game_ids:
-            print("❌ No games found to process. Run populate_database.py first.")
+            print("No games found to process. Run populate_database.py first.")
             return 1
 
         if not args.itad_only:
@@ -892,30 +822,29 @@ async def main():
         await populator.aclose()
 
     duration = datetime.now() - start_time
-    print("\n" + "=" * 60 + "\n🎉 Async Price Population Complete!")
-    print(f"⏱️   Duration: {duration.total_seconds():.1f} seconds")
+    print("\n" + "=" * 60 + "\nPrice Population Complete!")
+    print(f"Duration: {duration.total_seconds():.1f} seconds")
     if all_game_ids:
-        print(f"🎮 Games processed: {len(all_game_ids)}")
-    print(f"💰 Steam prices cached: {total_steam_cached}")
-    print(f"📈 ITAD prices cached: {total_itad_cached}")
-    print(f"💾 Total price entries updated: {total_steam_cached + total_itad_cached}")
+        print(f"Games processed: {len(all_game_ids)}")
+    print(f"Steam prices cached: {total_steam_cached}")
+    print(f"ITAD prices cached: {total_itad_cached}")
+    print(f"Total price entries updated: {total_steam_cached + total_itad_cached}")
 
     if not args.dry_run:
-        print("\n🚀 Async price data population complete!")
-        print(
-            f"   ⚡ Performance improvement: ~{max_concurrent}x faster than sequential processing"
-        )
-        print("   🔄 Advanced connection reuse with 200 max connections")
-        print("   📊 Adaptive async rate limiting prevents API throttling")
-        print("   🚀 True async/await processing for maximum speed!")
-        print("   All deal commands will now run at maximum speed! 🎊")
+        print("\nPrice data population complete!")
+        print(f"   Performance: ~{max_concurrent}x faster than sequential processing")
+        print("   Connection reuse enabled to minimize data usage")
+        print("   Adaptive rate limiting prevents API throttling")
 
     return 0
+
+
+import time  # noqa: E402 - needed for adaptive_rate_limit
 
 
 if __name__ == "__main__":
     try:
         sys.exit(asyncio.run(main()))
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user")
+        print("\nOperation cancelled by user")
         sys.exit(1)
