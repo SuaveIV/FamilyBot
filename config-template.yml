@@ -45,6 +45,14 @@ steam_family:
   websocket_server_ip: "127.0.0.1" # OPTIONAL: IP address for the bot's internal WebSocket server.
                                    # Use "127.0.0.1" for local development. Change if deploying to a different machine.
 
+# --- Cache TTL Configuration (Hours) ---
+  cache_ttl_hours:
+    family_library: 1      # Family shared library cache (default: 1 hour)
+    wishlist: 2            # Wishlist cache (default: 2 hours)
+    game_details: 168      # Game details cache including current prices (default: 168 hours / 1 week)
+    itad_prices: 336       # ITAD historical low prices cache (default: 336 hours / 14 days)
+                           # Note: Historical low prices rarely go up, so longer TTL is safe.
+
 # --- Token Sender Configuration ---
 token_sender:
   token_save_path: "tokens"                        # Directory where Steam tokens are saved

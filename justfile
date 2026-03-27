@@ -133,6 +133,11 @@ purge-all-cache:
     mise exec -- uv run python src/familybot/FamilyBot.py --purge-all
     @echo "✅ All cache data purged"
 
+# Check price cache status (permanent vs TTL-based entries)
+check-price-cache:
+    @echo "🔍 Checking price cache status..."
+    mise exec -- uv run python scripts/check_price_cache.py
+
 # === DATABASE OPERATIONS ===
 
 # Populate database with game data and family information

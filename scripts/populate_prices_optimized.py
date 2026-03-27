@@ -5,7 +5,8 @@ import os
 import random
 import sys
 import time
-from datetime import datetime
+import traceback
+from datetime import datetime, timezone
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -30,7 +31,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-from familybot.config import ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_game_details_with_source,  # pylint: disable=wrong-import-position
@@ -501,11 +502,12 @@ class OptimizedPricePopulator:
                             app_id, game_data, source, conn=conn
                         )
                     else:
-                        cache_game_details(app_id, game_data, permanent=True, conn=conn)
-
-                    written_count += 1
-
+                        cache_game_details(
+                            app_id, game_data, permanent=False, conn=conn
+                        )
                 conn.commit()
+                written_count += len(batch)
+
             except Exception as e:
                 conn.rollback()
                 logger.error(f"Failed to write Steam batch: {e}")
@@ -515,12 +517,31 @@ class OptimizedPricePopulator:
                         game_data = game_info["data"]
                         source = game_info["source"]
                         if source == "steam_library":
-                            cache_game_details_with_source(app_id, game_data, source)
+                            cache_game_details_with_source(
+                                app_id, game_data, source, conn=conn
+                            )
                         else:
-                            cache_game_details(app_id, game_data, permanent=True)
+                            cache_game_details(
+                                app_id, game_data, permanent=False, conn=conn
+                            )
+                        conn.commit()
                         written_count += 1
-                    except Exception:
-                        pass
+                    except Exception as salvage_error:
+                        conn.rollback()
+                        logger.exception(
+                            f"Failed to write individual Steam record {app_id}"
+                        )
+                        try:
+                            with open(
+                                "logs/price_population_failures.log",
+                                "a",
+                                encoding="utf-8",
+                            ) as f:
+                                f.write(
+                                    f"{datetime.now(timezone.utc)}: Steam Failure - AppID: {app_id}, Source: {source}, Error: {salvage_error}\n"
+                                )
+                        except Exception as log_error:
+                            logger.error(f"Failed to write to failure log: {log_error}")
             finally:
                 conn.close()
 
@@ -552,12 +573,13 @@ class OptimizedPricePopulator:
                         price_data,
                         lookup_method=lookup_method,
                         steam_game_name=game_name,
-                        permanent=True,
+                        permanent=False,
+                        cache_hours=ITAD_CACHE_TTL,
                         conn=conn,
                     )
-                    written_count += 1
-
                 conn.commit()
+                written_count += len(batch)
+
             except Exception as e:
                 conn.rollback()
                 logger.error(f"Failed to write ITAD batch: {e}")
@@ -572,11 +594,28 @@ class OptimizedPricePopulator:
                             price_data,
                             lookup_method=lookup_method,
                             steam_game_name=game_name,
-                            permanent=True,
+                            permanent=False,
+                            cache_hours=ITAD_CACHE_TTL,
+                            conn=conn,
                         )
+                        conn.commit()
                         written_count += 1
-                    except Exception:
-                        pass
+                    except Exception as salvage_error:
+                        conn.rollback()
+                        logger.exception(
+                            f"Failed to write individual ITAD record {app_id}"
+                        )
+                        try:
+                            with open(
+                                "logs/price_population_failures.log",
+                                "a",
+                                encoding="utf-8",
+                            ) as f:
+                                f.write(
+                                    f"{datetime.now(timezone.utc)}: ITAD Failure - AppID: {app_id}, Method: {lookup_method}, Error: {salvage_error}\n"
+                                )
+                        except Exception as log_error:
+                            logger.error(f"Failed to write to failure log: {log_error}")
             finally:
                 conn.close()
 

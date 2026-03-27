@@ -340,7 +340,7 @@ class JSONDatabaseImporter:
             )
         else:
             try:
-                cache_game_details(appid, game_data, permanent=True)
+                cache_game_details(appid, game_data, permanent=False)
                 self.log_action(f"Cached game details: {appid} ({game_data['name']})")
 
             except Exception as e:

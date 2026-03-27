@@ -27,7 +27,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-from familybot.config import ITAD_API_KEY, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL, STEAMWORKS_API_KEY  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
     cache_game_details,  # pylint: disable=wrong-import-position
     cache_game_details_with_source,  # pylint: disable=wrong-import-position
@@ -464,15 +464,19 @@ class AsyncPricePopulator:
                             app_id, game_data, source, conn=conn
                         )
                     else:
-                        cache_game_details(app_id, game_data, permanent=True, conn=conn)
-
-                    written_count += 1
+                        cache_game_details(
+                            app_id, game_data, permanent=False, conn=conn
+                        )
 
                 conn.commit()
+                written_count += len(batch)
                 logger.debug(f"Successfully wrote batch of {len(batch)} Steam records")
 
             except Exception as e:
-                conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception as rollback_error:
+                    logger.error(f"Rollback failed: {rollback_error}")
                 logger.error(f"Failed to write Steam batch: {e}")
                 # Try individual records to salvage what we can
                 for app_id, game_info in batch:
@@ -481,16 +485,25 @@ class AsyncPricePopulator:
                         source = game_info["source"]
 
                         if source == "steam_library":
-                            cache_game_details_with_source(app_id, game_data, source)
+                            cache_game_details_with_source(
+                                app_id, game_data, source, conn=conn
+                            )
                         else:
-                            cache_game_details(app_id, game_data, permanent=True)
-
+                            cache_game_details(
+                                app_id, game_data, permanent=False, conn=conn
+                            )
+                        conn.commit()
                         written_count += 1
                     except Exception as individual_error:
+                        try:
+                            conn.rollback()
+                        except Exception as rollback_error:
+                            logger.error(
+                                f"Individual rollback failed: {rollback_error}"
+                            )
                         logger.error(
                             f"Failed to write individual Steam record {app_id}: {individual_error}"
                         )
-                        written_count -= 1  # Adjust count for failed individual writes
 
             finally:
                 conn.close()
@@ -526,16 +539,20 @@ class AsyncPricePopulator:
                         price_data,
                         lookup_method=lookup_method,
                         steam_game_name=game_name,
-                        permanent=True,
+                        permanent=False,
+                        cache_hours=ITAD_CACHE_TTL,
                         conn=conn,
                     )
-                    written_count += 1
 
                 conn.commit()
+                written_count += len(batch)
                 logger.debug(f"Successfully wrote batch of {len(batch)} ITAD records")
 
             except Exception as e:
-                conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception as rollback_error:
+                    logger.error(f"Rollback failed: {rollback_error}")
                 logger.error(f"Failed to write ITAD batch: {e}")
                 # Try individual records to salvage what we can
                 for app_id, price_info in batch:
@@ -549,14 +566,22 @@ class AsyncPricePopulator:
                             price_data,
                             lookup_method=lookup_method,
                             steam_game_name=game_name,
-                            permanent=True,
+                            permanent=False,
+                            cache_hours=ITAD_CACHE_TTL,
+                            conn=conn,
                         )
+                        conn.commit()
                         written_count += 1
                     except Exception as individual_error:
+                        try:
+                            conn.rollback()
+                        except Exception as rollback_error:
+                            logger.error(
+                                f"Individual rollback failed: {rollback_error}"
+                            )
                         logger.error(
                             f"Failed to write individual ITAD record {app_id}: {individual_error}"
                         )
-                        written_count -= 1  # Adjust count for failed individual writes
 
             finally:
                 conn.close()

@@ -6,7 +6,10 @@ import time
 
 import requests
 
-from familybot.config import ITAD_API_KEY  # Import ITAD_API_KEY from config
+from familybot.config import (
+    ITAD_API_KEY,
+    ITAD_CACHE_TTL,
+)  # Import ITAD_API_KEY and ITAD_CACHE_TTL from config
 from familybot.lib.constants import (
     DEFAULT_PROGRESS_INTERVAL,
     MIN_ELAPSED_TIME_FOR_ESTIMATION,
@@ -95,11 +98,11 @@ def get_lowest_price(steam_app_id: int) -> str:
                         "shop_name": shop_name,
                     },
                     permanent=False,
-                    cache_hours=336,  # 14 days
+                    cache_hours=ITAD_CACHE_TTL,
                 )
 
                 logger.debug(
-                    f"Cached ITAD price for {steam_app_id} for 14 days: {formatted_price} from {shop_name}"
+                    f"Cached ITAD price for {steam_app_id} for {ITAD_CACHE_TTL} hours: {formatted_price} from {shop_name}"
                 )
                 return formatted_price
 
@@ -233,7 +236,7 @@ def prefetch_itad_prices(steam_app_ids: list[str]) -> None:
                                 "shop_name": shop_name,
                             },
                             permanent=False,
-                            cache_hours=336,
+                            cache_hours=ITAD_CACHE_TTL,
                         )
                         continue
 

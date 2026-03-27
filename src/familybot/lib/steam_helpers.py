@@ -69,8 +69,8 @@ async def fetch_game_details(
         if not game_data:
             return None
 
-        # Cache the game details
-        await asyncio.to_thread(cache_game_details, app_id, game_data, permanent=True)
+        # Cache the game details (use permanent=False so prices expire with GAME_DETAILS_CACHE_TTL)
+        await asyncio.to_thread(cache_game_details, app_id, game_data, permanent=False)
         return game_data
 
     except Exception as e:
