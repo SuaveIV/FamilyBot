@@ -20,12 +20,14 @@ from familybot.lib.constants import (
 )
 from familybot.lib.database import (
     cache_family_library,
-    cache_game_details,
     cache_wishlist,
     get_cached_family_library,
-    get_cached_game_details,
     get_cached_wishlist,
     load_family_members_from_db,
+)
+from familybot.lib.game_details_repository import (
+    cache_game_details,
+    get_cached_game_details,
 )
 from familybot.lib.family_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_utils import (

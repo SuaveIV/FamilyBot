@@ -8,7 +8,10 @@ from familybot.lib.constants import (
     HISTORICAL_LOW_BUFFER,
     LOW_DISCOUNT_THRESHOLD,
 )
-from familybot.lib.database import cache_game_details, get_cached_game_details
+from familybot.lib.game_details_repository import (
+    cache_game_details,
+    get_cached_game_details,
+)
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 from familybot.lib.utils import get_lowest_price
