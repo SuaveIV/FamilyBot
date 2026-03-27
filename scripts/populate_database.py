@@ -80,6 +80,9 @@ class DatabasePopulator:
 
         self.client = httpx.AsyncClient(timeout=15.0)
 
+        self._app_list_cache = None
+        self._app_list_lock = asyncio.Lock()
+
         # Initialize Steam WebAPI if available
         self.steam_api = None
         if STEAMWORKS_API_KEY and STEAMWORKS_API_KEY != "YOUR_STEAMWORKS_API_KEY_HERE":
@@ -257,38 +260,47 @@ class DatabasePopulator:
         if not self.steam_api:
             return None
 
-        def get_app_info():
-            try:
-                if not self.steam_api:
-                    return None
-                # Get app list and search for our app using the correct interface
-                app_list = self.steam_api.call("ISteamApps.GetAppList")
-                if not (
-                    app_list and "applist" in app_list and "apps" in app_list["applist"]
-                ):
-                    return None
+        async with self._app_list_lock:
+            if self._app_list_cache is None:
 
-                for app in app_list["applist"]["apps"]:
-                    if str(app.get("appid")) == app_id:
-                        logger.debug(
-                            "Found fallback name via steam library for app %s: %s",
-                            app_id,
-                            app["name"],
+                def get_app_list():
+                    try:
+                        app_list_response = self.steam_api.call(
+                            "ISteamApps.GetAppList_v2"
                         )
-                        return {
-                            "name": app["name"],
-                            "type": "game",
-                            "is_free": False,
-                            "categories": [],
-                            "price_overview": None,
-                        }
-            except (ValueError, TypeError, KeyError, OSError) as e:
-                logger.debug(
-                    "Steam library app list lookup failed for %s: %s", app_id, e
-                )
-            return None
+                        if (
+                            app_list_response
+                            and "applist" in app_list_response
+                            and "apps" in app_list_response["applist"]
+                        ):
+                            # Convert to dict for fast O(1) lookups
+                            return {
+                                str(app.get("appid")): app.get("name")
+                                for app in app_list_response["applist"]["apps"]
+                            }
+                        return {}
+                    except (ValueError, TypeError, KeyError, OSError) as e:
+                        logger.debug("Steam library app list lookup failed: %s", e)
+                        return {}
 
-        return await asyncio.to_thread(get_app_info)
+                self._app_list_cache = await asyncio.to_thread(get_app_list)
+
+        app_name = self._app_list_cache.get(app_id)
+        if app_name:
+            logger.debug(
+                "Found fallback name via steam library for app %s: %s",
+                app_id,
+                app_name,
+            )
+            return {
+                "name": app_name,
+                "type": "game",
+                "is_free": False,
+                "categories": [],
+                "price_overview": None,
+            }
+
+        return None
 
     def load_family_members(self) -> dict[str, str]:
         """Load family members from database."""
@@ -755,7 +767,7 @@ class DatabasePopulator:
                 return failed_count
 
             lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
-            if lookup_data is None:
+            if not isinstance(lookup_data, dict):
                 failed_count += len(chunk)
                 if pbar_update:
                     pbar_update(len(chunk), failed_count)

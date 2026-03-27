@@ -400,7 +400,7 @@ class PricePopulator:
                     continue
 
                 lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
-                if lookup_data is None:
+                if not isinstance(lookup_data, dict):
                     failed_appids.extend(chunk)
                     if pbar:
                         pbar.update(len(chunk))
@@ -486,13 +486,16 @@ class PricePopulator:
                     continue
 
                 prices_data = self.handle_api_response("ITAD Bulk Prices", response)
-                if prices_data is None:
+                if not isinstance(prices_data, list):
                     if pbar:
                         pbar.update(len(chunk))
                     continue
 
                 chunk_processed = 0
                 for price_entry in prices_data:
+                    if not price_entry:
+                        chunk_processed += 1
+                        continue
                     itad_id = price_entry.get("id")
                     app_id = itad_id_to_appid.get(itad_id)
                     if not app_id:
