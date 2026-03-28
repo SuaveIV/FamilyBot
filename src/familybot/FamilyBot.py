@@ -330,11 +330,14 @@ def purge_game_cache() -> None:
     # Use read connection for counts (no write lock held during input())
     # Then use write connection only after user confirmation
     try:
-        # Step 1: Query count with a read connection (no write lock)
+        # Step 1: Query counts with a read connection (no write lock)
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM game_details_cache")
-        cache_count = cursor.fetchone()[0]
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM game_details_cache")
+            cache_count = cursor.fetchone()[0]
+        finally:
+            conn.close()
 
         if cache_count == 0:
             print("✅ Game details cache is already empty.")
@@ -350,10 +353,10 @@ def purge_game_cache() -> None:
 
         if confirm in ["y", "yes"]:
             # Step 3: Open write connection only after confirmation
-            with get_write_connection() as write_conn:
-                cursor = write_conn.cursor()
+            with get_write_connection() as conn:
+                cursor = conn.cursor()
                 cursor.execute("DELETE FROM game_details_cache")
-                write_conn.commit()
+                conn.commit()
 
             print(
                 f"✅ Cache purge complete! Deleted {cache_count} cached game entries."
@@ -382,11 +385,14 @@ def purge_wishlist_cache() -> None:
     try:
         # Step 1: Query counts with a read connection (no write lock)
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(DISTINCT steam_id) FROM wishlist_cache")
-        user_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM wishlist_cache")
-        total_count = cursor.fetchone()[0]
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(DISTINCT steam_id) FROM wishlist_cache")
+            user_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM wishlist_cache")
+            total_count = cursor.fetchone()[0]
+        finally:
+            conn.close()
 
         if total_count == 0:
             print("✅ Wishlist cache is already empty.")
@@ -404,10 +410,10 @@ def purge_wishlist_cache() -> None:
 
         if confirm in ["y", "yes"]:
             # Step 3: Open write connection only after confirmation
-            with get_write_connection() as write_conn:
-                cursor = write_conn.cursor()
+            with get_write_connection() as conn:
+                cursor = conn.cursor()
                 cursor.execute("DELETE FROM wishlist_cache")
-                write_conn.commit()
+                conn.commit()
 
             print(
                 f"✅ Wishlist cache purge complete! Deleted {total_count} entries from {user_count} users."
@@ -425,7 +431,9 @@ def purge_wishlist_cache() -> None:
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging wishlist cache: {e}")
-        logger.exception("Unexpected error purging wishlist cache from command line: %s", e)
+        logger.exception(
+            "Unexpected error purging wishlist cache from command line: %s", e
+        )
 
 
 def purge_family_library_cache_cli() -> None:
@@ -433,11 +441,14 @@ def purge_family_library_cache_cli() -> None:
     # Use read connection for counts (no write lock held during input())
     # Then use write connection only after user confirmation
     try:
-        # Step 1: Query count with a read connection (no write lock)
+        # Step 1: Query counts with a read connection (no write lock)
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM family_library_cache")
-        cache_count = cursor.fetchone()[0]
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM family_library_cache")
+            cache_count = cursor.fetchone()[0]
+        finally:
+            conn.close()
 
         if cache_count == 0:
             print("✅ Family library cache is already empty.")
@@ -452,7 +463,7 @@ def purge_family_library_cache_cli() -> None:
         )
 
         if confirm in ["y", "yes"]:
-            # Step 3: Call the repository function which handles its own write connection
+            # purge_family_library_cache() manages its own connection and transaction
             purge_family_library_cache()
 
             print(
@@ -469,7 +480,9 @@ def purge_family_library_cache_cli() -> None:
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging family library cache: {e}")
-        logger.exception("Unexpected error purging family library cache from command line: %s", e)
+        logger.exception(
+            "Unexpected error purging family library cache from command line: %s", e
+        )
 
 
 def purge_prices_cache() -> None:
@@ -525,7 +538,9 @@ def purge_prices_cache() -> None:
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging price cache: {e}")
-        logger.exception("Unexpected error purging price cache from command line: %s", e)
+        logger.exception(
+            "Unexpected error purging price cache from command line: %s", e
+        )
 
 
 def purge_all_cache() -> None:
@@ -535,19 +550,20 @@ def purge_all_cache() -> None:
     try:
         # Step 1: Query counts with a read connection (no write lock)
         conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Get counts before deletion
-        cursor.execute("SELECT COUNT(*) FROM game_details_cache")
-        game_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM wishlist_cache")
-        wishlist_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM family_library_cache")
-        family_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM user_games_cache")
-        user_games_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM itad_price_cache")
-        itad_count = cursor.fetchone()[0]
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM game_details_cache")
+            game_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM wishlist_cache")
+            wishlist_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM family_library_cache")
+            family_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM user_games_cache")
+            user_games_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM itad_price_cache")
+            itad_count = cursor.fetchone()[0]
+        finally:
+            conn.close()
 
         total_count = (
             game_count + wishlist_count + family_count + user_games_count + itad_count
@@ -557,7 +573,7 @@ def purge_all_cache() -> None:
             print("✅ All caches are already empty.")
             return
 
-        # Step 2: Show breakdown and confirm deletion (no connection held)
+        # Step 2: Confirm deletion (no connection held)
         print("⚠️  Found cached data:")
         print(f"   - Game details: {game_count} entries")
         print(f"   - Wishlist: {wishlist_count} entries")
@@ -574,14 +590,14 @@ def purge_all_cache() -> None:
 
         if confirm in ["y", "yes"]:
             # Step 3: Open write connection only after confirmation
-            with get_write_connection() as write_conn:
-                cursor = write_conn.cursor()
+            with get_write_connection() as conn:
+                cursor = conn.cursor()
                 cursor.execute("DELETE FROM game_details_cache")
                 cursor.execute("DELETE FROM wishlist_cache")
                 cursor.execute("DELETE FROM family_library_cache")
                 cursor.execute("DELETE FROM user_games_cache")
                 cursor.execute("DELETE FROM itad_price_cache")
-                write_conn.commit()
+                conn.commit()
 
             print(f"✅ All cache purge complete! Deleted {total_count} total entries.")
             print("\n🔄 Next steps:")

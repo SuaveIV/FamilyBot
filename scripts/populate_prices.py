@@ -18,6 +18,7 @@ import os
 import random
 import sys
 import asyncio
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -846,7 +847,7 @@ class PricePopulator:
                     desc="Steam Fallback",
                     unit="game",
                 ):
-                    app_id, success, game_data, source = await task
+                    app_id, success, game_data, _source = await task
                     if success and game_data:
                         entry = self._extract_steam_fallback_entry(game_data)
                         if entry:
@@ -854,7 +855,7 @@ class PricePopulator:
             else:
                 completed = 0
                 for coro in asyncio.as_completed(tasks):
-                    app_id, success, game_data, source = await coro
+                    app_id, success, game_data, _source = await coro
                     if success and game_data:
                         entry = self._extract_steam_fallback_entry(game_data)
                         if entry:
@@ -1057,9 +1058,6 @@ async def main():
         print("   Adaptive rate limiting prevents API throttling")
 
     return 0
-
-
-import time  # noqa: E402 - needed for adaptive_rate_limit
 
 
 if __name__ == "__main__":

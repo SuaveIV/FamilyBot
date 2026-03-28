@@ -596,7 +596,7 @@ class DatabasePopulator:
                         user_skipped += 1
                         games_progress_iterator_tqdm.update(1)
                         games_progress_iterator_tqdm.set_postfix_str(
-                            f"Cached: {user_cached}, Skipped: {user_skipped}"
+                            f"Cached: {user_cached}, Skipped: {user_skipped} "
                         )
                     return None
 
@@ -608,7 +608,7 @@ class DatabasePopulator:
                         user_skipped += 1
                         games_progress_iterator_tqdm.update(1)
                         games_progress_iterator_tqdm.set_postfix_str(
-                            f"Cached: {user_cached}, Skipped: {user_skipped}"
+                            f"Cached: {user_cached}, Skipped: {user_skipped} "
                         )
                     return None
 
@@ -618,7 +618,7 @@ class DatabasePopulator:
                         user_skipped += 1
                         games_progress_iterator_tqdm.update(1)
                         games_progress_iterator_tqdm.set_postfix_str(
-                            f"Cached: {user_cached}, Skipped: {user_skipped}"
+                            f"Cached: {user_cached}, Skipped: {user_skipped} "
                         )
                     return None
 
@@ -627,7 +627,7 @@ class DatabasePopulator:
                     total_cached += 1
                     games_progress_iterator_tqdm.update(1)
                     games_progress_iterator_tqdm.set_postfix_str(
-                        f"Cached: {user_cached}, Skipped: {user_skipped}"
+                        f"Cached: {user_cached}, Skipped: {user_skipped} "
                     )
                 return (app_id, game_data)
             except (
@@ -643,7 +643,7 @@ class DatabasePopulator:
                     user_skipped += 1
                     games_progress_iterator_tqdm.update(1)
                     games_progress_iterator_tqdm.set_postfix_str(
-                        f"Cached: {user_cached}, Skipped: {user_skipped}"
+                        f"Cached: {user_cached}, Skipped: {user_skipped} "
                     )
                 return None
 
@@ -673,7 +673,7 @@ class DatabasePopulator:
             )
             games_progress_iterator_tqdm.update(1)
             games_progress_iterator_tqdm.set_postfix_str(
-                f"Cached: {user_cached}, Skipped: {user_skipped}"
+                f"Cached: {user_cached}, Skipped: {user_skipped} "
             )
             games_progress_iterator_tqdm.close()
 
@@ -731,7 +731,7 @@ class DatabasePopulator:
             # Progress update every batch
             processed = min(i + batch_size, len(games_to_fetch))
             print(
-                f"   📈 Progress: {processed}/{len(games_to_fetch)} | Cached: {user_cached}"
+                f"   📈 Progress: {processed}/{len(games_to_fetch)} | Cached: {user_cached} "
             )
 
         return total_cached
@@ -863,7 +863,7 @@ class DatabasePopulator:
                 def pbar_update(size: int, failed_count: int):
                     pbar.update(size)
                     pbar.set_postfix_str(
-                        f"Mapped: {len(new_mappings)}, Failed: {failed_count}"
+                        f"Mapped: {len(new_mappings)}, Failed: {failed_count} "
                     )
 
                 for i in range(0, len(uncached), chunk_size):
