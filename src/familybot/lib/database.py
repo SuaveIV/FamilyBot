@@ -22,6 +22,27 @@ _local = threading.local()
 _write_lock = threading.Lock()
 
 
+def _create_conn():
+    """Create a new SQLite connection with standard settings."""
+    try:
+        conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        result = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        if not result or result[0].lower() != "wal":
+            result_val = result[0] if result else None
+            logger.critical(
+                "Failed to set WAL mode: PRAGMA journal_mode=WAL returned %r",
+                result_val,
+            )
+            raise RuntimeError(
+                f"Database WAL mode not enabled: PRAGMA returned {result_val!r}"
+            )
+        return conn
+    except sqlite3.Error as e:
+        logger.critical(f"Database connection error: {e}")
+        raise
+
+
 def get_db_connection():
     """Returns a thread-local SQLite connection, creating one if needed.
 
@@ -29,28 +50,14 @@ def get_db_connection():
     Writes are serialized via _write_lock to prevent concurrent write corruption.
     """
     if not hasattr(_local, "conn") or _local.conn is None:
-        try:
-            conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            _local.conn = conn
-        except sqlite3.Error as e:
-            logger.critical(f"Database connection error: {e}")
-            raise
+        _local.conn = _create_conn()
     else:
         # Check if the existing connection is still usable (not closed)
         try:
             _local.conn.execute("SELECT 1")
         except sqlite3.ProgrammingError:
             # Connection was closed, create a new one
-            try:
-                conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-                conn.row_factory = sqlite3.Row
-                conn.execute("PRAGMA journal_mode=WAL")
-                _local.conn = conn
-            except sqlite3.Error as e:
-                logger.critical(f"Database connection error: {e}")
-                raise
+            _local.conn = _create_conn()
     return _local.conn
 
 
@@ -184,10 +191,28 @@ def _create_tables(cursor: sqlite3.Cursor):
             expires_at TEXT,
             permanent BOOLEAN DEFAULT 1,
             lookup_method TEXT DEFAULT 'appid',
-            steam_game_name TEXT
+            steam_game_name TEXT,
+            current_price TEXT,
+            current_price_formatted TEXT,
+            discount_percent INTEGER DEFAULT 0,
+            original_price TEXT,
+            is_family_shared BOOLEAN DEFAULT 0
         )
     """)
     logger.info("Database: 'itad_price_cache' table checked/created.")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS steam_itad_mapping (
+            appid TEXT PRIMARY KEY,
+            itad_id TEXT NOT NULL,
+            mapped_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+        )
+    """)
+    # Add index for fast reverse lookups on itad_id
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_steam_itad_mapping_itad_id ON steam_itad_mapping(itad_id)
+    """)
+    logger.info("Database: 'steam_itad_mapping' table checked/created and indexed.")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS migrations (
@@ -226,6 +251,11 @@ def _run_column_migrations(cursor: sqlite3.Cursor):
             "'appid'",
         ),
         ("itad_price_cache", "steam_game_name", "TEXT", None),
+        ("itad_price_cache", "current_price", "TEXT", None),
+        ("itad_price_cache", "current_price_formatted", "TEXT", None),
+        ("itad_price_cache", "discount_percent", "INTEGER DEFAULT 0", "0"),
+        ("itad_price_cache", "original_price", "TEXT", None),
+        ("itad_price_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
     ]
 
     for table, column, definition, update_val in COLUMN_MIGRATIONS:
@@ -262,6 +292,7 @@ def init_db():
             conn.commit()  # Final commit
     except sqlite3.Error as e:
         logger.critical(f"Database initialization error: {e}")
+        raise RuntimeError("Database initialization failed") from e
 
 
 # === CACHE HELPER FUNCTIONS ===
@@ -277,6 +308,7 @@ def cleanup_expired_cache():
                 "game_details_cache",
                 "user_games_cache",
                 "wishlist_cache",
+                "discord_users_cache",
                 "family_library_cache",
                 "itad_price_cache",
             ]

@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import re
 from datetime import datetime
 
 from familybot.config import ADMIN_DISCORD_ID
@@ -12,10 +13,36 @@ from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
-from familybot.lib.itad_service import get_lowest_price
+from familybot.lib.itad_price_repository import get_cached_itad_price
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 from familybot.lib.steam_api_manager import SteamAPIManager
+
+
+def parse_price_string(price: str) -> float | None:
+    """Parse a price string (e.g., "$1,234.56", "€9,99") to a float. Returns None on error or N/A."""
+    if not price or price == "N/A":
+        return None
+
+    # Remove currency symbols and grouping, handle both "." and "," as decimal/grouping
+    price_clean = re.sub(r"[^\d.,]", "", price)
+    # If both . and , exist, assume . is decimal, , is grouping
+    if "." in price_clean and "," in price_clean:
+        if price_clean.rfind(".") > price_clean.rfind(","):
+            price_clean = price_clean.replace(",", "")
+        else:
+            price_clean = price_clean.replace(".", "").replace(",", ".")
+    # If only , exists, treat as decimal if at end (e.g., "9,99")
+    elif "," in price_clean and "." not in price_clean:
+        if price_clean.count(",") == 1 and len(price_clean.split(",")[-1]) <= 2:
+            price_clean = price_clean.replace(",", ".")
+        else:
+            price_clean = price_clean.replace(",", "")
+    try:
+        return float(price_clean)
+    except (ValueError, TypeError):
+        return None
+
 
 logger = get_logger(__name__)
 
@@ -92,48 +119,80 @@ async def process_game_deal(
 ) -> dict | None:
     """
     Process a game to check for deals.
+    Prefers ITAD cached data when available, falls back to Steam API.
     Returns a dict with deal info if found, else None.
     """
     try:
-        game_data = await fetch_game_details(app_id, steam_api_manager, session=session)
-        if not game_data:
-            return None
+        game_name = f"Unknown Game ({app_id})"
+        discount_percent = 0
+        current_price = "N/A"
+        original_price = "N/A"
+        lowest_price = "N/A"
+        lowest_price_num = None
+        price_source = "none"
 
-        # Check family sharing if required
-        if require_family_shared and not game_data.get("is_family_shared", False):
-            return None
+        # Try ITAD cache first — it has current price, discount, and historical low
+        itad_cache = await asyncio.to_thread(get_cached_itad_price, app_id)
 
-        game_name = game_data.get("name", f"Unknown Game ({app_id})")
-        # Handle fresh API data and cached data (normalized)
-        price_overview = game_data.get("price_overview")
+        # Enforce family sharing requirement if needed
+        # Note: We don't null out itad_cache here, so downstream code can still
+        # read ITAD historical_low even when family sharing is not confirmed.
+        # Instead we track the family_shared flag separately for the Steam fallback path.
+        itad_family_shared = True
+        if require_family_shared and itad_cache:
+            is_family_shared = itad_cache.get("is_family_shared")
+            if not bool(is_family_shared):
+                # Flag is missing, False, or invalid — mark as not confirmed
+                itad_family_shared = False
 
-        if not price_overview:
-            return None
+        if itad_cache and itad_cache.get("current_price"):
+            # Check family sharing requirement before using ITAD data
+            if require_family_shared and not itad_family_shared:
+                return None
 
-        # Check if game is on sale
-        discount_percent = price_overview.get("discount_percent", 0)
-        current_price = price_overview.get("final_formatted", "N/A")
-        original_price = price_overview.get("initial_formatted", current_price)
+            game_name = itad_cache.get("steam_game_name") or game_name
+            discount_percent = itad_cache.get("discount_percent", 0)
+            current_price = itad_cache.get("current_price_formatted", "N/A")
+            original_price = itad_cache.get("original_price", "N/A")
+            lowest_price = itad_cache.get("lowest_price_formatted") or itad_cache.get(
+                "lowest_price", "N/A"
+            )
+            price_source = "itad"
+
+            # Parse lowest_price for numeric comparison
+            lowest_price_num = parse_price_string(lowest_price)
+        else:
+            # Fallback: fetch from Steam Store API
+            game_data = await fetch_game_details(
+                app_id, steam_api_manager, session=session
+            )
+            if not game_data:
+                return None
+
+            # Check family sharing if required
+            if require_family_shared and not game_data.get("is_family_shared", False):
+                return None
+
+            game_name = game_data.get("name", game_name)
+            price_overview = game_data.get("price_overview")
+            if not price_overview:
+                return None
+
+            discount_percent = price_overview.get("discount_percent", 0)
+            current_price = price_overview.get("final_formatted", "N/A")
+            original_price = price_overview.get("initial_formatted", current_price)
+            price_source = "steam"
+
+            # Get historical low from ITAD cache (even if no current price data)
+            if itad_cache:
+                lowest_price = itad_cache.get(
+                    "lowest_price_formatted"
+                ) or itad_cache.get("lowest_price", "N/A")
+                lowest_price_num = parse_price_string(lowest_price)
 
         # Early exit if the discount doesn't meet minimum thresholds
         if discount_percent < min(low_discount_threshold, high_discount_threshold):
             return None
-
-        # Get historical low price
-        lowest_price_raw = await asyncio.to_thread(get_lowest_price, int(app_id))
-        lowest_price = lowest_price_raw
-
-        # Sanitize lowest_price to a numeric value for comparison
-        lowest_price_num = None
-        if lowest_price_raw != "N/A":
-            try:
-                # Strip currency symbols and commas
-                clean_price = lowest_price_raw.replace("$", "").replace(",", "").strip()
-                lowest_price_num = float(clean_price)
-            except (ValueError, TypeError):
-                logger.warning(
-                    f"Could not parse lowest_price '{lowest_price_raw}' for AppID {app_id}"
-                )
 
         # Determine if this is a good deal
         is_good_deal = False
@@ -145,19 +204,18 @@ async def process_game_deal(
         elif (
             discount_percent >= low_discount_threshold and lowest_price_num is not None
         ):
-            # Check if current price is close to historical low
-            try:
-                current_price_num = float(price_overview.get("final", 0)) / 100
-                if current_price_num <= lowest_price_num * historical_low_buffer:
-                    is_good_deal = True
-                    if historical_low_buffer > 1.1:
-                        deal_reason = (
-                            f"💎 **Near Historical Low** ({discount_percent}% off)"
-                        )
-                    else:
-                        deal_reason = f"💎 **Historical Low** ({discount_percent}% off)"
-            except (ValueError, TypeError):
-                pass
+            current_price_num = parse_price_string(current_price)
+            if (
+                current_price_num is not None
+                and current_price_num <= lowest_price_num * historical_low_buffer
+            ):
+                is_good_deal = True
+                if historical_low_buffer > 1.1:
+                    deal_reason = (
+                        f"💎 **Near Historical Low** ({discount_percent}% off)"
+                    )
+                else:
+                    deal_reason = f"💎 **Historical Low** ({discount_percent}% off)"
 
         if is_good_deal:
             return {
@@ -168,6 +226,7 @@ async def process_game_deal(
                 "discount_percent": discount_percent,
                 "lowest_price": lowest_price,
                 "deal_reason": deal_reason,
+                "price_source": price_source,
             }
 
     except Exception as e:
