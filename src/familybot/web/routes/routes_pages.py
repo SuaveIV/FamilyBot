@@ -49,3 +49,10 @@ async def admin_page(request: Request):
     return templates.TemplateResponse(
         "admin.html", {"request": request, "active_page": "admin"}
     )
+
+
+@router.get("/common-games", response_class=HTMLResponse)
+async def common_games_page(request: Request):
+    return templates.TemplateResponse(
+        "common_games.html", {"request": request, "active_page": "common-games"}
+    )

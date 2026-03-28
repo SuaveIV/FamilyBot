@@ -21,6 +21,7 @@ from familybot.config import WEB_UI_HOST, WEB_UI_PORT
 from familybot.lib.logging_config import setup_web_logging
 from familybot.web.routes import routes_admin as route_admin
 from familybot.web.routes import routes_cache as route_cache
+from familybot.web.routes import routes_common_games as route_common_games
 from familybot.web.routes import routes_config as route_config
 from familybot.web.routes import routes_games as route_games
 from familybot.web.routes import routes_logs as route_logs
@@ -66,6 +67,7 @@ app.include_router(route_status.router)
 app.include_router(route_cache.router)
 app.include_router(route_games.router)
 app.include_router(route_wishlist.router)
+app.include_router(route_common_games.router)
 app.include_router(route_config.router)
 app.include_router(route_admin.router)
 app.include_router(route_logs.router)
