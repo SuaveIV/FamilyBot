@@ -184,6 +184,11 @@ check-db:
     @echo "🩺 Checking database integrity..."
     mise exec -- uv run python scripts/check_db_integrity.py
 
+# Fix missing or 'Unknown' game names in price cache
+fix-missing-info:
+    @echo "🔧 Fixing missing game names in price cache..."
+    mise exec -- uv run python scripts/fix_missing_info.py
+
 # Debug deals detection logic
 debug-deals:
     @echo "🔍 Debugging deals detection..."

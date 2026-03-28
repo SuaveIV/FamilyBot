@@ -676,6 +676,12 @@ class PricePopulator:
                         lookup_method = price_info["method"]
                         game_name = price_info.get("game_name")
 
+                        # If name is missing, try to get it from local cache
+                        if not game_name:
+                            cached_details = get_cached_game_details(app_id)
+                            if cached_details:
+                                game_name = cached_details.get("name")
+
                         cache_itad_price_enhanced(
                             app_id,
                             price_data,
@@ -698,6 +704,12 @@ class PricePopulator:
                             price_data = price_info["data"]
                             lookup_method = price_info["method"]
                             game_name = price_info.get("game_name")
+
+                            # If name is missing, try to get it from local cache
+                            if not game_name:
+                                cached_details = get_cached_game_details(app_id)
+                                if cached_details:
+                                    game_name = cached_details.get("name")
 
                             cache_itad_price_enhanced(
                                 app_id,

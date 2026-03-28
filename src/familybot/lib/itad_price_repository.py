@@ -84,6 +84,15 @@ def _do_cache_itad_price(
     if current_price_formatted is None:
         current_price_formatted = price_data.get("steam_current_price_formatted")
 
+    # Preserve existing name if not provided
+    if steam_game_name is None:
+        cursor.execute(
+            "SELECT steam_game_name FROM itad_price_cache WHERE appid = ?", (appid,)
+        )
+        existing_row = cursor.fetchone()
+        if existing_row:
+            steam_game_name = existing_row["steam_game_name"]
+
     cursor.execute(
         """
         INSERT OR REPLACE INTO itad_price_cache

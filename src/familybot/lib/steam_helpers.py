@@ -194,6 +194,15 @@ async def process_game_deal(
         if discount_percent < min(low_discount_threshold, high_discount_threshold):
             return None
 
+        # Fallback for game name if ITAD didn't provide it (e.g. bulk ITAD data)
+        # We check both the local cache and Steam API via fetch_game_details
+        if game_name.startswith("Unknown Game"):
+            game_data = await fetch_game_details(
+                app_id, steam_api_manager, session=session
+            )
+            if game_data and game_data.get("name"):
+                game_name = game_data["name"]
+
         # Determine if this is a good deal
         is_good_deal = False
         deal_reason = ""
