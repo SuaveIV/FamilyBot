@@ -820,15 +820,14 @@ class DatabasePopulator:
 
         # Collect all known app IDs from the database
         conn = get_db_connection()
+        cursor = None
         try:
             cursor = conn.cursor()
-            try:
-                cursor.execute("SELECT appid FROM game_details_cache")
-                all_appids = [row["appid"] for row in cursor.fetchall()]
-            finally:
-                cursor.close()
+            cursor.execute("SELECT appid FROM game_details_cache")
+            all_appids = [row["appid"] for row in cursor.fetchall()]
         finally:
-            conn.close()
+            if cursor:
+                cursor.close()
 
         if not all_appids:
             print("   ⚠️  No games found in database")

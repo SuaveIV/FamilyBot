@@ -75,6 +75,11 @@ def _do_cache_itad_price(
         expires_at_str = expires_at.isoformat().replace("+00:00", "Z")
         permanent_val = 0
 
+    # Map steam_current_price fields to current_price if present
+    # This allows populate_prices.py to inject Steam fallback prices
+    current_price = price_data.get("steam_current_price") or price_data.get("current_price")
+    current_price_formatted = price_data.get("steam_current_price_formatted") or price_data.get("current_price_formatted")
+
     cursor.execute(
         """
         INSERT OR REPLACE INTO itad_price_cache
@@ -90,8 +95,8 @@ def _do_cache_itad_price(
             price_data.get("shop_name"),
             lookup_method,
             steam_game_name,
-            price_data.get("current_price"),
-            price_data.get("current_price_formatted"),
+            current_price,
+            current_price_formatted,
             price_data.get("discount_percent") or 0,
             price_data.get("original_price"),
             price_data.get("is_family_shared"),

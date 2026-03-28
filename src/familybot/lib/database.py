@@ -191,7 +191,12 @@ def _create_tables(cursor: sqlite3.Cursor):
             expires_at TEXT,
             permanent BOOLEAN DEFAULT 1,
             lookup_method TEXT DEFAULT 'appid',
-            steam_game_name TEXT
+            steam_game_name TEXT,
+            current_price TEXT,
+            current_price_formatted TEXT,
+            discount_percent INTEGER DEFAULT 0,
+            original_price TEXT,
+            is_family_shared BOOLEAN DEFAULT 0
         )
     """)
     logger.info("Database: 'itad_price_cache' table checked/created.")
@@ -246,6 +251,11 @@ def _run_column_migrations(cursor: sqlite3.Cursor):
             "'appid'",
         ),
         ("itad_price_cache", "steam_game_name", "TEXT", None),
+        ("itad_price_cache", "current_price", "TEXT", None),
+        ("itad_price_cache", "current_price_formatted", "TEXT", None),
+        ("itad_price_cache", "discount_percent", "INTEGER DEFAULT 0", "0"),
+        ("itad_price_cache", "original_price", "TEXT", None),
+        ("itad_price_cache", "is_family_shared", "BOOLEAN DEFAULT 0", "0"),
     ]
 
     for table, column, definition, update_val in COLUMN_MIGRATIONS:

@@ -327,11 +327,12 @@ async def on_disconnect():
 # --- Command Line Utilities ---
 def purge_game_cache() -> None:
     """Purge the game details cache from command line."""
-    conn = get_db_connection()
+    # Use read connection for counts (no write lock held during input())
+    # Then use write connection only after user confirmation
     try:
+        # Step 1: Query count with a read connection (no write lock)
+        conn = get_db_connection()
         cursor = conn.cursor()
-
-        # Get count before deletion
         cursor.execute("SELECT COUNT(*) FROM game_details_cache")
         cache_count = cursor.fetchone()[0]
 
@@ -339,7 +340,7 @@ def purge_game_cache() -> None:
             print("✅ Game details cache is already empty.")
             return
 
-        # Confirm deletion
+        # Step 2: Confirm deletion (no connection held)
         print(f"⚠️  Found {cache_count} cached game entries.")
         confirm = (
             input("Are you sure you want to purge all game details cache? (y/N): ")
@@ -348,9 +349,11 @@ def purge_game_cache() -> None:
         )
 
         if confirm in ["y", "yes"]:
-            # Clear the game details cache
-            cursor.execute("DELETE FROM game_details_cache")
-            conn.commit()
+            # Step 3: Open write connection only after confirmation
+            with get_write_connection() as write_conn:
+                cursor = write_conn.cursor()
+                cursor.execute("DELETE FROM game_details_cache")
+                write_conn.commit()
 
             print(
                 f"✅ Cache purge complete! Deleted {cache_count} cached game entries."
@@ -365,24 +368,21 @@ def purge_game_cache() -> None:
             print("❌ Cache purge cancelled.")
     except sqlite3.Error as e:
         print(f"❌ Error purging cache: {e}")
-        logger.error("Error purging cache from command line: %s", e, exc_info=True)
+        logger.exception("Error purging cache from command line: %s", e)
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging cache: {e}")
-        logger.error(
-            "Unexpected error purging cache from command line: %s", e, exc_info=True
-        )
-    finally:
-        conn.close()
+        logger.exception("Unexpected error purging cache from command line: %s", e)
 
 
 def purge_wishlist_cache() -> None:
     """Purge the wishlist cache from command line."""
-    conn = get_db_connection()
+    # Use read connection for counts (no write lock held during input())
+    # Then use write connection only after user confirmation
     try:
+        # Step 1: Query counts with a read connection (no write lock)
+        conn = get_db_connection()
         cursor = conn.cursor()
-
-        # Get count before deletion
         cursor.execute("SELECT COUNT(DISTINCT steam_id) FROM wishlist_cache")
         user_count = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM wishlist_cache")
@@ -392,7 +392,7 @@ def purge_wishlist_cache() -> None:
             print("✅ Wishlist cache is already empty.")
             return
 
-        # Confirm deletion
+        # Step 2: Confirm deletion (no connection held)
         print(
             f"⚠️  Found {total_count} cached wishlist entries from {user_count} users."
         )
@@ -403,9 +403,11 @@ def purge_wishlist_cache() -> None:
         )
 
         if confirm in ["y", "yes"]:
-            # Clear the wishlist cache
-            cursor.execute("DELETE FROM wishlist_cache")
-            conn.commit()
+            # Step 3: Open write connection only after confirmation
+            with get_write_connection() as write_conn:
+                cursor = write_conn.cursor()
+                cursor.execute("DELETE FROM wishlist_cache")
+                write_conn.commit()
 
             print(
                 f"✅ Wishlist cache purge complete! Deleted {total_count} entries from {user_count} users."
@@ -419,28 +421,21 @@ def purge_wishlist_cache() -> None:
             print("❌ Wishlist cache cancelled.")
     except sqlite3.Error as e:
         print(f"❌ Error purging wishlist cache: {e}")
-        logger.error(
-            "Error purging wishlist cache from command line: %s", e, exc_info=True
-        )
+        logger.exception("Error purging wishlist cache from command line: %s", e)
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging wishlist cache: {e}")
-        logger.error(
-            "Unexpected error purging wishlist cache from command line: %s",
-            e,
-            exc_info=True,
-        )
-    finally:
-        conn.close()
+        logger.exception("Unexpected error purging wishlist cache from command line: %s", e)
 
 
 def purge_family_library_cache_cli() -> None:
     """Purge the family library cache from command line."""
-    conn = get_db_connection()
+    # Use read connection for counts (no write lock held during input())
+    # Then use write connection only after user confirmation
     try:
+        # Step 1: Query count with a read connection (no write lock)
+        conn = get_db_connection()
         cursor = conn.cursor()
-
-        # Get count before deletion
         cursor.execute("SELECT COUNT(*) FROM family_library_cache")
         cache_count = cursor.fetchone()[0]
 
@@ -448,7 +443,7 @@ def purge_family_library_cache_cli() -> None:
             print("✅ Family library cache is already empty.")
             return
 
-        # Confirm deletion
+        # Step 2: Confirm deletion (no connection held)
         print(f"⚠️  Found {cache_count} cached family library entries.")
         confirm = (
             input("Are you sure you want to purge family library cache? (y/N): ")
@@ -457,8 +452,8 @@ def purge_family_library_cache_cli() -> None:
         )
 
         if confirm in ["y", "yes"]:
-            purge_family_library_cache()  # Call the function from the repository
-            conn.commit()
+            # Step 3: Call the repository function which handles its own write connection
+            purge_family_library_cache()
 
             print(
                 f"✅ Family library cache purge complete! Deleted {cache_count} entries."
@@ -470,19 +465,11 @@ def purge_family_library_cache_cli() -> None:
             print("❌ Family library cache cancelled.")
     except sqlite3.Error as e:
         print(f"❌ Error purging family library cache: {e}")
-        logger.error(
-            "Error purging family library cache from command line: %s", e, exc_info=True
-        )
+        logger.exception("Error purging family library cache from command line: %s", e)
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging family library cache: {e}")
-        logger.error(
-            "Unexpected error purging family library cache from command line: %s",
-            e,
-            exc_info=True,
-        )
-    finally:
-        conn.close()
+        logger.exception("Unexpected error purging family library cache from command line: %s", e)
 
 
 def purge_prices_cache() -> None:
@@ -534,23 +521,20 @@ def purge_prices_cache() -> None:
             print("❌ Price cache purge cancelled.")
     except sqlite3.Error as e:
         print(f"❌ Error purging price cache: {e}")
-        logger.error(
-            "Error purging price cache from command line: %s", e, exc_info=True
-        )
+        logger.exception("Error purging price cache from command line: %s", e)
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors
         print(f"❌ Unexpected error purging price cache: {e}")
-        logger.error(
-            "Unexpected error purging price cache from command line: %s",
-            e,
-            exc_info=True,
-        )
+        logger.exception("Unexpected error purging price cache from command line: %s", e)
 
 
 def purge_all_cache() -> None:
     """Purge all cache data from command line."""
-    conn = get_db_connection()
+    # Use read connection for counts (no write lock held during input())
+    # Then use write connection only after user confirmation
     try:
+        # Step 1: Query counts with a read connection (no write lock)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Get counts before deletion
@@ -573,7 +557,7 @@ def purge_all_cache() -> None:
             print("✅ All caches are already empty.")
             return
 
-        # Show breakdown
+        # Step 2: Show breakdown and confirm deletion (no connection held)
         print("⚠️  Found cached data:")
         print(f"   - Game details: {game_count} entries")
         print(f"   - Wishlist: {wishlist_count} entries")
@@ -589,13 +573,15 @@ def purge_all_cache() -> None:
         )
 
         if confirm in ["y", "yes"]:
-            # Clear all caches
-            cursor.execute("DELETE FROM game_details_cache")
-            cursor.execute("DELETE FROM wishlist_cache")
-            cursor.execute("DELETE FROM family_library_cache")
-            cursor.execute("DELETE FROM user_games_cache")
-            cursor.execute("DELETE FROM itad_price_cache")
-            conn.commit()
+            # Step 3: Open write connection only after confirmation
+            with get_write_connection() as write_conn:
+                cursor = write_conn.cursor()
+                cursor.execute("DELETE FROM game_details_cache")
+                cursor.execute("DELETE FROM wishlist_cache")
+                cursor.execute("DELETE FROM family_library_cache")
+                cursor.execute("DELETE FROM user_games_cache")
+                cursor.execute("DELETE FROM itad_price_cache")
+                write_conn.commit()
 
             print(f"✅ All cache purge complete! Deleted {total_count} total entries.")
             print("\n🔄 Next steps:")
@@ -606,17 +592,13 @@ def purge_all_cache() -> None:
             print("❌ Cache purge cancelled.")
     except sqlite3.Error as e:
         print(f"❌ Error purging all cache: {e}")
-        logger.error("Error purging all cache from command line: %s", e, exc_info=True)
+        logger.exception("Error purging all cache from command line: %s", e)
     except Exception as e:  # pylint: disable=broad-except
         # General catch for unexpected errors in cache purging utility.
         # This is justified because this is a command-line tool and we want to ensure any unexpected error is reported to the user
         # without crashing the script, as this is a top-level utility function.
         print(f"❌ Unexpected error purging all cache: {e}")
-        logger.error(
-            "Unexpected error purging all cache from command line: %s", e, exc_info=True
-        )
-    finally:
-        conn.close()
+        logger.exception("Unexpected error purging all cache from command line: %s", e)
 
 
 def _parse_and_dispatch() -> None:
