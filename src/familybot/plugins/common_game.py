@@ -182,25 +182,151 @@ class common_games(Extension):
             if conn:
                 conn.close()
 
+    async def _resolve_steam_vanity_url(
+        self, vanity_url: str, session: aiohttp.ClientSession | None = None
+    ) -> str | None:
+        """Resolve a Steam vanity URL (custom name) to a Steam ID.
+
+        Args:
+            vanity_url: The vanity URL name (e.g., "GabeNewell" from steamcommunity.com/id/GabeNewell)
+            session: Optional aiohttp.ClientSession to reuse. If None, a new session is created.
+
+        Returns:
+            The Steam ID (SteamID64) if found, None otherwise.
+        """
+        if (
+            not STEAMWORKS_API_KEY
+            or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE"
+        ):
+            return None
+
+        url = "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/"
+        params = {
+            "key": STEAMWORKS_API_KEY,
+            "vanityurl": vanity_url,
+        }
+
+        async def _do_resolve(s: aiohttp.ClientSession) -> str | None:
+            try:
+                async with s.get(
+                    url, params=params, timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status != 200:
+                        return None
+                    data = await response.json()
+                    result = data.get("response", {})
+                    if result.get("success") == 1:
+                        return result.get("steamid")
+            except Exception as e:
+                logger.debug(f"Failed to resolve vanity URL '{vanity_url}': {e}")
+            return None
+
+        if session is not None:
+            return await _do_resolve(session)
+        else:
+            async with aiohttp.ClientSession() as new_session:
+                return await _do_resolve(new_session)
+
     """
-    [help]|!common_games|get the multiplayer games that the given person have in common and send the result in dm| !common_games @user1 @user2 ... | the users put in the command needs to be registered before. ***This command can be used in bot DM***
+    [help]|!common_games|get the multiplayer games that the given person have in common| !common_games user1 user2 ... | Accepts Discord IDs, @mentions, Steam IDs, Steam profile names, or Discord usernames in quotes (e.g., "Username"). The users need to be registered before. ***This command can be used in bot DM***
     """
 
     @prefixed_command(name="common_games")
     async def get_common_games(self, ctx: PrefixedContext, *args):
         target_discord_ids = [str(ctx.author_id)]
-        for arg in args:
-            if arg.startswith("<@") and arg.endswith(">"):
-                clean_id = arg.strip("<@!>")
-                if clean_id.isdigit() and clean_id not in target_discord_ids:
-                    target_discord_ids.append(clean_id)
-            else:
-                await ctx.send(
-                    "Please mention users using `@user` format. Example: `!common_games @user1 @user2`"
-                )
-                return
-
+        # Load registered users once to avoid repeated DB queries
         registered_users = await self._load_registered_users()
+
+        async with aiohttp.ClientSession() as session:
+            for arg in args:
+                # Handle quoted Discord names (e.g., "Username" or 'Display Name')
+                if (arg.startswith('"') and arg.endswith('"')) or (
+                    arg.startswith("'") and arg.endswith("'")
+                ):
+                    username = arg[1:-1]  # Strip quotes
+                    if not username:
+                        await ctx.send("Empty username in quotes.")
+                        return
+
+                    # Search guild members by username or display name
+                    found = False
+                    if ctx.guild is None:
+                        await ctx.send(
+                            "This command must be run in a server; username lookup is not available in DMs."
+                        )
+                        return
+                    for member in ctx.guild.members:
+                        if (
+                            member.username.lower() == username.lower()
+                            or member.display_name.lower() == username.lower()
+                        ):
+                            member_id = str(member.id)
+                            if member_id not in target_discord_ids:
+                                target_discord_ids.append(member_id)
+                            found = True
+                            break
+
+                    if not found:
+                        await ctx.send(
+                            f"Could not find a user with name '{username}' in this server."
+                        )
+                        return
+                # Handle mentions: <@123456> or <@!123456>
+                elif arg.startswith("<@") and arg.endswith(">"):
+                    clean_id = arg.strip("<@!>")
+                    if clean_id.isdigit() and clean_id not in target_discord_ids:
+                        target_discord_ids.append(clean_id)
+                # Handle plain numeric IDs (Discord or Steam IDs)
+                elif arg.isdigit() and len(arg) >= 17 and len(arg) <= 20:
+                    # Verify if arg is a registered Discord ID
+                    if arg in registered_users:
+                        if arg not in target_discord_ids:
+                            target_discord_ids.append(arg)
+                    else:
+                        # Check if arg is a registered Steam ID and map back to Discord ID
+                        found_discord_id = None
+                        for discord_id, steam_id in registered_users.items():
+                            if steam_id == arg:
+                                found_discord_id = discord_id
+                                break
+                        if found_discord_id is None:
+                            await ctx.send(
+                                f"'{arg}' could not be resolved; the user is not registered."
+                            )
+                            return
+                        elif found_discord_id not in target_discord_ids:
+                            target_discord_ids.append(found_discord_id)
+                        else:
+                            await ctx.send(
+                                f"User with Steam ID '{arg}' is already in the target list."
+                            )
+                # Handle Steam vanity URLs / profile names
+                else:
+                    # Try to resolve as Steam vanity URL
+                    steam_id = await self._resolve_steam_vanity_url(arg, session)
+                    if steam_id:
+                        # Find the Discord user registered with this Steam ID
+                        found_discord_id = None
+                        for discord_id, sid in registered_users.items():
+                            if sid == steam_id:
+                                found_discord_id = discord_id
+                                break
+                        if found_discord_id is None:
+                            await ctx.send(
+                                f"Steam profile '{arg}' was found, but no registered Discord user matches that Steam ID."
+                            )
+                            return
+                        elif found_discord_id not in target_discord_ids:
+                            target_discord_ids.append(found_discord_id)
+                        else:
+                            await ctx.send(
+                                f"User '{arg}' is already in the target list."
+                            )
+                    else:
+                        await ctx.send(
+                            f"Could not resolve '{arg}'. Please use a Discord ID, @mention, Steam ID (17-20 digits), or Steam profile name."
+                        )
+                        return
         steam_ids_to_check = []
         missing_discord_ids = []
 
@@ -211,11 +337,15 @@ class common_games(Extension):
                 missing_discord_ids.append(discord_id)
 
         if missing_discord_ids:
-            mentions = [f"<@{uid}>" for uid in missing_discord_ids]
-            await self.bot.send_dm(
-                ctx.author_id,
-                f"Not all users listed are registered. Please register them or use `!list_users` to see registered users. Missing: {', '.join(mentions)}",
-            )
+            try:
+                await ctx.author.send(
+                    f"Hey {ctx.author.display_name}, not all users listed are registered. Please register them or use `!list_users` to see registered users."
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send DM to {ctx.author_id}: {e}")
+                await ctx.send(
+                    f"Hey {ctx.author.display_name}, not all users listed are registered. Please register them or use `!list_users` to see registered users."
+                )
             return
 
         if (
@@ -225,10 +355,7 @@ class common_games(Extension):
             logger.error(
                 "STEAMWORKS_API_KEY is missing or is a placeholder. Cannot fetch Steam games."
             )
-            await self.bot.send_dm(
-                ctx.author_id,
-                "Steam API key is not configured. Please contact an admin.",
-            )
+            await ctx.send("Steam API key is not configured. Please contact an admin.")
             return
 
         game_lists = []
@@ -291,23 +418,20 @@ class common_games(Extension):
                     logger.error(
                         f"Request error fetching games for Steam ID {steam_id}: {e}"
                     )
-                    await self.bot.send_dm(
-                        ctx.author_id,
-                        f"Error fetching games for Steam ID {steam_id}. Steam API issue. Check logs.",
+                    await ctx.send(
+                        f"Error fetching games for Steam ID {steam_id}. Steam API issue. Check logs."
                     )
                 except json.JSONDecodeError:
                     logger.error(f"JSON decode error for Steam ID {steam_id}.")
-                    await self.bot.send_dm(
-                        ctx.author_id,
-                        f"Error processing Steam API response for Steam ID {steam_id}. Check logs.",
+                    await ctx.send(
+                        f"Error processing Steam API response for Steam ID {steam_id}. Check logs."
                     )
                 except KeyError as e:
                     logger.error(
                         f"Missing key in Steam API response for Steam ID {steam_id}: {e}. Response: {response_data if response_data is not None else '<no response>'}"
                     )
-                    await self.bot.send_dm(
-                        ctx.author_id,
-                        f"Unexpected response format from Steam API for Steam ID {steam_id}. Check logs.",
+                    await ctx.send(
+                        f"Unexpected response format from Steam API for Steam ID {steam_id}. Check logs."
                     )
                 except Exception as e:
                     logger.critical(
@@ -320,22 +444,18 @@ class common_games(Extension):
 
         if not game_lists or len(game_lists) < len(steam_ids_to_check):
             if len(steam_ids_to_check) > 1:
-                await self.bot.send_dm(
-                    ctx.author_id,
-                    "Could not retrieve game lists for all specified users. Some users might have private profiles or an API error occurred. Cannot find common games.",
+                await ctx.send(
+                    "Could not retrieve game lists for all specified users. Some users might have private profiles or an API error occurred. Cannot find common games."
                 )
             else:
-                await self.bot.send_dm(
-                    ctx.author_id,
-                    "Could not retrieve your game list. Your profile might be private or an API error occurred.",
+                await ctx.send(
+                    "Could not retrieve your game list. Your profile might be private or an API error occurred."
                 )
             return
 
         common_game_appids = get_common_elements_in_lists(game_lists)
         if not common_game_appids:
-            await self.bot.send_dm(
-                ctx.author_id, "No common games found among the specified users."
-            )
+            await ctx.send("No common games found among the specified users.")
             return
 
         header = "Common Multiplayer Games:\n"
@@ -423,17 +543,17 @@ class common_games(Extension):
             footer_template = "\n... and {count} more games!"
             final_message = truncate_message_list(game_entries, header, footer_template)
 
-        await self.bot.send_dm(ctx.author_id, final_message)
+        await ctx.send(final_message)
 
     """
-    [help]|!list_users|list the registered users|!list_users | the list of registered user will be sent to you in dm. ***This command can be used in bot DM***
+    [help]|!list_users|list the registered users|!list_users | the list of registered users will be shown in the channel where called. ***This command can be used in bot DM***
     """
 
     @prefixed_command(name="list_users")
     async def list_users(self, ctx: PrefixedContext):
         registered_users = await self._load_registered_users()
         if not registered_users:
-            await self.bot.send_dm(ctx.author_id, "No users are currently registered.")
+            await ctx.send("No users are currently registered.")
             return
 
         header = "Here are the users currently registered:\n"
@@ -462,7 +582,7 @@ class common_games(Extension):
         footer_template = "\n... and {count} more users!"
         final_message = truncate_message_list(user_entries, header, footer_template)
 
-        await self.bot.send_dm(ctx.author_id, final_message)
+        await ctx.send(final_message)
 
     @Task.create(IntervalTrigger(hours=6))
     async def cleanup_cache_task(self):
