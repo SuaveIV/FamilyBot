@@ -225,7 +225,7 @@ class DatabasePopulator:
             # Do not close the shared connection from get_db_connection()
         return written
 
-    async def get_fallback_game_info(self, app_id: str) -> Optional[dict]:
+    async def get_fallback_game_info(self, app_id: str) -> dict:
         """Get basic game info using multiple fallback strategies for games without store pages."""
         try:
             # Strategy 1: Try using the steam library for more comprehensive data
@@ -614,13 +614,16 @@ class DatabasePopulator:
 
                 game_data = game_info.get(str(app_id), {}).get("data")
                 if not game_data:
+                    # Try fallback for games no longer on the Steam store
+                    fallback_data = await self.get_fallback_game_info(app_id)
                     async with progress_lock:
-                        user_skipped += 1
+                        user_cached += 1
+                        total_cached += 1
                         games_progress_iterator_tqdm.update(1)
                         games_progress_iterator_tqdm.set_postfix_str(
                             f"Cached: {user_cached}, Skipped: {user_skipped} "
                         )
-                    return None
+                    return (app_id, fallback_data)
 
                 async with progress_lock:
                     user_cached += 1
@@ -702,7 +705,12 @@ class DatabasePopulator:
 
                 game_data = game_info.get(str(app_id), {}).get("data")
                 if not game_data:
-                    return False
+                    # Try fallback for games no longer on the Steam store
+                    fallback_data = await self.get_fallback_game_info(app_id)
+                    cache_game_details(app_id, fallback_data, permanent=False)
+                    user_cached += 1
+                    total_cached += 1
+                    return True
 
                 cache_game_details(app_id, game_data, permanent=False)
                 user_cached += 1
@@ -903,10 +911,9 @@ class DatabasePopulator:
                     if game_data:
                         return (app_id, game_data)
 
-                    # Fallback
+                    # Fallback - get_fallback_game_info always returns a dict
                     fallback_data = await self.get_fallback_game_info(app_id)
-                    if fallback_data:
-                        return (app_id, fallback_data)
+                    return (app_id, fallback_data)
             return None
         except Exception as e:
             logger.warning("Error processing game %s: %s", app_id, e)

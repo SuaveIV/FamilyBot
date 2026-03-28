@@ -69,6 +69,12 @@ class PricePopulator:
 
     def _extract_steam_fallback_entry(self, game_data: dict) -> dict | None:
         """Extracts a Steam fallback entry in ITAD-style format from game_data."""
+        if game_data.get("lowest_price_formatted") == "Delisted/Unavailable":
+            return {
+                "data": game_data,
+                "method": "steam_delisted",
+                "game_name": game_data.get("game_name"),
+            }
         price_overview = game_data.get("price_overview")
         is_free = game_data.get("is_free", False)
         if not price_overview and not is_free:
@@ -331,6 +337,16 @@ class PricePopulator:
         """Fetch Steam price for a single game via Store API."""
         async with self.semaphore:
             try:
+                # Look up cached game details to get the real game name
+                # Run blocking DB lookup off the event loop
+                loop = asyncio.get_running_loop()
+                cached_game = await loop.run_in_executor(
+                    None, get_cached_game_details, app_id
+                )
+                cached_game_name = (
+                    cached_game.get("name") if cached_game else f"App {app_id}"
+                )
+
                 game_url = "https://store.steampowered.com/api/appdetails"
                 response = await self.make_request_with_retry(
                     game_url,
@@ -343,8 +359,22 @@ class PricePopulator:
                     game_info = self.handle_api_response(
                         f"Steam Store ({app_id})", response
                     )
-                    if game_info and game_info.get(str(app_id), {}).get("data"):
-                        return app_id, True, game_info[str(app_id)]["data"], "store_api"
+                    if game_info:
+                        app_data = game_info.get(str(app_id), {})
+                        if app_data.get("success") is False:
+                            return (
+                                app_id,
+                                True,
+                                {
+                                    "lowest_price": "N/A",
+                                    "lowest_price_formatted": "Delisted/Unavailable",
+                                    "shop_name": "N/A",
+                                    "game_name": cached_game_name,
+                                },
+                                "store_api",
+                            )
+                        if app_data.get("data"):
+                            return app_id, True, app_data["data"], "store_api"
             except Exception as e:
                 logger.debug("Steam Store API failed for %s: %s", app_id, e)
 
