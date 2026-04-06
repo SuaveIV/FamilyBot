@@ -1,5 +1,6 @@
 # Pre-commit configuration for FamilyBot
 # This replaces the bash-based git hooks with a more reliable Python-based solution
+# Includes supply chain security checks per https://pydevtools.com/blog/litellm-supply-chain-attack/
 
 repos:
   - repo: local
@@ -12,7 +13,22 @@ repos:
       #   types: [python]
       #   files: ^(src/|scripts/).*\.py$
       #   args: [--rcfile=.pylintrc, --fail-under=9.0]
-      
+
+      - id: ruff-security
+        name: Ruff Security Linting (S rules)
+        entry: uv run ruff check --select S
+        language: system
+        types: [python]
+        files: ^(src/|scripts/).*\.py$
+
+      - id: pip-audit
+        name: Pip-audit for known vulnerabilities
+        entry: uv run pip-audit -r requirements-hashes.txt
+        language: system
+        files: ^(pyproject\.toml|requirements.*\.txt)$
+        pass_filenames: false
+        always_run: true
+
       - id: version-bump
         name: Auto-bump version
         entry: uv run python scripts/bump_version.py patch
