@@ -78,8 +78,13 @@ class token_sender(Extension):
         """Extract Steam webapi_token using Camoufox."""
         logger.info("Starting token extraction using Camoufox...")
 
-        if BROWSER_PROFILE_PATH and os.path.exists(BROWSER_PROFILE_PATH):
-            logger.info(f"Using browser profile: {BROWSER_PROFILE_PATH}")
+        from pathlib import Path
+        resolved_profile_path = None
+        if BROWSER_PROFILE_PATH:
+            resolved_profile_path = Path(PROJECT_ROOT) / BROWSER_PROFILE_PATH if not os.path.isabs(BROWSER_PROFILE_PATH) else Path(BROWSER_PROFILE_PATH)
+
+        if resolved_profile_path and resolved_profile_path.exists():
+            logger.info(f"Using browser profile: {resolved_profile_path}")
             camoufox_kwargs = {
                 "persistent_context": True,
                 "user_data_dir": BROWSER_PROFILE_PATH,

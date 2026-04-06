@@ -200,7 +200,7 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 ## License Compatibility
 
-FamilyBot is built using libraries compatible with permissive open-source usage (MIT, BSD-3-Clause, Apache-2.0, MPL-2.0, OFL-1.1, and Public Domain).
+FamilyBot is built using libraries with permissive open-source licenses (MIT, BSD-3-Clause, Apache-2.0, and Public Domain), the weak copyleft (file-level) MPL-2.0 license, and the font-specific OFL-1.1 license (which includes share-alike/copy-left terms).
 
 ## Acknowledgments
 

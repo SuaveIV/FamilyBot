@@ -13,6 +13,7 @@ setup:
     just create-venv
     just install-deps
     just node-deps
+    just update-camoufox
     just verify-setup
     @echo "✅ Setup complete! Run 'just run' to start the bot."
 

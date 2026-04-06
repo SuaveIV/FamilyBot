@@ -41,6 +41,7 @@ async def setup_browser_profile():
         )
 
         consecutive_errors = 0
+        setup_failed = False
         try:
             while True:
                 try:
@@ -60,13 +61,14 @@ async def setup_browser_profile():
                             print(
                                 f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
                             )
+                            setup_failed = True
                             break
                         await asyncio.sleep(3)  # Brief delay before retry
 
                 except asyncio.CancelledError:
                     # Task was cancelled, break the loop immediately
                     print("Browser check task was cancelled.")
-                    raise  # Re-raise to propagate cancellation
+                    break  # Replace raise with break
                 except Exception as e:
                     # Catch other unexpected errors, track and check retry limit
                     consecutive_errors += 1
@@ -75,13 +77,15 @@ async def setup_browser_profile():
                         print(
                             f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
                         )
+                        setup_failed = True
                         break
                     await asyncio.sleep(3)  # Brief delay before retry
 
         except KeyboardInterrupt:
             print("\nCtrl+C detected. Closing browser gracefully...")
 
-    print("✅ Browser closed successfully!")
+    if not setup_failed:
+        print("✅ Browser closed successfully!")
 
     # Verify PROFILE_PATH was created and is writable
     if not PROFILE_PATH.exists():

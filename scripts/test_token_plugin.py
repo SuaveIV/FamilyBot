@@ -78,7 +78,11 @@ class TokenTester:
         """Test the token extraction process."""
         print("\n🔍 Testing token extraction...")
 
-        if self.browser_profile_path and os.path.exists(self.browser_profile_path):
+        if self.browser_profile_path:
+            if not os.path.exists(self.browser_profile_path):
+                print(f"❌ Saved browser profile missing at: {self.browser_profile_path}")
+                print("   Please run test_browser_profile() or setup first.")
+                sys.exit(1)
             print(f"   Using browser profile: {self.browser_profile_path}")
             camoufox_kwargs = {
                 "persistent_context": True,

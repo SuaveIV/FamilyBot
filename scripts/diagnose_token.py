@@ -292,6 +292,7 @@ async def diagnose_token_extraction():
             print("   Check the browser window to see what Steam returned")
             await asyncio.sleep(15)
 
+    # A catch-all Exception is deliberate for the diagnostic routine in scripts/diagnose_token.py to report any failure
     except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"\n❌ Error during diagnosis: {e}")
         traceback.print_exc()
