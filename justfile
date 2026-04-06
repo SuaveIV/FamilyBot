@@ -13,6 +13,7 @@ setup:
     just create-venv
     just install-deps
     just node-deps
+    just update-camoufox
     just verify-setup
     @echo "✅ Setup complete! Run 'just run' to start the bot."
 
@@ -90,12 +91,12 @@ force-token:
     @echo "🔄 Forcing token update..."
     mise exec -- uv run python scripts/force_token_update.py
 
-# Update Playwright and browser binaries
-update-playwright:
-    @echo "🎭 Updating Playwright..."
-    mise exec -- uv pip install --upgrade playwright
-    mise exec -- uv run playwright install chromium
-    @echo "✅ Playwright updated"
+# Update Camoufox and browser binaries
+update-camoufox:
+    @echo "🦊 Updating Camoufox..."
+    mise exec -- uv pip install --upgrade camoufox
+    mise exec -- uv run camoufox install
+    @echo "✅ Camoufox updated"
 
 # Test free games plugin
 test-free-games:

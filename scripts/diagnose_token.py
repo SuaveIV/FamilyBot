@@ -5,7 +5,6 @@ This script is designed to run from your FamilyBot project directory.
 """
 
 import asyncio
-import json
 import os
 import sys
 from pathlib import Path
@@ -40,17 +39,11 @@ if not os.access(OUTPUT_DIR, os.W_OK):
     OUTPUT_DIR = Path.home()
 
 try:
-    from playwright.async_api import async_playwright
-
-    PLAYWRIGHT_AVAILABLE = True
+    from camoufox.async_api import AsyncCamoufox
 except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
-    print("❌ Playwright not available. Please install with:")
-    print("   pip install playwright")
-    print("   playwright install chromium")
-    print("\n   Or if using uv:")
-    print("   uv pip install playwright")
-    print("   uv run playwright install chromium")
+    print("❌ Camoufox not available. Please install with:")
+    print("   uv add camoufox")
+    print("   uv run camoufox install")
     sys.exit(1)
 
 
@@ -76,54 +69,27 @@ async def diagnose_token_extraction():
         print("   just setup-browser")
         print("   OR: python scripts/setup_browser.py")
 
-        # Ask if user wants to continue without profile
         response = input("\n❓ Continue without profile? (y/N): ").strip().lower()
         if response not in ["y", "yes"]:
             print("Exiting...")
             return
 
-    async with async_playwright() as p:
-        try:
-            # Launch with profile if available
-            if BROWSER_PROFILE_PATH and BROWSER_PROFILE_PATH.exists():
-                print("\n🌐 Launching browser with profile...")
-                print(f"   Profile: {BROWSER_PROFILE_PATH}")
+    if BROWSER_PROFILE_PATH and BROWSER_PROFILE_PATH.exists():
+        print("\n🌐 Launching browser with profile...")
+        print(f"   Profile: {BROWSER_PROFILE_PATH}")
+        camoufox_kwargs = {
+            "persistent_context": True,
+            "user_data_dir": str(BROWSER_PROFILE_PATH),
+            "headless": False,  # Non-headless for debugging
+        }
+    else:
+        print("\n🌐 Launching browser without profile...")
+        print("   ⚠️  You will need to log in manually")
+        camoufox_kwargs = {"headless": False}
 
-                # Check for storage state
-                storage_state_path = BROWSER_PROFILE_PATH / "storage_state.json"
-                storage_state = None
-                if storage_state_path.exists():
-                    try:
-                        with open(storage_state_path, "r", encoding="utf-8") as f:
-                            storage_state = json.load(f)
-                        print("   ✅ Found storage_state.json")
-                    except (json.JSONDecodeError, OSError) as e:
-                        print(f"   ⚠️  Could not load storage_state.json: {e}")
-
-                context = await p.chromium.launch_persistent_context(
-                    user_data_dir=str(BROWSER_PROFILE_PATH),
-                    headless=False,  # Non-headless for debugging
-                    args=[
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage",
-                    ],
-                )
-
-                # Apply cookies if available
-                if storage_state:
-                    try:
-                        await context.add_cookies(storage_state.get("cookies", []))
-                        print("   ✅ Applied cookies from storage_state.json")
-                    except Exception as e:  # pylint: disable=broad-exception-caught
-                        print(f"   ⚠️  Could not apply cookies: {e}")
-
-                page = await context.new_page()
-            else:
-                print("\n🌐 Launching browser without profile...")
-                print("   ⚠️  You will need to log in manually")
-                browser = await p.chromium.launch(headless=False)
-                context = await browser.new_context()
-                page = await context.new_page()
+    try:
+        async with AsyncCamoufox(**camoufox_kwargs) as context:
+            page = await context.new_page()
 
             # Navigate to the points summary page
             print("\n📄 Navigating to Steam points summary page...")
@@ -145,7 +111,7 @@ async def diagnose_token_extraction():
             content = await page.content()
             print(f"\n📝 Page content length: {len(content):,} characters")
 
-            # Check for empty JSON response (Steam specific issue)
+            # Check for empty JSON response
             if '{"success":1,"data":[]}' in content or (
                 len(content) < 200 and '"success":1' in content
             ):
@@ -182,7 +148,7 @@ async def diagnose_token_extraction():
 
             found_token = False
 
-            # Method 1: Original marker search with variations
+            # Method 1: String pattern search
             print("\n📌 Method 1: String pattern search")
             patterns = [
                 ('"webapi_token":"', '"}'),
@@ -209,10 +175,9 @@ async def diagnose_token_extraction():
             if not found_token:
                 print("   ❌ Could not find token with any string pattern")
 
-            # Method 2: Regex search for JSON
+            # Method 2: Regex search (production logic)
             print("\n📌 Method 2: Regex JSON search (Production Logic)")
             try:
-                # More flexible regex patterns
                 json_patterns = [
                     r'"webapi_token"\s*:\s*"([^"]+)"',
                     r"'webapi_token'\s*:\s*'([^']+)'",
@@ -233,23 +198,21 @@ async def diagnose_token_extraction():
             except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"   ⚠️  Regex search error: {e}")
 
-            # Method 3: Search for any occurrence of "webapi"
+            # Method 3: General 'webapi' search
             print("\n📌 Method 3: General 'webapi' search")
             webapi_count = content.lower().count("webapi")
             print(f"   Found 'webapi' {webapi_count} times in page")
 
             if webapi_count > 0:
-                # Find context around webapi mentions
-                webapi_contexts = []
-                for match in re.finditer(
-                    r".{0,50}webapi.{0,50}", content, re.IGNORECASE
-                ):
-                    webapi_contexts.append(match.group())
-
-                if webapi_contexts:
+                webapi_contexts_list = [
+                    m.group()
+                    for m in re.finditer(
+                        r".{0,50}webapi.{0,50}", content, re.IGNORECASE
+                    )
+                ]
+                if webapi_contexts_list:
                     print("   Showing first 3 contexts:")
-                    for i, ctx in enumerate(webapi_contexts[:3], 1):
-                        # Clean up for display
+                    for i, ctx in enumerate(webapi_contexts_list[:3], 1):
                         ctx_clean = ctx.replace("\n", " ").replace("\r", "")
                         print(f"   {i}. ...{ctx_clean[:80]}...")
 
@@ -257,9 +220,7 @@ async def diagnose_token_extraction():
             print("\n📌 Method 4: Page metadata")
             title = await page.title()
             print(f"   Page title: {title}")
-
-            url = page.url
-            print(f"   Current URL: {url}")
+            print(f"   Current URL: {page.url}")
 
             # Method 5: JavaScript evaluation
             print("\n📌 Method 5: JavaScript evaluation")
@@ -268,7 +229,6 @@ async def diagnose_token_extraction():
                     () => {
                         const results = {};
 
-                        // Check scripts for webapi_token
                         const scripts = document.getElementsByTagName('script');
                         results.scriptCount = scripts.length;
                         results.scriptsWithToken = 0;
@@ -285,7 +245,6 @@ async def diagnose_token_extraction():
                             }
                         }
 
-                        // Check for common Steam global variables
                         results.hasWindowG = typeof window.g_rgLoyaltyRewardDefs !== 'undefined';
                         results.hasSessionID = typeof g_sessionID !== 'undefined';
 
@@ -313,7 +272,7 @@ async def diagnose_token_extraction():
             except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"   ⚠️  JavaScript evaluation error: {e}")
 
-            # Take a screenshot for visual debugging
+            # Screenshot for visual debugging
             screenshot_path = OUTPUT_DIR / "steam_page_screenshot.png"
             try:
                 await page.screenshot(path=str(screenshot_path), full_page=True)
@@ -329,24 +288,18 @@ async def diagnose_token_extraction():
                 print("❌ FAILURE: No token found")
             print("=" * 60)
 
-            # Wait for user to inspect
             print("\n⏸️  Browser will stay open for 15 seconds...")
             print("   Check the browser window to see what Steam returned")
             await asyncio.sleep(15)
 
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            print(f"\n❌ Error during diagnosis: {e}")
-            traceback.print_exc()
-        finally:
-            print("\n🔒 Closing browser...")
-            await context.close()
+    # A catch-all Exception is deliberate for the diagnostic routine in scripts/diagnose_token.py to report any failure
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"\n❌ Error during diagnosis: {e}")
+        traceback.print_exc()
 
 
 async def main():
     """Main diagnostic function."""
-    if not PLAYWRIGHT_AVAILABLE:
-        return
-
     try:
         await diagnose_token_extraction()
     except KeyboardInterrupt:

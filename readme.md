@@ -35,7 +35,7 @@ FamilyBot combines a Discord bot with a web-based dashboard.
 
 ### Token Management
 
-- **Automation**: Uses Playwright to extract Steam web API tokens automatically.
+- **Automation**: Uses Camoufox to extract Steam web API tokens automatically.
 - **Sessions**: Saves login states so you don't have to log in repeatedly.
 - **Admin Control**: Use `!force_token` to refresh tokens manually.
 

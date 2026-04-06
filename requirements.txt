@@ -16,6 +16,8 @@ anyio==4.13.0
     # via
     #   httpx
     #   starlette
+apify-fingerprint-datapoints==0.12.0
+    # via browserforge
 astroid==3.3.11
     # via pylint
 attrs==26.1.0
@@ -28,10 +30,14 @@ audioop-lts==0.2.2
     #   discord-py-interactions
 boolean-py==5.0
     # via license-expression
+browserforge==1.2.4
+    # via camoufox
 cachecontrol==0.14.4
     # via pip-audit
 cachetools==7.0.5
     # via steam
+camoufox==0.4.11
+    # via familybot (pyproject.toml)
 certifi==2026.2.25
     # via
     #   httpcore
@@ -42,7 +48,10 @@ cfgv==3.5.0
 charset-normalizer==3.4.6
     # via requests
 click==8.3.1
-    # via uvicorn
+    # via
+    #   browserforge
+    #   camoufox
+    #   uvicorn
 colorama==0.4.6
     # via
     #   click
@@ -102,10 +111,14 @@ isort==6.1.0
     # via pylint
 jinja2==3.1.6
     # via familybot (pyproject.toml)
+language-tags==1.2.0
+    # via camoufox
 librt==0.8.1
     # via mypy
 license-expression==30.4.4
     # via cyclonedx-python-lib
+lxml==6.0.2
+    # via camoufox
 markdown-it-py==4.0.0
     # via rich
 markupsafe==3.0.3
@@ -126,6 +139,10 @@ mypy-extensions==1.1.0
     # via mypy
 nodeenv==1.10.0
     # via pre-commit
+numpy==2.4.4
+    # via camoufox
+orjson==3.11.8
+    # via camoufox
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
 packaging==26.0
@@ -144,12 +161,13 @@ pip-requirements-parser==32.0.1
     # via pip-audit
 platformdirs==4.9.4
     # via
+    #   camoufox
     #   pip-audit
     #   pylint
     #   python-discovery
     #   virtualenv
 playwright==1.53.0
-    # via familybot (pyproject.toml)
+    # via camoufox
 pre-commit==4.0.1
     # via familybot (pyproject.toml)
 propcache==0.4.1
@@ -176,6 +194,8 @@ pyparsing==3.3.2
     # via pip-requirements-parser
 pyreadline3==3.5.4
     # via humanfriendly
+pysocks==1.7.1
+    # via camoufox
 python-dateutil==2.9.0.post0
     # via croniter
 python-discovery==1.2.1
@@ -187,17 +207,21 @@ python-multipart==0.0.22
 pyyaml==6.0.3
     # via
     #   familybot (pyproject.toml)
+    #   camoufox
     #   pre-commit
 requests==2.32.5
     # via
     #   familybot (pyproject.toml)
     #   cachecontrol
+    #   camoufox
     #   pip-audit
     #   steam
 rich==14.3.3
     # via pip-audit
 ruff==0.12.12
     # via familybot (pyproject.toml)
+screeninfo==0.8.1
+    # via camoufox
 six==1.17.0
     # via
     #   python-dateutil
@@ -217,7 +241,9 @@ tomli-w==1.2.0
 tomlkit==0.14.0
     # via pylint
 tqdm==4.66.6
-    # via familybot (pyproject.toml)
+    # via
+    #   familybot (pyproject.toml)
+    #   camoufox
 types-pyyaml==6.0.12.20250915
     # via familybot (pyproject.toml)
 types-requests==2.33.0.20260327
@@ -228,12 +254,17 @@ types-tqdm==4.67.3.20260303
     # via familybot (pyproject.toml)
 typing-extensions==4.15.0
     # via
+    #   camoufox
     #   discord-typings
     #   fastapi
     #   mypy
     #   pydantic
     #   pydantic-core
     #   pyee
+ua-parser==1.0.2
+    # via camoufox
+ua-parser-builtins==202603
+    # via ua-parser
 urllib3==2.6.3
     # via
     #   requests

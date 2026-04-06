@@ -47,18 +47,25 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 ### HTTP & Networking
 
+**[aiohttp](https://github.com/aio-libs/aiohttp)**
+
+- **Description**: Async HTTP client/server framework.
+- **License**: Apache License 2.0
+- **Usage**: Primary async HTTP client for Steam API calls throughout the bot.
+- **Website**: <https://docs.aiohttp.org/>
+
 **[Requests](https://github.com/psf/requests)**
 
 - **Description**: Standard library for synchronous HTTP requests.
 - **License**: Apache License 2.0
-- **Usage**: Talking to the Steam API and other services.
+- **Usage**: Synchronous calls to the ITAD API.
 - **Website**: <https://requests.readthedocs.io/>
 
 **[HTTPX](https://github.com/encode/httpx)**
 
 - **Description**: Modern HTTP client with async support.
 - **License**: BSD 3-Clause License
-- **Usage**: Asynchronous API calls.
+- **Usage**: Asynchronous API calls in database population scripts.
 - **Website**: <https://www.python-httpx.org/>
 
 **[WebSockets](https://github.com/python-websockets/websockets)**
@@ -79,26 +86,14 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 ### Browser Automation
 
-**[Playwright](https://github.com/microsoft/playwright-python)**
+**[Camoufox](https://github.com/daijro/camoufox)**
 
-- **Description**: Handles automated browser interactions.
-- **License**: Apache License 2.0
-- **Usage**: Extracting Steam tokens.
-- **Website**: <https://playwright.dev/python/>
+- **Description**: Anti-detect browser built on Firefox with fingerprint injection at the C++ level.
+- **License**: MPL-2.0
+- **Usage**: Extracting Steam web API tokens with bot-detection evasion.
+- **Compliance Note**: This usage may violate Steam's Terms of Service (automated API token extraction).
 
-**[Selenium](https://github.com/SeleniumHQ/selenium)**
-
-- **Description**: The classic browser automation framework.
-- **License**: Apache License 2.0
-- **Usage**: Legacy token extraction.
-- **Website**: <https://selenium-python.readthedocs.io/>
-
-**[WebDriver Manager](https://github.com/SergeyPirogov/webdriver_manager)**
-
-- **Description**: Manages browser drivers automatically.
-- **License**: Apache License 2.0
-- **Usage**: Downloads drivers for Selenium.
-- **Website**: <https://pypi.org/project/webdriver-manager/>
+- **Website**: <https://camoufox.com/>
 
 ### Configuration & Data Processing
 
@@ -205,12 +200,10 @@ FamilyBot exists because of the incredible work done by the open-source communit
 
 ## License Compatibility
 
-FamilyBot is built using libraries compatible with permissive open-source usage (MIT, BSD, Apache 2.0, SIL OFL, and Public Domain).
+FamilyBot is built using libraries with permissive open-source licenses (MIT, BSD-3-Clause, Apache-2.0, and Public Domain), the weak copyleft (file-level) MPL-2.0 license, and the font-specific OFL-1.1 license (which includes share-alike/copy-left terms).
 
 ## Acknowledgments
 
 Huge thanks to the maintainers of the projects listed above. Without your work, building something like FamilyBot would take months instead of days. We also appreciate the Discord.py community and everyone who uses and helps improve this bot.
 
 ---
-
-**Maintainer**: FamilyBot Development Team

@@ -22,15 +22,15 @@ from familybot.config import (
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
 
-# Import Playwright conditionally
+# Import Camoufox conditionally
 try:
-    from playwright.async_api import async_playwright
+    from camoufox.async_api import AsyncCamoufox
 
-    PLAYWRIGHT_AVAILABLE = True
+    CAMOUFOX_AVAILABLE = True
 except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
+    CAMOUFOX_AVAILABLE = False
     logger = logging.getLogger(__name__)
-    logger.error("Playwright not installed. Please install with: uv add playwright")
+    logger.error("Camoufox not installed. Please install with: uv add camoufox")
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)
@@ -43,13 +43,13 @@ class token_sender(Extension):
         self._force_next_run = False
         self._last_checked_day = -1
 
-        # Check if Playwright is available
-        if not PLAYWRIGHT_AVAILABLE:
+        # Check if Camoufox is available
+        if not CAMOUFOX_AVAILABLE:
             logger.error(
-                "Playwright is not available. Token sender plugin will not function properly."
+                "Camoufox is not available. Token sender plugin will not function properly."
             )
             logger.error(
-                "Please install Playwright with: uv add playwright && uv run playwright install chromium"
+                "Please install Camoufox with: uv add camoufox && uv run camoufox install"
             )
 
         # Ensure the token save path directory exists
@@ -74,65 +74,28 @@ class token_sender(Extension):
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
-    async def _get_token_with_playwright(self) -> str:
-        """Extract Steam webapi_token using Playwright."""
-        logger.info("Starting token extraction using Playwright...")
+    async def _get_token_with_camoufox(self) -> str:
+        """Extract Steam webapi_token using Camoufox."""
+        logger.info("Starting token extraction using Camoufox...")
 
-        async with async_playwright() as p:
-            # Launch browser with profile if specified
-            if BROWSER_PROFILE_PATH and os.path.exists(BROWSER_PROFILE_PATH):
-                logger.info(f"Using browser profile: {BROWSER_PROFILE_PATH}")
+        from pathlib import Path
+        resolved_profile_path = None
+        if BROWSER_PROFILE_PATH:
+            resolved_profile_path = Path(PROJECT_ROOT) / BROWSER_PROFILE_PATH if not os.path.isabs(BROWSER_PROFILE_PATH) else Path(BROWSER_PROFILE_PATH)
 
-                # Check if storage state file exists for better session persistence
-                storage_state_path = os.path.join(
-                    BROWSER_PROFILE_PATH, "storage_state.json"
-                )
-                storage_state = None
+        if resolved_profile_path and resolved_profile_path.exists():
+            logger.info(f"Using browser profile: {resolved_profile_path}")
+            camoufox_kwargs = {
+                "persistent_context": True,
+                "user_data_dir": BROWSER_PROFILE_PATH,
+                "headless": True,
+            }
+        else:
+            logger.info("No browser profile found, using default context")
+            camoufox_kwargs = {"headless": True}
 
-                if os.path.exists(storage_state_path):
-                    try:
-                        with open(storage_state_path, "r") as f:
-                            storage_state = json.load(f)
-                        logger.info("Loaded storage state for session persistence")
-                    except Exception as e:
-                        logger.warning(f"Could not load storage state: {e}")
-
-                # Launch with persistent context (storage state is automatically loaded from user_data_dir)
-                context = await p.chromium.launch_persistent_context(
-                    user_data_dir=BROWSER_PROFILE_PATH,
-                    headless=True,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-extensions",
-                        "--disable-gpu",
-                        "--blink-settings=imagesEnabled=false",
-                    ],
-                )
-                page = await context.new_page()
-
-                # Block unnecessary resources to speed up loading
-                await page.route(
-                    "**/*",
-                    lambda route: route.abort()
-                    if route.request.resource_type
-                    in ["image", "stylesheet", "font", "media"]
-                    else route.continue_(),
-                )
-
-                # If we have storage state, apply it to the context
-                if storage_state:
-                    try:
-                        await context.add_cookies(storage_state.get("cookies", []))
-                        logger.info("Applied cookies from storage state")
-                    except Exception as e:
-                        logger.warning(f"Could not apply storage state cookies: {e}")
-            else:
-                logger.info("Using default browser profile")
-                browser = await p.chromium.launch(headless=True)
-                context = await browser.new_context()
-                page = await context.new_page()
-
+        async with AsyncCamoufox(**camoufox_kwargs) as context:
+            page = await context.new_page()
             try:
                 # Navigate to Steam points summary page
                 await page.goto(
@@ -156,7 +119,7 @@ class token_sender(Extension):
                     rawdata_tab = page.locator("#rawdata-tab")
                     if await rawdata_tab.count() > 0:
                         await rawdata_tab.click()
-                        await page.wait_for_timeout(1000)  # Wait 1 second
+                        await page.wait_for_timeout(1000)
                         content = await page.content()
                 except Exception as e:
                     logger.warning(f"Could not click rawdata-tab: {e}")
@@ -176,8 +139,9 @@ class token_sender(Extension):
                 logger.info(f"Successfully extracted token: {extracted_key[:20]}...")
                 return extracted_key
 
-            finally:
-                await context.close()
+            except Exception:
+                await page.close()
+                raise
 
     async def _process_token(self, token: str) -> bool:
         """Process and save the token, return True if token was updated."""
@@ -225,9 +189,6 @@ class token_sender(Extension):
                 logger.info(
                     f"Token expires at: {datetime.fromtimestamp(exp_timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-
-                # Token saved successfully - no additional token manager needed
-                # since this plugin handles token management directly
 
                 return True
 
@@ -283,17 +244,17 @@ class token_sender(Extension):
                     should_run = True  # Error reading, force update
 
             if should_run:
-                if not PLAYWRIGHT_AVAILABLE:
-                    logger.error("Cannot update token: Playwright is not available")
+                if not CAMOUFOX_AVAILABLE:
+                    logger.error("Cannot update token: Camoufox is not available")
                     await self._send_admin_dm(
-                        "Cannot update Steam token: Playwright is not installed"
+                        "Cannot update Steam token: Camoufox is not installed"
                     )
                     self._force_next_run = False
                     return
 
                 logger.info("Starting token update process...")
                 try:
-                    token = await self._get_token_with_playwright()
+                    token = await self._get_token_with_camoufox()
                     updated = await self._process_token(token)
 
                     if updated:

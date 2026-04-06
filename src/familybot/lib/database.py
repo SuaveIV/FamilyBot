@@ -365,5 +365,5 @@ def _mark_migration_run(migration_name: str) -> None:
                 (migration_name,),
             )
             conn.commit()
-    except Exception as e:
-        logger.error(f"Error marking migration '{migration_name}': {e}")
+    except Exception:
+        logger.exception("Error marking migration %s", migration_name)
