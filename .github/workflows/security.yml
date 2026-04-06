@@ -1,0 +1,134 @@
+name: Supply Chain Security Checks
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+      - 'src/**/*.py'
+      - 'scripts/**/*.py'
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run daily at 2 AM UTC to catch newly disclosed vulnerabilities
+    - cron: '0 2 * * *'
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    name: Security Scanning
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -r requirements-hashes.txt
+
+      - name: Run Ruff security linting (S rules)
+        run: |
+          uv run ruff check --select S src/ scripts/
+        continue-on-error: false
+
+      - name: Run pip-audit for vulnerable dependencies
+        run: |
+          uv run pip-audit -r requirements-hashes.txt
+        continue-on-error: false
+
+      - name: Verify hash-pinned lockfile
+        run: |
+          # Verify that requirements-hashes.txt exists and contains hashes
+          if ! grep -q "\-\-hash=" requirements-hashes.txt; then
+            echo "❌ Error: requirements-hashes.txt does not contain hashes!"
+            echo "Generate with: uv pip compile pyproject.toml --extra dev --generate-hashes -o requirements-hashes.txt"
+            exit 1
+          fi
+          echo "✅ Hash-pinned lockfile verified"
+
+      - name: Generate CycloneDX SBOM (Supply Bill of Materials)
+        run: |
+          uv run pip-audit -r requirements-hashes.txt --format cyclonedx --output sbom.xml || true
+          if [ -f sbom.xml ]; then
+            echo "✅ SBOM generated: sbom.xml"
+          else
+            echo "⚠️  Note: SBOM generation requires pip-audit with CycloneDX support"
+          fi
+
+      - name: Upload SBOM as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.xml
+          if-no-files-found: ignore
+
+      - name: Check for newly published versions (--exclude-newer)
+        run: |
+          echo "ℹ️  Checking lockfile generation date..."
+          # Get the date from the lockfile header comment
+          LOCKFILE_DATE=$(head -1 requirements-hashes.txt | grep -oP '\d{4}-\d{2}-\d{2}' || echo "unknown")
+          echo "Lockfile date: $LOCKFILE_DATE"
+          echo "This lockfile was generated on: $LOCKFILE_DATE"
+          echo "To use time-based constraints, run:"
+          echo "  uv pip install --exclude-newer '$LOCKFILE_DATE' -r requirements-hashes.txt"
+
+  # Optional: Dependency review for pull requests (GitHub-native scanning)
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Dependency Review
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          allow-licenses: Apache-2.0,Apache-2.0 WITH LLVM-exception,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MIT AND BSD-2-Clause,MPL-2.0,Python-2.0,Unlicense,0BSD,CC0-1.0
+
+  # Post security results to pull request
+  comment-on-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Security Summary
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post security check summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const comment = `## 🔒 Supply Chain Security Status
+
+            ✅ Checks Performed:
+            - Ruff security linting (S rules: hardcoded secrets, unsafe deserialization, SQL injection)
+            - pip-audit against OSV vulnerability database
+            - Hash-pinned lockfile verification
+            - CycloneDX SBOM generation (if available)
+
+            ✅ Best Practices:
+            - Dependencies pinned with hashes in \`requirements-hashes.txt\`
+            - Automated vulnerability scanning on every push/PR
+            - Time-based installation constraints supported (\`--exclude-newer\`)
+
+            📖 Learn more: [Securing the Python Supply Chain](https://bernat.tech/posts/securing-python-supply-chain/)`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

@@ -47,6 +47,14 @@ lock:
     mise exec -- uv pip compile pyproject.toml --extra dev -o requirements.txt
     @echo "✅ requirements.txt lockfile updated."
 
+# Generate a hash-pinned lockfile (recommended for supply chain security)
+lock-hashes:
+    @echo "🔒 Generating hash-pinned lockfile from pyproject.toml..."
+    mise exec -- uv pip compile pyproject.toml --extra dev --generate-hashes -o requirements-hashes.txt
+    @echo "✅ requirements-hashes.txt hash-pinned lockfile created."
+    @echo "💡 This lockfile verifies every package by SHA256 hash at install time."
+    @echo "📖 See: https://bernat.tech/posts/securing-python-supply-chain/"
+
 # Upgrade all dependencies in the lockfile to the latest safe versions
 update-deps:
     @echo "⬆️  Upgrading dependencies to their latest compatible versions (respecting ~=)..."
@@ -242,10 +250,46 @@ type-check:
     @echo "🧐 Running mypy type checker..."
     mise exec -- uv run mypy src/ scripts/
 
-# Run pip-audit for security vulnerabilities
+# Run pip-audit for security vulnerabilities (against standard lockfile)
 audit:
     @echo "🛡️ Running pip-audit for security vulnerabilities..."
     mise exec -- uv run pip-audit -r requirements.txt
+
+# Run pip-audit for security vulnerabilities (against hash-pinned lockfile)
+audit-hashes:
+    @echo "🛡️ Running pip-audit against hash-pinned lockfile..."
+    mise exec -- uv run pip-audit -r requirements-hashes.txt
+
+# Install dependencies with time-based constraints (supply chain security)
+install-safe older_than_days='7':
+    @echo "🔒 Installing with --exclude-newer (supply chain security)..."
+    @echo "This installs packages published at least {{ older_than_days }} days ago"
+    @python3 -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); print(f'Excluding packages newer than: {date}')"
+    @python3 -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); import subprocess; subprocess.run(['mise', 'exec', '--', 'uv', 'pip', 'install', '--exclude-newer', date, '-r', 'requirements-hashes.txt'])"
+
+# Show supply chain security status
+security-status:
+    @echo "🔒 FamilyBot Supply Chain Security Status"
+    @echo "========================================="
+    @echo ""
+    @echo "✅ Hash-pinned lockfile:"
+    @if [ -f "requirements-hashes.txt" ]; then echo "   ✓ requirements-hashes.txt exists"; else echo "   ✗ Missing (run: just lock-hashes)"; fi
+    @echo ""
+    @echo "✅ Ruff security linting:"
+    @echo "   Rules: S105 (hardcoded secrets), S301 (pickle), S608 (SQL injection)"
+    @echo "   Run: ruff check --select S src/ scripts/"
+    @echo ""
+    @echo "✅ Pip-audit integration:"
+    @echo "   Run: just audit-hashes (checks against OSV database)"
+    @echo ""
+    @echo "✅ GitHub Actions:"
+    @if [ -f ".github/workflows/security.yml" ]; then echo "   ✓ Security workflow configured"; else echo "   ✗ Missing"; fi
+    @echo ""
+    @echo "✅ Time-based constraints:"
+    @echo "   Run: just install-safe <days>"
+    @echo "   Example: just install-safe 7  (packages from 7+ days ago)"
+    @echo ""
+    @echo "📖 Learn more: https://bernat.tech/posts/securing-python-supply-chain/"
 
 # Lint TOML files
 check-toml:
