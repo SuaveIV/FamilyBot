@@ -95,7 +95,7 @@ force-token:
 update-camoufox:
     @echo "🦊 Updating Camoufox..."
     mise exec -- uv pip install --upgrade camoufox
-    mise exec -- uv run camoufox install
+    mise exec -- uv run camoufox fetch
     @echo "✅ Camoufox updated"
 
 # Test free games plugin
