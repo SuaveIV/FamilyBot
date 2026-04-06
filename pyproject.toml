@@ -20,7 +20,7 @@ dependencies = [
   "pylint~=3.3.1",
   "python-json-logger~=2.0.7",
   "python-multipart~=0.0.18",
-  "requests~=2.32.4",
+  "requests~=2.33.0",
   "steam~=1.4.4",
   "tqdm~=4.66.5",
   "uvicorn~=0.32.1",
@@ -62,6 +62,49 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "coloredlogs"
 ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "W",
+  "C",
+  "I",
+  "N",
+  "D",
+  "UP",
+  "B",
+  "A",
+  "C4",
+  "DTZ",
+  "T10",
+  "EM",
+  "ISC",
+  "ICN",
+  "PIE",
+  "PT",
+  "RET",
+  "SIM",
+  "TID",
+  "ARG",
+  "PTH",
+  "PERF",
+  "FURB",
+  "LOG",
+  "RUF",
+  "S",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["D"]
+"tests/*" = ["D", "S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["familybot"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
