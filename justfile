@@ -252,20 +252,20 @@ type-check:
 
 # Run pip-audit for security vulnerabilities (against standard lockfile)
 audit:
-    @echo "🛡️ Running pip-audit for security vulnerabilities..."
-    mise exec -- uv run pip-audit -r requirements.txt
+     @echo "🛡️ Running pip-audit for security vulnerabilities..."
+     mise exec -- uv run pip-audit -r requirements.txt -s osv
 
 # Run pip-audit for security vulnerabilities (against hash-pinned lockfile)
 audit-hashes:
-    @echo "🛡️ Running pip-audit against hash-pinned lockfile..."
-    mise exec -- uv run pip-audit -r requirements-hashes.txt
+     @echo "🛡️ Running pip-audit against hash-pinned lockfile..."
+     mise exec -- uv run pip-audit -r requirements-hashes.txt -s osv
 
 # Install dependencies with time-based constraints (supply chain security)
 install-safe older_than_days='7':
     @echo "🔒 Installing with --exclude-newer (supply chain security)..."
     @echo "This installs packages published at least {{ older_than_days }} days ago"
-    @python3 -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); print(f'Excluding packages newer than: {date}')"
-    @python3 -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); import subprocess; subprocess.run(['mise', 'exec', '--', 'uv', 'pip', 'install', '--exclude-newer', date, '-r', 'requirements-hashes.txt'], check=True)"
+    @mise exec -- uv run python -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); print(f'Excluding packages newer than: {date}')"
+    @mise exec -- uv run python -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); import subprocess; subprocess.run(['mise', 'exec', '--', 'uv', 'pip', 'install', '--exclude-newer', date, '-r', 'requirements-hashes.txt'], check=True)"
 
 # Show supply chain security status
 security-status:

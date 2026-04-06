@@ -14,6 +14,9 @@ on:
     # Run daily at 2 AM UTC to catch newly disclosed vulnerabilities
     - cron: '0 2 * * *'
 
+permissions:
+  issues: write
+
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -47,6 +50,11 @@ jobs:
       - name: Run Ruff security linting (S rules)
         run: |
           uv run ruff check --select S src/ scripts/
+        continue-on-error: false
+
+      - name: Run full Ruff linting (all configured rules)
+        run: |
+          uv run ruff check src/ scripts/
         continue-on-error: false
 
       - name: Run pip-audit for vulnerable dependencies

@@ -97,10 +97,10 @@ Automated security scanning runs:
 
 The workflow:
 
-1. Installs dependencies from `requirements-hashes.txt` with hash verification
-2. Runs Ruff security linting
-3. Runs pip-audit against OSV database
-4. Verifies lockfile contains hashes
+1. Verifies lockfile contains hashes
+2. Installs dependencies from `requirements-hashes.txt` with hash verification
+3. Runs Ruff security linting
+4. Runs pip-audit against OSV database
 5. Generates CycloneDX SBOM (Software Bill of Materials)
 6. Posts results to pull requests
 
@@ -162,7 +162,7 @@ The date is automatically calculated from "7 days ago."
 2. **March 24 (hours later)**: Discovered via automated scanning
 3. **March 25**: Security advisory published
 4. **March 26**: pip-audit and GitHub advisories updated
-5. **With 7-day buffer on March 31**: Malicious versions are 7 days old, automatically excluded
+5. **With 7-day buffer on March 31**: Cutoff is March 24; packages from March 24 and earlier are eligible for installation
 
 ## Defense-in-Depth Strategy
 
@@ -189,7 +189,7 @@ just lock-hashes
 ### 2. Verify security checks pass
 
 ```bash
-just check              # Runs lint, format, type-check, audit
+just check              # Runs lint, format, type-check, audit-hashes, check-toml
 just audit-hashes       # Explicitly check hash-pinned lockfile
 ```
 
