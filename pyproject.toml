@@ -63,5 +63,48 @@ ignore_missing_imports = true
 module = "coloredlogs"
 ignore_missing_imports = true
 
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "W",
+  "C",
+  "I",
+  "N",
+  "D",
+  "UP",
+  "B",
+  "A",
+  "C4",
+  "DTZ",
+  "T10",
+  "EM",
+  "ISC",
+  "ICN",
+  "PIE",
+  "PT",
+  "RET",
+  "SIM",
+  "TID",
+  "ARG",
+  "PTH",
+  "PERF",
+  "FURB",
+  "LOG",
+  "RUF",
+  "S",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["D"]
+"tests/*" = ["D", "S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["familybot"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
