@@ -28,12 +28,3 @@ repos:
         files: ^(pyproject\.toml|requirements.*\.txt)$
         pass_filenames: false
         always_run: true
-
-      - id: version-bump
-        name: Auto-bump version
-        entry: uv run python scripts/bump_version.py patch
-        language: system
-        stages: [pre-commit]
-        pass_filenames: false
-        always_run: false
-        verbose: true
