@@ -1,87 +1,109 @@
 # File: scripts/setup_browser.py
 import asyncio
-import json
+import os
 from pathlib import Path
 
-from playwright.async_api import async_playwright
+from camoufox.async_api import AsyncCamoufox
+
+# Configuration constants
+MAX_RETRIES = 5  # Maximum consecutive errors before giving up
 
 # Define the path for your dedicated browser profile
 # This will be created inside your FamilyBot project directory (one level up from scripts/)
 PROFILE_PATH = Path(__file__).parent.parent / "FamilyBotBrowserProfile"
-STORAGE_STATE_PATH = PROFILE_PATH / "storage_state.json"
 
 
 async def setup_browser_profile():
-    print(f"Launching Chromium with persistent context at: {PROFILE_PATH.resolve()}")
+    print(f"Launching Camoufox with persistent context at: {PROFILE_PATH.resolve()}")
     print("Please log into Steam in the opened browser window.")
     print("Once logged in, you can:")
     print("  1. Close the browser window, OR")
     print("  2. Press Ctrl+C in this terminal")
-    print("Playwright will save your session automatically.")
+    print("Camoufox will save your session automatically.")
     print("\nStarting browser...")
 
-    async with async_playwright() as p:
-        # Launch browser with persistent context to maintain user data
-        context = await p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_PATH),
-            headless=False,  # Launch in visible mode
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
-        )
-
+    async with AsyncCamoufox(
+        persistent_context=True,
+        user_data_dir=str(PROFILE_PATH),
+        headless=False,
+        extra_http_headers={"accept-encoding": "identity"},
+    ) as context:
         page = await context.new_page()
-        await page.goto(
-            "https://store.steampowered.com/login/"
-        )  # Go directly to Steam login
+        try:
+            await page.goto("https://store.steampowered.com/login/")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to navigate to login page: {e}")
+            print("   Continuing anyway - you may need to navigate manually")
 
         print("Browser launched! Please log into Steam.")
         print(
             "Press Ctrl+C when you're done logging in to close the browser gracefully."
         )
 
-        # Keep the browser open until manually closed by the user or Ctrl+C
+        consecutive_errors = 0
         try:
             while True:
-                # Check if browser is still open
                 try:
-                    await page.title()  # This will throw if browser is closed
+                    await page.title()  # Throws if browser is closed
                     await asyncio.sleep(1)
-                except Exception:
-                    # Browser was closed by user
-                    print("Browser window was closed by user.")
-                    break
+                    consecutive_errors = 0  # Reset counter on successful iteration
+                except RuntimeError as e:
+                    # Browser-closed events typically raise RuntimeError with specific messages
+                    if "Target closed" in str(e) or "closed" in str(e).lower():
+                        print("Browser window was closed by user.")
+                        break
+                    else:
+                        # Unexpected RuntimeError, track and check retry limit
+                        consecutive_errors += 1
+                        print(f"⚠️  Unexpected browser error: {e}")
+                        if consecutive_errors >= MAX_RETRIES:
+                            print(
+                                f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
+                            )
+                            break
+                        await asyncio.sleep(3)  # Brief delay before retry
+
+                except asyncio.CancelledError:
+                    # Task was cancelled, break the loop immediately
+                    print("Browser check task was cancelled.")
+                    raise  # Re-raise to propagate cancellation
+                except Exception as e:
+                    # Catch other unexpected errors, track and check retry limit
+                    consecutive_errors += 1
+                    print(f"⚠️  Unexpected error during browser check: {e}")
+                    if consecutive_errors >= MAX_RETRIES:
+                        print(
+                            f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
+                        )
+                        break
+                    await asyncio.sleep(3)  # Brief delay before retry
+
         except KeyboardInterrupt:
             print("\nCtrl+C detected. Closing browser gracefully...")
-        finally:
-            try:
-                # Save storage state before closing
-                print("💾 Saving browser storage state...")
-                storage_state = await context.storage_state()
 
-                # Ensure the profile directory exists
-                PROFILE_PATH.mkdir(exist_ok=True)
+    print("✅ Browser closed successfully!")
 
-                # Save storage state to file
-                with open(STORAGE_STATE_PATH, "w") as f:
-                    json.dump(storage_state, f, indent=2)
+    # Verify PROFILE_PATH was created and is writable
+    if not PROFILE_PATH.exists():
+        print("❌ ERROR: Profile directory was not created!")
+        print(f"   Expected location: {PROFILE_PATH.resolve()}")
+        return
 
-                print(f"✅ Storage state saved to: {STORAGE_STATE_PATH}")
+    if not PROFILE_PATH.is_dir():
+        print("❌ ERROR: Profile path exists but is not a directory!")
+        print(f"   Path: {PROFILE_PATH.resolve()}")
+        return
 
-                await context.close()
-            except Exception as e:
-                print(f"⚠️  Warning: Could not save storage state: {e}")
-                try:
-                    await context.close()
-                except Exception:
-                    pass
+    if not os.access(PROFILE_PATH, os.W_OK):
+        print("❌ ERROR: Profile directory is not writable!")
+        print(f"   Path: {PROFILE_PATH.resolve()}")
+        return
 
-            print("✅ Browser closed successfully!")
-            print("✅ Profile and storage state saved successfully!")
-            print(f"\n📁 Browser profile location: {PROFILE_PATH.resolve()}")
-            print(f"💾 Storage state file: {STORAGE_STATE_PATH}")
-            print("📝 The config.yml has already been updated with the correct path.")
-            print(
-                "\n🎉 Setup complete! You can now run the FamilyBot and the token_sender plugin will work."
-            )
+    print("✅ Profile saved successfully!")
+    print(f"\n📁 Browser profile location: {PROFILE_PATH.resolve()}")
+    print(
+        "\n🎉 Setup complete! You can now run the FamilyBot and the token_sender plugin will work."
+    )
 
 
 if __name__ == "__main__":

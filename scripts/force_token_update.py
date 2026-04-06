@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Script to force an immediate update of the Steam webapi_token.
-This script launches Playwright, extracts the token, and saves it to the live tokens directory.
+This script launches Camoufox, extracts the token, and saves it to the live tokens directory.
 Useful for manual updates or cron jobs.
 """
 
@@ -19,9 +19,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from playwright.async_api import async_playwright
+    from camoufox.async_api import AsyncCamoufox
 except ImportError:
-    print("❌ Playwright not available. Please install with: uv add playwright")
+    print("❌ Camoufox not available. Please install with: uv add camoufox")
     sys.exit(1)
 
 # Import configuration
@@ -38,8 +38,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def get_token_with_playwright() -> str:
-    """Extract Steam webapi_token using Playwright with optimized settings."""
+async def get_token_with_camoufox() -> str:
+    """Extract Steam webapi_token using Camoufox."""
     logger.info("Starting token extraction...")
 
     profile_path = (
@@ -53,52 +53,14 @@ async def get_token_with_playwright() -> str:
         logger.error("Run 'uv run python scripts/setup_browser.py' first.")
         return ""
 
-    # Load storage state if available
-    storage_state_path = os.path.join(profile_path, "storage_state.json")
-    storage_state = None
-    if os.path.exists(storage_state_path):
+    logger.info("Launching headless browser...")
+    async with AsyncCamoufox(
+        persistent_context=True,
+        user_data_dir=profile_path,
+        headless=True,
+    ) as context:
+        page = await context.new_page()
         try:
-            with open(storage_state_path, "r") as f:
-                storage_state = json.load(f)
-            logger.info("Loaded storage state for session persistence")
-        except Exception as e:
-            logger.warning(f"Could not load storage state: {e}")
-
-    async with async_playwright() as p:
-        # Launch with optimized arguments (same as plugin)
-        logger.info("Launching headless browser...")
-        browser = await p.chromium.launch_persistent_context(
-            user_data_dir=profile_path,
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-extensions",
-                "--disable-gpu",
-                "--blink-settings=imagesEnabled=false",
-            ],
-        )
-
-        # Apply cookies if available
-        if storage_state:
-            try:
-                await browser.add_cookies(storage_state.get("cookies", []))
-                logger.info("Applied cookies from storage state")
-            except Exception as e:
-                logger.warning(f"Could not apply storage state cookies: {e}")
-
-        page = await browser.new_page()
-
-        # Block unnecessary resources
-        await page.route(
-            "**/*",
-            lambda route: route.abort()
-            if route.request.resource_type in ["image", "stylesheet", "font", "media"]
-            else route.continue_(),
-        )
-
-        try:
-            # Navigate
             logger.info("Navigating to Steam...")
             await page.goto(
                 "https://store.steampowered.com/pointssummary/ajaxgetasyncconfig"
@@ -145,8 +107,6 @@ async def get_token_with_playwright() -> str:
         except Exception as e:
             logger.error(f"Error extracting token: {e}")
             return ""
-        finally:
-            await browser.close()
 
 
 def save_token(token: str) -> bool:
@@ -183,7 +143,7 @@ def save_token(token: str) -> bool:
 
 
 async def main():
-    token = await get_token_with_playwright()
+    token = await get_token_with_camoufox()
     if token:
         if save_token(token):
             print("\n🎉 Token force update completed successfully.")

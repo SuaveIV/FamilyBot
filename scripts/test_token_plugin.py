@@ -13,12 +13,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from playwright.async_api import async_playwright
+    from camoufox.async_api import AsyncCamoufox
 
-    PLAYWRIGHT_AVAILABLE = True
+    CAMOUFOX_AVAILABLE = True
 except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
-    print("❌ Playwright not available. Please install with: uv add playwright")
+    CAMOUFOX_AVAILABLE = False
+    print("❌ Camoufox not available. Please install with: uv add camoufox")
     sys.exit(1)
 
 # Import configuration
@@ -33,8 +33,8 @@ import base64
 import binascii
 import json
 import re
-import tempfile  # Import tempfile
-import shutil  # Import shutil
+import tempfile
+import shutil
 from datetime import datetime
 
 
@@ -78,64 +78,22 @@ class TokenTester:
         """Test the token extraction process."""
         print("\n🔍 Testing token extraction...")
 
-        async with async_playwright() as p:
-            try:
-                # Launch browser with profile if available
-                if self.browser_profile_path and os.path.exists(
-                    self.browser_profile_path
-                ):
-                    print(f"   Using browser profile: {self.browser_profile_path}")
+        if self.browser_profile_path and os.path.exists(self.browser_profile_path):
+            print(f"   Using browser profile: {self.browser_profile_path}")
+            camoufox_kwargs = {
+                "persistent_context": True,
+                "user_data_dir": self.browser_profile_path,
+                "headless": True,
+            }
+        else:
+            print("   Using default browser (no profile)")
+            camoufox_kwargs = {
+                "headless": True,
+            }
 
-                    # Check if storage state file exists for better session persistence
-                    storage_state_path = os.path.join(
-                        self.browser_profile_path, "storage_state.json"
-                    )
-                    storage_state = None
-
-                    if os.path.exists(storage_state_path):
-                        try:
-                            with open(storage_state_path, "r") as f:
-                                storage_state = json.load(f)
-                            print("   Loaded storage state for session persistence")
-                        except Exception as e:
-                            print(f"   Warning: Could not load storage state: {e}")
-
-                    browser = await p.chromium.launch_persistent_context(
-                        user_data_dir=self.browser_profile_path,
-                        headless=True,
-                        args=[
-                            "--no-sandbox",
-                            "--disable-dev-shm-usage",
-                            "--disable-extensions",
-                            "--disable-gpu",
-                            "--blink-settings=imagesEnabled=false",
-                        ],
-                    )
-                    page = await browser.new_page()
-
-                    # Block unnecessary resources to speed up loading
-                    await page.route(
-                        "**/*",
-                        lambda route: route.abort()
-                        if route.request.resource_type
-                        in ["image", "stylesheet", "font", "media"]
-                        else route.continue_(),
-                    )
-
-                    # If we have storage state, apply it to the context
-                    if storage_state:
-                        try:
-                            await browser.add_cookies(storage_state.get("cookies", []))
-                            print("   Applied cookies from storage state")
-                        except Exception as e:
-                            print(
-                                f"   Warning: Could not apply storage state cookies: {e}"
-                            )
-                else:
-                    print("   Using default browser (no profile)")
-                    browser = await p.chromium.launch(headless=True)
-                    context = await browser.new_context()
-                    page = await context.new_page()
+        try:
+            async with AsyncCamoufox(**camoufox_kwargs) as context:
+                page = await context.new_page()
 
                 # Navigate to Steam points summary page
                 print("   Navigating to Steam API endpoint...")
@@ -189,20 +147,16 @@ class TokenTester:
                 print(f"✅ Successfully extracted token: {extracted_key[:20]}...")
                 return extracted_key
 
-            except Exception as e:
-                print(f"❌ Error during token extraction: {e}")
-                return False
-            finally:
-                await browser.close()
+        except Exception as e:
+            print(f"❌ Error during token extraction: {e}")
+            return False
 
     def test_token_decoding(self, token):
         """Test token decoding and expiry extraction."""
         print("\n🔍 Testing token decoding...")
 
         try:
-            # Decode token to get expiry time
             coded_string = token.split(".")[1]
-            # Pad and replace URL-safe chars for base64 decoding
             padded_coded_string = coded_string.replace("-", "+").replace("_", "/")
             padded_coded_string += "=" * (-len(padded_coded_string) % 4)
 
@@ -219,7 +173,7 @@ class TokenTester:
 
             if time_remaining.total_seconds() < 0:
                 print("⚠️  Token has already expired!")
-            elif time_remaining.total_seconds() < 3600:  # Less than 1 hour
+            elif time_remaining.total_seconds() < 3600:
                 print("⚠️  Token expires soon!")
             else:
                 print("✅ Token is valid")
@@ -235,15 +189,10 @@ class TokenTester:
         print("\n🔍 Testing token storage...")
 
         try:
-            # Ensure temporary directory exists (already created in __init__)
-            # os.makedirs(self.test_token_save_dir, exist_ok=True) # Not needed as mkdtemp creates it
-
-            # Save token
             token_file_path = os.path.join(self.test_token_save_dir, "token")
             with open(token_file_path, "w") as token_file:
                 token_file.write(token)
 
-            # Save expiry time
             exp_file_path = os.path.join(self.test_token_save_dir, "token_exp")
             with open(exp_file_path, "w") as exp_time_file:
                 exp_time_file.write(str(exp_timestamp))
@@ -316,7 +265,7 @@ class TokenTester:
         if profile_ok and token and exp_timestamp and storage_ok:
             print("🎉 All tests passed! Token sender plugin is working correctly.")
             print("\nNext steps:")
-            print("1. Start the FamilyBot: uv run python src/familybot/FamilyBot.py")
+            print("1. Start the FamilyBot: uv run familybot")
             print("2. Test admin commands in Discord DMs:")
             print("   - !token_status (check current token)")
             print("   - !force_token (force token update)")
@@ -327,10 +276,6 @@ class TokenTester:
 
 
 async def main():
-    """Main test function."""
-    if not PLAYWRIGHT_AVAILABLE:
-        return
-
     tester = TokenTester()
     success = await tester.run_full_test()
 
