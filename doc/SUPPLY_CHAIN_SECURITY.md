@@ -138,7 +138,7 @@ grep -i "requests" sbom.xml
 
 **PEP:** [PEP 751](https://peps.python.org/pep-0751/) (uv implementation)
 
-Limit installations to packages published before a specific date. Most malware is caught by the community within 24-72 hours, so a 7-day buffer catches obvious attacks while allowing legitimate updates.
+Limit installations to packages published before a specific date. Most malware is caught by the community within 24-72 hours, so a 7-day buffer acts as a temporary quarantine window that delays adoption of very recent publishes while allowing legitimate updates.
 
 #### Install with 7-day buffer
 
@@ -146,7 +146,7 @@ Limit installations to packages published before a specific date. Most malware i
 just install-safe 7
 ```
 
-This installs packages published at least 7 days ago, preventing fresh compromises.
+This installs packages published at least 7 days ago, providing a temporary safety window against fresh compromises. Note: Once a release ages past the cutoff date, it becomes eligible for installation again (unless the lockfile is rotated or dependencies are updated). If a release is suspected of being malicious, follow up with lockfile rotation or package pinning to prevent future adoption.
 
 #### Manual approach
 
@@ -173,7 +173,7 @@ The date is automatically calculated from "7 days ago."
 | **Pip-audit** | Known CVEs in dependencies | Pre-commit + CI/CD |
 | **SBOM** | Slow incident response | CycloneDX in CI artifacts |
 | **Time-based constraints** | Fresh compromises | `--exclude-newer` flag |
-| **Pre-commit hooks** | Bypassing checks | `.pre-commit-config.yaml` |
+| **Pre-commit hooks** | Local developer errors (can be bypassed) | `.pre-commit-config.yaml` - Enforced via CI/branch-protection |
 | **GitHub Actions** | Manual review gaps | `.github/workflows/security.yml` |
 
 ## Release Process Best Practices

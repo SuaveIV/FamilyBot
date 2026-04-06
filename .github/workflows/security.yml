@@ -30,6 +30,16 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v2
 
+      - name: Verify hash-pinned lockfile
+        run: |
+          # Verify that requirements-hashes.txt exists and contains hashes
+          if ! grep -q "\-\-hash=" requirements-hashes.txt; then
+            echo "❌ Error: requirements-hashes.txt does not contain hashes!"
+            echo "Generate with: uv pip compile pyproject.toml --extra dev --generate-hashes -o requirements-hashes.txt"
+            exit 1
+          fi
+          echo "✅ Hash-pinned lockfile verified"
+
       - name: Install dependencies
         run: |
           uv pip install --system -r requirements-hashes.txt
@@ -41,22 +51,12 @@ jobs:
 
       - name: Run pip-audit for vulnerable dependencies
         run: |
-          uv run pip-audit -r requirements-hashes.txt
+          uv run pip-audit -r requirements-hashes.txt -s osv
         continue-on-error: false
-
-      - name: Verify hash-pinned lockfile
-        run: |
-          # Verify that requirements-hashes.txt exists and contains hashes
-          if ! grep -q "\-\-hash=" requirements-hashes.txt; then
-            echo "❌ Error: requirements-hashes.txt does not contain hashes!"
-            echo "Generate with: uv pip compile pyproject.toml --extra dev --generate-hashes -o requirements-hashes.txt"
-            exit 1
-          fi
-          echo "✅ Hash-pinned lockfile verified"
 
       - name: Generate CycloneDX SBOM (Supply Bill of Materials)
         run: |
-          uv run pip-audit -r requirements-hashes.txt --format cyclonedx --output sbom.xml || true
+          uv run pip-audit -r requirements-hashes.txt -s osv --format cyclonedx --output sbom.xml || true
           if [ -f sbom.xml ]; then
             echo "✅ SBOM generated: sbom.xml"
           else
@@ -99,7 +99,8 @@ jobs:
 
   # Post security results to pull request
   comment-on-pr:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.security.result == 'success' && needs.dependency-review.result == 'success'
+    needs: [security, dependency-review]
     runs-on: ubuntu-latest
     name: Security Summary
 
@@ -111,7 +112,12 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const comment = `## 🔒 Supply Chain Security Status
+            const securityResult = '${{ needs.security.result }}';
+            const depReviewResult = '${{ needs.dependency-review.result }}';
+
+            let comment;
+            if (securityResult === 'success' && depReviewResult === 'success') {
+              comment = `## 🔒 Supply Chain Security Status
 
             ✅ Checks Performed:
             - Ruff security linting (S rules: hardcoded secrets, unsafe deserialization, SQL injection)
@@ -125,6 +131,15 @@ jobs:
             - Time-based installation constraints supported (\`--exclude-newer\`)
 
             📖 Learn more: [Securing the Python Supply Chain](https://bernat.tech/posts/securing-python-supply-chain/)`;
+            } else {
+              comment = `## ⚠️ Supply Chain Security Check Failed
+
+            ❌ Failed checks:
+            ${securityResult !== 'success' ? '- Security scanning (Ruff + pip-audit)' : ''}
+            ${depReviewResult !== 'success' ? '- Dependency review' : ''}
+
+            Please review the GitHub Actions logs for details and resolve the issues before merging.`;
+            }
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,

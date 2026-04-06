@@ -265,7 +265,7 @@ install-safe older_than_days='7':
     @echo "🔒 Installing with --exclude-newer (supply chain security)..."
     @echo "This installs packages published at least {{ older_than_days }} days ago"
     @python3 -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); print(f'Excluding packages newer than: {date}')"
-    @python3 -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); import subprocess; subprocess.run(['mise', 'exec', '--', 'uv', 'pip', 'install', '--exclude-newer', date, '-r', 'requirements-hashes.txt'])"
+    @python3 -c "from datetime import datetime, timedelta; days = int('{{ older_than_days }}'); date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d'); import subprocess; subprocess.run(['mise', 'exec', '--', 'uv', 'pip', 'install', '--exclude-newer', date, '-r', 'requirements-hashes.txt'], check=True)"
 
 # Show supply chain security status
 security-status:
@@ -302,7 +302,7 @@ format-toml:
     mise exec -- uv run tombi format pyproject.toml
 
 # Run all code quality checks
-check: lint format-check type-check audit check-toml
+check: lint format-check type-check audit-hashes check-toml
     @echo "✅ All code quality checks passed!"
 
 # Fix and format all code issues
