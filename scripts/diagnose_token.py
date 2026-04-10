@@ -6,10 +6,10 @@ This script is designed to run from your FamilyBot project directory.
 
 import asyncio
 import os
-import sys
-from pathlib import Path
 import re
+import sys
 import traceback
+from pathlib import Path
 
 # Configuration - automatically detect project root
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -47,6 +47,194 @@ except ImportError:
     sys.exit(1)
 
 
+def _setup_browser_kwargs():
+    """Determine browser arguments based on profile availability."""
+    if BROWSER_PROFILE_PATH and BROWSER_PROFILE_PATH.exists():
+        print("\n🌐 Launching browser with profile...")
+        print(f"   Profile: {BROWSER_PROFILE_PATH}")
+        return {
+            "persistent_context": True,
+            "user_data_dir": str(BROWSER_PROFILE_PATH),
+            "headless": False,  # Non-headless for debugging
+        }
+    print("\n🌐 Launching browser without profile...")
+    print("   ⚠️  You will need to log in manually")
+    return {"headless": False}
+
+
+async def _navigate_and_get_content(page):
+    """Navigate to points summary page and retrieve content."""
+    print("\n📄 Navigating to Steam points summary page...")
+    print("   URL: https://store.steampowered.com/pointssummary/ajaxgetasyncconfig")
+
+    try:
+        await page.goto(
+            "https://store.steampowered.com/pointssummary/ajaxgetasyncconfig",
+            wait_until="networkidle",
+            timeout=30000,
+        )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"   ⚠️  Navigation warning: {e}")
+        print("   Continuing anyway...")
+
+    content = await page.content()
+    print(f"\n📝 Page content length: {len(content):,} characters")
+
+    if '{"success":1,"data":[]}' in content or (
+        len(content) < 200 and '"success":1' in content
+    ):
+        print("\n   ⚠️  CRITICAL: Steam returned an empty data response.")
+        print(f"   Response content: {content.strip()}")
+        print("   This indicates the session is invalid or not logged in.")
+        print("   The browser profile might need to be refreshed.")
+
+    return content
+
+
+def _save_debug_content(content):
+    """Save page content to debug file."""
+    debug_file = OUTPUT_DIR / "steam_page_content.html"
+    try:
+        debug_file.write_text(content, encoding="utf-8")
+        print(f"💾 Saved page content to: {debug_file}")
+    except OSError as e:
+        print(f"⚠️  Could not save content: {e}")
+
+
+def _check_login_status(content):
+    """Check for obvious login indicators in the content."""
+    print("\n🔐 Login status check:")
+    login_indicators = ["login", "sign in", "signin", "join steam"]
+    found_indicators = [ind for ind in login_indicators if ind in content.lower()]
+
+    if found_indicators:
+        print("   ⚠️  Page appears to show login form")
+        print(f"   Found indicators: {', '.join(found_indicators)}")
+        print("   ❌ You are likely NOT logged into Steam")
+    else:
+        print("   ✅ No obvious login indicators found")
+
+
+def _search_string_pattern(content):
+    """Method 1: String pattern search."""
+    print("\n📌 Method 1: String pattern search")
+    patterns = [
+        ('"webapi_token":"', '"}'),
+        ('"webapi_token": "', '"'),
+        ('webapi_token":"', '"'),
+        ('webapi_token": "', '"'),
+        ("'webapi_token':'", "'}"),
+        ("'webapi_token': '", "'"),
+    ]
+
+    for i, (start_marker, end_marker) in enumerate(patterns, 1):
+        start_index = content.find(start_marker)
+        if start_index != -1:
+            key_start = start_index + len(start_marker)
+            key_end = content.find(end_marker, key_start)
+            if key_end != -1:
+                token = content[key_start:key_end]
+                print(f"   ✅ Found token with pattern {i}: {start_marker}")
+                print(f"   Token preview: {token[:30]}...")
+                print(f"   Token length: {len(token)} characters")
+                return True
+    print("   ❌ Could not find token with any string pattern")
+    return False
+
+
+def _search_regex_pattern(content):
+    """Method 2: Regex search (production logic)."""
+    print("\n📌 Method 2: Regex JSON search (Production Logic)")
+    try:
+        json_patterns = [
+            r'"webapi_token"\s*:\s*"([^"]+)"',
+            r"'webapi_token'\s*:\s*'([^']+)'",
+            r'webapi_token\s*:\s*"([^"]+)"',
+        ]
+
+        for i, pattern in enumerate(json_patterns, 1):
+            matches = re.findall(pattern, content)
+            if matches:
+                print(f"   ✅ Found {len(matches)} token(s) with pattern {i}")
+                for j, match in enumerate(matches[:3], 1):
+                    print(f"   Token {j} preview: {match[:30]}...")
+                return True
+        print("   ❌ No tokens found with regex patterns")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"   ⚠️  Regex search error: {e}")
+    return False
+
+
+def _search_webapi_general(content):
+    """Method 3: General 'webapi' search."""
+    print("\n📌 Method 3: General 'webapi' search")
+    webapi_count = content.lower().count("webapi")
+    print(f"   Found 'webapi' {webapi_count} times in page")
+
+    if webapi_count > 0:
+        webapi_contexts_list = [
+            m.group()
+            for m in re.finditer(r".{0,50}webapi.{0,50}", content, re.IGNORECASE)
+        ]
+        if webapi_contexts_list:
+            print("   Showing first 3 contexts:")
+            for i, ctx in enumerate(webapi_contexts_list[:3], 1):
+                ctx_clean = ctx.replace("\n", " ").replace("\r", "")
+                print(f"   {i}. ...{ctx_clean[:80]}...")
+
+
+async def _get_page_metadata(page):
+    """Method 4: Page metadata."""
+    print("\n📌 Method 4: Page metadata")
+    title = await page.title()
+    print(f"   Page title: {title}")
+    print(f"   Current URL: {page.url}")
+
+
+async def _evaluate_javascript(page):
+    """Method 5: JavaScript evaluation."""
+    print("\n📌 Method 5: JavaScript evaluation")
+    try:
+        js_result = await page.evaluate("""
+            () => {
+                const results = {};
+                const scripts = document.getElementsByTagName('script');
+                results.scriptCount = scripts.length;
+                results.scriptsWithToken = 0;
+                for (let script of scripts) {
+                    if (script.textContent.includes('webapi_token')) {
+                        results.scriptsWithToken++;
+                        const regex = /"webapi_token"\\s*:\\s*"([^"]+)"/;
+                        const match = script.textContent.match(regex);
+                        if (match && match[1]) {
+                            results.token = match[1];
+                            results.tokenLength = match[1].length;
+                            break;
+                        }
+                    }
+                }
+                results.hasWindowG = typeof window.g_rgLoyaltyRewardDefs !== 'undefined';
+                results.hasSessionID = typeof g_sessionID !== 'undefined';
+                return results;
+            }
+        """)
+
+        print(f"   Scripts on page: {js_result.get('scriptCount', 0)}")
+        print(f"   Scripts with 'webapi_token': {js_result.get('scriptsWithToken', 0)}")
+        print(f"   Has window.g_rgLoyaltyRewardDefs: {js_result.get('hasWindowG', False)}")
+        print(f"   Has g_sessionID: {js_result.get('hasSessionID', False)}")
+
+        if "token" in js_result:
+            print("   ✅ Found token via JavaScript!")
+            print(f"   Token preview: {js_result['token'][:30]}...")
+            print(f"   Token length: {js_result['tokenLength']} characters")
+            return True
+        print("   ❌ No token found via JavaScript")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"   ⚠️  JavaScript evaluation error: {e}")
+    return False
+
+
 async def diagnose_token_extraction():
     """Diagnose token extraction issues with detailed logging."""
     print("\n" + "=" * 60)
@@ -74,205 +262,31 @@ async def diagnose_token_extraction():
             print("Exiting...")
             return
 
-    if BROWSER_PROFILE_PATH and BROWSER_PROFILE_PATH.exists():
-        print("\n🌐 Launching browser with profile...")
-        print(f"   Profile: {BROWSER_PROFILE_PATH}")
-        camoufox_kwargs = {
-            "persistent_context": True,
-            "user_data_dir": str(BROWSER_PROFILE_PATH),
-            "headless": False,  # Non-headless for debugging
-        }
-    else:
-        print("\n🌐 Launching browser without profile...")
-        print("   ⚠️  You will need to log in manually")
-        camoufox_kwargs = {"headless": False}
+    camoufox_kwargs = _setup_browser_kwargs()
 
     try:
         async with AsyncCamoufox(**camoufox_kwargs) as context:
             page = await context.new_page()
 
-            # Navigate to the points summary page
-            print("\n📄 Navigating to Steam points summary page...")
-            print(
-                "   URL: https://store.steampowered.com/pointssummary/ajaxgetasyncconfig"
-            )
+            content = await _navigate_and_get_content(page)
+            _save_debug_content(content)
+            _check_login_status(content)
 
-            try:
-                await page.goto(
-                    "https://store.steampowered.com/pointssummary/ajaxgetasyncconfig",
-                    wait_until="networkidle",
-                    timeout=30000,
-                )
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                print(f"   ⚠️  Navigation warning: {e}")
-                print("   Continuing anyway...")
-
-            # Get page content
-            content = await page.content()
-            print(f"\n📝 Page content length: {len(content):,} characters")
-
-            # Check for empty JSON response
-            if '{"success":1,"data":[]}' in content or (
-                len(content) < 200 and '"success":1' in content
-            ):
-                print("\n   ⚠️  CRITICAL: Steam returned an empty data response.")
-                print(f"   Response content: {content.strip()}")
-                print("   This indicates the session is invalid or not logged in.")
-                print("   The browser profile might need to be refreshed.")
-
-            # Save content for inspection
-            debug_file = OUTPUT_DIR / "steam_page_content.html"
-            try:
-                debug_file.write_text(content, encoding="utf-8")
-                print(f"💾 Saved page content to: {debug_file}")
-            except OSError as e:
-                print(f"⚠️  Could not save content: {e}")
-
-            # Check for login indicators
-            print("\n🔐 Login status check:")
-            login_indicators = ["login", "sign in", "signin", "join steam"]
-            found_indicators = [
-                ind for ind in login_indicators if ind in content.lower()
-            ]
-
-            if found_indicators:
-                print("   ⚠️  Page appears to show login form")
-                print(f"   Found indicators: {', '.join(found_indicators)}")
-                print("   ❌ You are likely NOT logged into Steam")
-            else:
-                print("   ✅ No obvious login indicators found")
-
-            # Try to find the webapi_token using multiple methods
             print("\n🔍 Searching for webapi_token...")
             print("-" * 60)
 
             found_token = False
+            if _search_string_pattern(content):
+                found_token = True
+            if _search_regex_pattern(content):
+                found_token = True
 
-            # Method 1: String pattern search
-            print("\n📌 Method 1: String pattern search")
-            patterns = [
-                ('"webapi_token":"', '"}'),
-                ('"webapi_token": "', '"'),
-                ('webapi_token":"', '"'),
-                ('webapi_token": "', '"'),
-                ("'webapi_token':'", "'}"),
-                ("'webapi_token': '", "'"),
-            ]
+            _search_webapi_general(content)
+            await _get_page_metadata(page)
 
-            for i, (start_marker, end_marker) in enumerate(patterns, 1):
-                start_index = content.find(start_marker)
-                if start_index != -1:
-                    key_start = start_index + len(start_marker)
-                    key_end = content.find(end_marker, key_start)
-                    if key_end != -1:
-                        token = content[key_start:key_end]
-                        print(f"   ✅ Found token with pattern {i}: {start_marker}")
-                        print(f"   Token preview: {token[:30]}...")
-                        print(f"   Token length: {len(token)} characters")
-                        found_token = True
-                        break
+            if await _evaluate_javascript(page):
+                found_token = True
 
-            if not found_token:
-                print("   ❌ Could not find token with any string pattern")
-
-            # Method 2: Regex search (production logic)
-            print("\n📌 Method 2: Regex JSON search (Production Logic)")
-            try:
-                json_patterns = [
-                    r'"webapi_token"\s*:\s*"([^"]+)"',
-                    r"'webapi_token'\s*:\s*'([^']+)'",
-                    r'webapi_token\s*:\s*"([^"]+)"',
-                ]
-
-                for i, pattern in enumerate(json_patterns, 1):
-                    matches = re.findall(pattern, content)
-                    if matches:
-                        print(f"   ✅ Found {len(matches)} token(s) with pattern {i}")
-                        for j, match in enumerate(matches[:3], 1):
-                            print(f"   Token {j} preview: {match[:30]}...")
-                        found_token = True
-                        break
-
-                if not found_token:
-                    print("   ❌ No tokens found with regex patterns")
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                print(f"   ⚠️  Regex search error: {e}")
-
-            # Method 3: General 'webapi' search
-            print("\n📌 Method 3: General 'webapi' search")
-            webapi_count = content.lower().count("webapi")
-            print(f"   Found 'webapi' {webapi_count} times in page")
-
-            if webapi_count > 0:
-                webapi_contexts_list = [
-                    m.group()
-                    for m in re.finditer(
-                        r".{0,50}webapi.{0,50}", content, re.IGNORECASE
-                    )
-                ]
-                if webapi_contexts_list:
-                    print("   Showing first 3 contexts:")
-                    for i, ctx in enumerate(webapi_contexts_list[:3], 1):
-                        ctx_clean = ctx.replace("\n", " ").replace("\r", "")
-                        print(f"   {i}. ...{ctx_clean[:80]}...")
-
-            # Method 4: Page metadata
-            print("\n📌 Method 4: Page metadata")
-            title = await page.title()
-            print(f"   Page title: {title}")
-            print(f"   Current URL: {page.url}")
-
-            # Method 5: JavaScript evaluation
-            print("\n📌 Method 5: JavaScript evaluation")
-            try:
-                js_result = await page.evaluate("""
-                    () => {
-                        const results = {};
-
-                        const scripts = document.getElementsByTagName('script');
-                        results.scriptCount = scripts.length;
-                        results.scriptsWithToken = 0;
-
-                        for (let script of scripts) {
-                            if (script.textContent.includes('webapi_token')) {
-                                results.scriptsWithToken++;
-                                const match = script.textContent.match(/"webapi_token"\\s*:\\s*"([^"]+)"/);
-                                if (match && match[1]) {
-                                    results.token = match[1];
-                                    results.tokenLength = match[1].length;
-                                    break;
-                                }
-                            }
-                        }
-
-                        results.hasWindowG = typeof window.g_rgLoyaltyRewardDefs !== 'undefined';
-                        results.hasSessionID = typeof g_sessionID !== 'undefined';
-
-                        return results;
-                    }
-                """)
-
-                print(f"   Scripts on page: {js_result.get('scriptCount', 0)}")
-                print(
-                    f"   Scripts with 'webapi_token': {js_result.get('scriptsWithToken', 0)}"
-                )
-                print(
-                    f"   Has window.g_rgLoyaltyRewardDefs: {js_result.get('hasWindowG', False)}"
-                )
-                print(f"   Has g_sessionID: {js_result.get('hasSessionID', False)}")
-
-                if "token" in js_result:
-                    print("   ✅ Found token via JavaScript!")
-                    print(f"   Token preview: {js_result['token'][:30]}...")
-                    print(f"   Token length: {js_result['tokenLength']} characters")
-                    found_token = True
-                else:
-                    print("   ❌ No token found via JavaScript")
-
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                print(f"   ⚠️  JavaScript evaluation error: {e}")
-
-            # Screenshot for visual debugging
             screenshot_path = OUTPUT_DIR / "steam_page_screenshot.png"
             try:
                 await page.screenshot(path=str(screenshot_path), full_page=True)
@@ -280,7 +294,6 @@ async def diagnose_token_extraction():
             except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"\n⚠️  Could not save screenshot: {e}")
 
-            # Final summary
             print("\n" + "=" * 60)
             if found_token:
                 print("✅ SUCCESS: Token was found!")
@@ -292,7 +305,8 @@ async def diagnose_token_extraction():
             print("   Check the browser window to see what Steam returned")
             await asyncio.sleep(15)
 
-    # A catch-all Exception is deliberate for the diagnostic routine in scripts/diagnose_token.py to report any failure
+    # A catch-all Exception is deliberate here
+    # to report any failure in scripts/diagnose_token.py
     except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"\n❌ Error during diagnosis: {e}")
         traceback.print_exc()

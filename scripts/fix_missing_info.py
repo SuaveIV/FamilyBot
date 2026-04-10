@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Database Content Fixer for FamilyBot
+"""Database Content Fixer for FamilyBot.
 
 Identifies and attempts to fix missing or 'Unknown' game names across multiple tables
 by cross-referencing with other tables and falling back to the Steam API.
@@ -24,17 +23,39 @@ logger = logging.getLogger("fix_missing_info")
 try:
     from familybot.lib.database import get_db_connection, get_write_connection
     from familybot.lib.game_details_repository import get_cached_game_details
-    from familybot.lib.steam_helpers import fetch_game_details
     from familybot.lib.steam_api_manager import SteamAPIManager
+    from familybot.lib.steam_helpers import fetch_game_details
 except ImportError as e:
     logger.error(f"Could not import familybot modules: {e}")
     sys.exit(1)
 
 
-async def fix_missing_names():
-    """Identifies and fixes 'Unknown' or NULL names in itad_price_cache."""
-    logger.info("Starting itad_price_cache name fix...")
+async def _resolve_game_name(appid, steam_api_manager):
+    """Attempt to resolve game name from internal cache or external API."""
+    cached_details = get_cached_game_details(appid)
+    if (
+        cached_details
+        and cached_details.get("name")
+        and not cached_details["name"].startswith("Unknown")
+    ):
+        logger.info(f"   [Internal] Found name for {appid}: '{cached_details['name']}'")
+        return cached_details["name"], "internal"
 
+    logger.info(f"   [External] Fetching Steam details for {appid}...")
+    try:
+        game_data = await fetch_game_details(appid, steam_api_manager)
+        if game_data and game_data.get("name"):
+            logger.info(
+                f"   [External] Successfully fetched name for {appid}: '{game_data['name']}'"
+            )
+            return game_data["name"], "external"
+    except Exception as e:
+        logger.warning(f"   [External] Failed to fetch details for {appid}: {e}")
+
+    return None, None
+
+
+def _get_missing_names_rows():
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -47,12 +68,51 @@ async def fix_missing_names():
                    OR steam_game_name = ''
                    OR steam_game_name LIKE 'Unknown Game%'
             """)
-
-            problematic_rows = cursor.fetchall()
+            return cursor.fetchall()
         finally:
             cursor.close()
     finally:
         conn.close()
+
+
+def _apply_name_updates(updates_to_apply):
+    fixed_count = 0
+    internal_fixes = 0
+    external_fixes = 0
+    failed_fixes = 0
+    try:
+        with get_write_connection() as write_conn:
+            write_cursor = write_conn.cursor()
+            write_cursor.executemany(
+                """
+                UPDATE itad_price_cache
+                SET steam_game_name = ?
+                WHERE appid = ?
+            """,
+                [(name, appid) for name, appid, _ in updates_to_apply],
+            )
+            write_conn.commit()
+            write_cursor.close()
+
+        # Count fixes by source only after successful commit
+        for _, _, source in updates_to_apply:
+            if source == "internal":
+                internal_fixes += 1
+            else:
+                external_fixes += 1
+            fixed_count += 1
+    except sqlite3.Error as e:
+        logger.error(f"   ❌ Batch database update failed: {e}")
+        failed_fixes += len(updates_to_apply)
+
+    return fixed_count, internal_fixes, external_fixes, failed_fixes
+
+
+async def fix_missing_names():
+    """Identify and fix 'Unknown' or NULL names in itad_price_cache."""
+    logger.info("Starting itad_price_cache name fix...")
+
+    problematic_rows = _get_missing_names_rows()
 
     if not problematic_rows:
         logger.info("✅ No problematic game names found in itad_price_cache.")
@@ -62,89 +122,27 @@ async def fix_missing_names():
         f"🔍 Found {len(problematic_rows)} entries with missing or 'Unknown' names."
     )
 
-    fixed_count = 0
-    internal_fixes = 0
-    external_fixes = 0
-    failed_fixes = 0
-
     steam_api_manager = SteamAPIManager()
-
-    # Collect updates for batch processing
     updates_to_apply = []
-
-    # Track entries that couldn't be resolved automatically
     failed_entries = []
 
-    # Process each problematic entry
     for row in problematic_rows:
         appid = row["appid"]
         current_name = row["steam_game_name"]
-        found_name = None
-        found_source = None
 
-        # Phase 1: Try local game_details_cache
-        cached_details = get_cached_game_details(appid)
-        if (
-            cached_details
-            and cached_details.get("name")
-            and not cached_details["name"].startswith("Unknown")
-        ):
-            found_name = cached_details["name"]
-            found_source = "internal"
-            logger.info(f"   [Internal] Found name for {appid}: '{found_name}'")
+        found_name, found_source = await _resolve_game_name(appid, steam_api_manager)
 
-        # Phase 2: Try Steam Store API fallback if Phase 1 failed
-        if not found_name:
-            logger.info(f"   [External] Fetching Steam details for {appid}...")
-            try:
-                game_data = await fetch_game_details(appid, steam_api_manager)
-                if game_data and game_data.get("name"):
-                    found_name = game_data["name"]
-                    found_source = "external"
-                    logger.info(
-                        f"   [External] Successfully fetched name for {appid}: '{found_name}'"
-                    )
-            except Exception as e:
-                logger.warning(
-                    f"   [External] Failed to fetch details for {appid}: {e}"
-                )
-
-        # Phase 2: Collect update if we found a name
         if found_name:
             updates_to_apply.append((found_name, appid, found_source))
         else:
             logger.warning(f"   ⚠️ Could not resolve name for AppID {appid}")
-            failed_fixes += 1
             failed_entries.append((appid, current_name))
 
-    # Phase 3: Batch update the database
     if updates_to_apply:
-        try:
-            with get_write_connection() as write_conn:
-                write_cursor = write_conn.cursor()
-                write_cursor.executemany(
-                    """
-                    UPDATE itad_price_cache
-                    SET steam_game_name = ?
-                    WHERE appid = ?
-                """,
-                    [(name, appid) for name, appid, _ in updates_to_apply],
-                )
-                write_conn.commit()
-                write_cursor.close()
+        fixed, internal, external, _ = _apply_name_updates(updates_to_apply)
+        return fixed, internal, external, failed_entries
 
-            # Count fixes by source only after successful commit
-            for _, _, source in updates_to_apply:
-                if source == "internal":
-                    internal_fixes += 1
-                else:
-                    external_fixes += 1
-                fixed_count += 1
-        except sqlite3.Error as e:
-            logger.error(f"   ❌ Batch database update failed: {e}")
-            failed_fixes += len(updates_to_apply)
-
-    return fixed_count, internal_fixes, external_fixes, failed_entries
+    return 0, 0, 0, failed_entries
 
 
 def check_game_details_cache():
@@ -265,11 +263,12 @@ async def fix_game_details_cache_names():
         cursor = conn.cursor()
         try:
             # Build placeholders for IN clause
-            placeholders = ",".join("?" * len(appids))
-            cursor.execute(
-                f"SELECT appid, steam_game_name FROM itad_price_cache WHERE appid IN ({placeholders})",
-                appids,
-            )
+            placeholders = ",".join(["?"] * len(appids))
+            query = (
+                "SELECT appid, steam_game_name FROM itad_price_cache "
+                "WHERE appid IN (PLACEHOLDERS)"
+            ).replace("PLACEHOLDERS", placeholders)
+            cursor.execute(query, appids)
             for row in cursor.fetchall():
                 if row["steam_game_name"] and not row["steam_game_name"].startswith(
                     "Unknown"
@@ -280,7 +279,7 @@ async def fix_game_details_cache_names():
     finally:
         conn.close()
 
-    for appid, current_name, game_type in problematic_rows:
+    for appid, _, _ in problematic_rows:
         found_name = None
 
         # Try to get name from the pre-fetched mapping
@@ -317,34 +316,7 @@ async def fix_game_details_cache_names():
     return fixed_count, failed_count
 
 
-async def interactive_manual_entry(failed_entries, table_name="itad_price_cache"):
-    """Interactive manual entry for failed entries."""
-    if not failed_entries:
-        return 0
-
-    # Validate table_name against whitelist and map to correct column
-    allowed_tables = {
-        "itad_price_cache": "steam_game_name",
-        "game_details_cache": "name",
-    }
-    if table_name not in allowed_tables:
-        logger.error(f"   ❌ Invalid table name: {table_name}")
-        return 0
-    name_column = allowed_tables[table_name]
-
-    print(f"\n⚠️  {len(failed_entries)} entries could not be resolved automatically.")
-    try:
-        response = (
-            input("Would you like to manually enter names for them? (y/n): ")
-            .strip()
-            .lower()
-        )
-    except EOFError:
-        response = "n"
-
-    if response != "y":
-        return 0
-
+def _collect_manual_updates(failed_entries):
     manual_updates = []
     for appid, current_name in failed_entries:
         print(f"\n  AppID: {appid}")
@@ -359,34 +331,69 @@ async def interactive_manual_entry(failed_entries, table_name="itad_price_cache"
             print(f"  ✅ Will update to: '{manual_name}'")
         else:
             print("  ⏭️  Skipped")
+    return manual_updates
 
-    # Apply manual updates
-    if manual_updates:
-        try:
-            with get_write_connection() as write_conn:
-                write_cursor = write_conn.cursor()
-                # Use validated table_name and name_column from the whitelist
-                write_cursor.executemany(
-                    f"""
-                    UPDATE {table_name}
-                    SET {name_column} = ?
+
+def _apply_manual_updates(manual_updates, table_name):
+    try:
+        with get_write_connection() as write_conn:
+            write_cursor = write_conn.cursor()
+            if table_name == "itad_price_cache":
+                query = """
+                    UPDATE itad_price_cache
+                    SET steam_game_name = ?
                     WHERE appid = ?
-                """,
-                    manual_updates,
-                )
-                write_conn.commit()
-                write_cursor.close()
+                """
+            else:
+                query = """
+                    UPDATE game_details_cache
+                    SET name = ?
+                    WHERE appid = ?
+                """
+            write_cursor.executemany(query, manual_updates)
+            write_conn.commit()
+            write_cursor.close()
 
-            print(f"\n✅ Applied {len(manual_updates)} manual fixes.")
-            return len(manual_updates)
-        except sqlite3.Error as e:
-            logger.error(f"   ❌ Manual update failed: {e}")
+        print(f"\n✅ Applied {len(manual_updates)} manual fixes.")
+        return len(manual_updates)
+    except sqlite3.Error as e:
+        logger.error(f"   ❌ Manual update failed: {e}")
+        return 0
+
+
+async def interactive_manual_entry(failed_entries, table_name="itad_price_cache"):
+    """Run interactive manual entry for failed entries."""
+    if not failed_entries:
+        return 0
+
+    allowed_tables = {"itad_price_cache", "game_details_cache"}
+    if table_name not in allowed_tables:
+        logger.error(f"   ❌ Invalid table name: {table_name}")
+        return 0
+
+    print(f"\n⚠️  {len(failed_entries)} entries could not be resolved automatically.")
+    try:
+        response = (
+            input("Would you like to manually enter names for them? (y/n): ")
+            .strip()
+            .lower()
+        )
+    except EOFError:
+        response = "n"
+
+    if response != "y":
+        return 0
+
+    manual_updates = _collect_manual_updates(failed_entries)
+
+    if manual_updates:
+        return _apply_manual_updates(manual_updates, table_name)
 
     return 0
 
 
 async def main():
-    """Main function to run all database checks and fixes."""
+    """Run all database checks and fixes."""
     print("=" * 50)
     print("🔧 FamilyBot Database Content Fixer")
     print("=" * 50)
