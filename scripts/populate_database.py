@@ -1,34 +1,42 @@
-import os
-import sys
-import random
-import json
 import argparse
 import asyncio
+import json
 import logging
-from datetime import datetime
-from typing import Any, Callable, Optional
-import httpx
+import random
+import sys
+from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
+import httpx
 from steam.webapi import WebAPI
 
 # Add the src directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from familybot.config import STEAMWORKS_API_KEY, ITAD_API_KEY  # pylint: disable=wrong-import-position
+from familybot.config import (  # pylint: disable=wrong-import-position
+    ITAD_API_KEY,
+    STEAMWORKS_API_KEY,
+)
 from familybot.lib.database import (
     get_db_connection,
     init_db,
 )
 from familybot.lib.family_library_repository import cache_family_library
-from familybot.lib.family_utils import get_family_game_list_url  # pylint: disable=wrong-import-position
+from familybot.lib.family_utils import (
+    get_family_game_list_url,  # pylint: disable=wrong-import-position
+)
 from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
-from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
+from familybot.lib.logging_config import (
+    setup_script_logging,  # pylint: disable=wrong-import-position
+)
 from familybot.lib.steam_itad_mapping_repository import (
-    get_cached_itad_ids_bulk,
     bulk_cache_itad_mappings,
+    get_cached_itad_ids_bulk,
 )
 from familybot.lib.user_games_repository import cache_user_games
 from familybot.lib.user_repository import load_family_members_from_db
@@ -66,9 +74,7 @@ class DatabasePopulator:
             "slow": {"steam_api": 1.8, "store_api": 2.2},
         }
 
-        self.current_limits = self.rate_limits.get(
-            rate_limit_mode, self.rate_limits["normal"]
-        )
+        self.current_limits = self.rate_limits.get(rate_limit_mode, self.rate_limits["normal"])
 
         # Create token bucket rate limiters
         self.steam_bucket = TokenBucket(1.0 / self.current_limits["steam_api"])
@@ -107,13 +113,14 @@ class DatabasePopulator:
         url: str,
         api_type: str = "steam",
         method: str = "GET",
-        params: Optional[dict] = None,
-        json: Optional[dict | list] = None,
-        timeout: Optional[float] = None,
-        headers: Optional[dict] = None,
-    ) -> Optional[httpx.Response]:
+        params: dict | None = None,
+        json: dict | list | None = None,
+        timeout: float | None = None,
+        headers: dict | None = None,
+    ) -> httpx.Response | None:
         """Make HTTP request with retry logic for 429 errors."""
         bucket = self.steam_bucket if api_type == "steam" else self.store_bucket
+        _rng = random.SystemRandom()
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -121,7 +128,7 @@ class DatabasePopulator:
                 await bucket.acquire()
 
                 # Add jitter to prevent synchronized requests
-                jitter = random.uniform(0, 0.1)
+                jitter = _rng.uniform(0, 0.1)
                 await asyncio.sleep(jitter)
 
                 # Make the request
@@ -140,9 +147,7 @@ class DatabasePopulator:
                 # Check for rate limiting
                 if response.status_code == 429:
                     if attempt < self.max_retries:
-                        backoff_time = self.base_backoff * (
-                            2**attempt
-                        ) + random.uniform(0, 1)
+                        backoff_time = self.base_backoff * (2**attempt) + _rng.uniform(0, 1)
                         logger.warning(
                             "Rate limited (429), retrying in %.1fs (attempt %d/%d)",
                             backoff_time,
@@ -159,9 +164,7 @@ class DatabasePopulator:
             except (httpx.RequestError, httpx.TimeoutException, OSError) as e:
                 if attempt < self.max_retries:
                     backoff_time = self.base_backoff * (2**attempt)
-                    logger.warning(
-                        "Request failed: %s, retrying in %.1f s", e, backoff_time
-                    )
+                    logger.warning("Request failed: %s, retrying in %.1f s", e, backoff_time)
                     await asyncio.sleep(backoff_time)
                     continue
                 logger.error("Request failed after %d retries: %s", self.max_retries, e)
@@ -169,9 +172,7 @@ class DatabasePopulator:
 
         return None
 
-    def handle_api_response(
-        self, api_name: str, response: httpx.Response
-    ) -> Optional[dict]:
+    def handle_api_response(self, api_name: str, response: httpx.Response) -> dict | None:
         """Handle API responses with error checking and enhanced logging."""
         try:
             response.raise_for_status()
@@ -217,8 +218,8 @@ class DatabasePopulator:
                 try:
                     cache_game_details(app_id, data, permanent=False)
                     written += 1
-                except Exception:
-                    pass
+                except Exception as fallback_err:
+                    logger.debug("Failed to cache game details for %s: %s", app_id, fallback_err)
         finally:
             if cursor is not None:
                 cursor.close()
@@ -234,9 +235,7 @@ class DatabasePopulator:
                 return fallback_data
 
             # Strategy 2: Last resort - create minimal entry with app ID
-            logger.debug(
-                "No fallback info found for app %s, using minimal entry", app_id
-            )
+            logger.debug("No fallback info found for app %s, using minimal entry", app_id)
             return {
                 "name": f"App {app_id}",
                 "type": "unknown",
@@ -262,7 +261,7 @@ class DatabasePopulator:
                 "price_overview": None,
             }
 
-    async def _try_steam_library_fallback(self, app_id: str) -> Optional[dict]:
+    async def _try_steam_library_fallback(self, app_id: str) -> dict | None:
         """Try using the steam library for fallback data, running in a separate thread."""
         if not self.steam_api:
             return None
@@ -345,7 +344,7 @@ class DatabasePopulator:
             print(f"   ❌ Error populating family shared library: {e}")
             return 0
 
-    async def get_owned_games(self, steam_id: str) -> Optional[dict]:
+    async def get_owned_games(self, steam_id: str) -> dict | None:
         """Get owned games for a user using the steam library."""
         if not self.steam_api:
             return None
@@ -367,14 +366,12 @@ class DatabasePopulator:
                     include_extended_appinfo=1,
                 )
             except (ValueError, TypeError, KeyError, OSError) as e:
-                logger.warning(
-                    "Steam library GetOwnedGames call failed for %s: %s", steam_id, e
-                )
+                logger.warning("Steam library GetOwnedGames call failed for %s: %s", steam_id, e)
                 return None
 
         return await asyncio.to_thread(get_games)
 
-    async def get_wishlist(self, steam_id: str) -> Optional[dict]:
+    async def get_wishlist(self, steam_id: str) -> dict | None:
         """Get wishlist for a user using the steam library."""
         if not self.steam_api:
             return None
@@ -383,13 +380,9 @@ class DatabasePopulator:
             try:
                 if not self.steam_api:
                     return None
-                return self.steam_api.call(
-                    "IWishlistService.GetWishlist", steamid=steam_id
-                )
+                return self.steam_api.call("IWishlistService.GetWishlist", steamid=steam_id)
             except (ValueError, TypeError, KeyError, OSError) as e:
-                logger.warning(
-                    "Steam library GetWishlist call failed for %s: %s", steam_id, e
-                )
+                logger.warning("Steam library GetWishlist call failed for %s: %s", steam_id, e)
                 return None
 
         wishlist_data = await asyncio.to_thread(get_wishlist_data)
@@ -407,10 +400,7 @@ class DatabasePopulator:
         """Populate database with all family member game libraries."""
         print("\n🎮 Starting family library population...")
 
-        if (
-            not STEAMWORKS_API_KEY
-            or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE"
-        ):
+        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
             print("❌ Steam API key not configured. Cannot fetch family libraries.")
             return 0
 
@@ -481,13 +471,13 @@ class DatabasePopulator:
                     self._show_empty_progress(name, user_cached, user_skipped)
 
             except (
+                TimeoutError,
                 httpx.RequestError,
                 httpx.TimeoutException,
                 httpx.HTTPStatusError,
                 ValueError,
                 TypeError,
                 KeyError,
-                asyncio.TimeoutError,
             ) as e:
                 logger.warning("Error processing %s: %s", name, e)
                 continue
@@ -501,7 +491,7 @@ class DatabasePopulator:
         total_processed: int,
         total_cached: int,
     ) -> tuple[int, int]:
-        """Populate libraries without tqdm progress bars. Returns (total_cached, total_processed)."""
+        """Populate libraries without tqdm. Returns (total_cached, total_processed)."""
         for steam_id, name in family_members.items():
             print(f"\n📊 Processing {name}...")
 
@@ -533,22 +523,18 @@ class DatabasePopulator:
 
                 if games_to_fetch:
                     print(f"   🎯 Processing {len(games_to_fetch)} new games...")
-                    total_cached += await self._fetch_games_simple(
-                        games_to_fetch, user_cached
-                    )
+                    total_cached += await self._fetch_games_simple(games_to_fetch, user_cached)
 
-                print(
-                    f"   ✅ {name} complete: {user_cached} cached, {user_skipped} skipped"
-                )
+                print(f"   ✅ {name} complete: {user_cached} cached, {user_skipped} skipped")
 
             except (
+                TimeoutError,
                 httpx.RequestError,
                 httpx.TimeoutException,
                 httpx.HTTPStatusError,
                 ValueError,
                 TypeError,
                 KeyError,
-                asyncio.TimeoutError,
             ) as e:
                 print(f"   ❌ Error processing {name}: {e}")
                 continue
@@ -556,7 +542,10 @@ class DatabasePopulator:
         return total_cached, total_processed
 
     def _process_user_games(self, games, total_processed):
-        """Process user games and return cached, skipped counts, games to fetch, and updated count."""
+        """Process user games, returning cached/skipped counts, games to fetch, and updated total.
+
+        Returns (user_cached, user_skipped, games_to_fetch, total_processed).
+        """
         user_cached = 0
         user_skipped = 0
         games_to_fetch = []
@@ -584,13 +573,11 @@ class DatabasePopulator:
         )
         total_cached = 0
 
-        async def fetch_game_with_progress(app_id: str) -> Optional[tuple[str, dict]]:
+        async def fetch_game_with_progress(app_id: str) -> tuple[str, dict] | None:
             nonlocal user_cached, user_skipped, total_cached
             game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
             try:
-                game_response = await self.make_request_with_retry(
-                    game_url, api_type="store"
-                )
+                game_response = await self.make_request_with_retry(game_url, api_type="store")
                 if game_response is None:
                     async with progress_lock:
                         user_skipped += 1
@@ -600,9 +587,7 @@ class DatabasePopulator:
                         )
                     return None
 
-                game_info = self.handle_api_response(
-                    f"AppDetails ({app_id})", game_response
-                )
+                game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
                 if not game_info:
                     async with progress_lock:
                         user_skipped += 1
@@ -634,13 +619,13 @@ class DatabasePopulator:
                     )
                 return (app_id, game_data)
             except (
+                TimeoutError,
                 httpx.RequestError,
                 httpx.TimeoutException,
                 httpx.HTTPStatusError,
                 ValueError,
                 TypeError,
                 KeyError,
-                asyncio.TimeoutError,
             ):
                 async with progress_lock:
                     user_skipped += 1
@@ -691,15 +676,11 @@ class DatabasePopulator:
             game_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
 
             try:
-                game_response = await self.make_request_with_retry(
-                    game_url, api_type="store"
-                )
+                game_response = await self.make_request_with_retry(game_url, api_type="store")
                 if game_response is None:
                     return False
 
-                game_info = self.handle_api_response(
-                    f"AppDetails ({app_id})", game_response
-                )
+                game_info = self.handle_api_response(f"AppDetails ({app_id})", game_response)
                 if not game_info:
                     return False
 
@@ -718,13 +699,13 @@ class DatabasePopulator:
                 return True
 
             except (
+                TimeoutError,
                 httpx.RequestError,
                 httpx.TimeoutException,
                 httpx.HTTPStatusError,
                 ValueError,
                 TypeError,
                 KeyError,
-                asyncio.TimeoutError,
             ) as e:
                 print(f"   ⚠️  Error processing game {app_id}: {e}")
                 return False
@@ -738,34 +719,48 @@ class DatabasePopulator:
 
             # Progress update every batch
             processed = min(i + batch_size, len(games_to_fetch))
-            print(
-                f"   📈 Progress: {processed}/{len(games_to_fetch)} | Cached: {user_cached} "
-            )
+            print(f"   📈 Progress: {processed}/{len(games_to_fetch)} | Cached: {user_cached} ")
 
         return total_cached
+
+    def _parse_itad_response(
+        self,
+        lookup_data: dict,
+        new_mappings: dict[str, str],
+    ) -> int:
+        """Parse an ITAD bulk lookup response into new_mappings. Returns failure count."""
+        failed = 0
+        for shop_query, itad_id in lookup_data.items():
+            app_id = shop_query.replace("app/", "")
+            if itad_id:
+                new_mappings[app_id] = itad_id
+            else:
+                failed += 1
+        return failed
+
+    def _fail_chunk(
+        self,
+        chunk: list[str],
+        failed_count: int,
+        pbar_update: Callable[[int, int], None] | None,
+    ) -> int:
+        """Increment failed_count by chunk size and notify pbar_update if provided."""
+        failed_count += len(chunk)
+        if pbar_update:
+            pbar_update(len(chunk), failed_count)
+        return failed_count
 
     async def _process_itad_chunk(
         self,
         chunk: list[str],
         new_mappings: dict[str, str],
         failed_count: int,
-        pbar_update: Optional[Callable[[int, int], None]] = None,
+        pbar_update: Callable[[int, int], None] | None = None,
     ) -> int:
-        """Process a chunk of ITAD ID lookups.
-
-        Args:
-            chunk: List of app IDs to look up
-            new_mappings: Dictionary to update with new mappings
-            failed_count: Current failure count to update
-            pbar_update: Optional callback to update progress bar
-
-        Returns:
-            Updated failed_count
-        """
+        """Process a chunk of ITAD ID lookups and return the updated failed_count."""
         shop_queries = [f"app/{app_id}" for app_id in chunk]
         lookup_url = "https://api.isthereanydeal.com/lookup/id/shop/61/v1"
         try:
-            # Use retry logic for POST (rate limiting handled by make_request_with_retry)
             response = await self.make_request_with_retry(
                 lookup_url,
                 api_type="store",
@@ -776,42 +771,62 @@ class DatabasePopulator:
             )
 
             if response is None:
-                # 429s are handled by make_request_with_retry and cause None to be returned after retries
-                failed_count += len(chunk)
-                if pbar_update:
-                    pbar_update(len(chunk), failed_count)
-                return failed_count
+                return self._fail_chunk(chunk, failed_count, pbar_update)
 
             lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
             if not isinstance(lookup_data, dict):
-                failed_count += len(chunk)
-                if pbar_update:
-                    pbar_update(len(chunk), failed_count)
-                return failed_count
+                return self._fail_chunk(chunk, failed_count, pbar_update)
 
-            for shop_query, itad_id in lookup_data.items():
-                app_id = shop_query.replace("app/", "")
-                if itad_id:
-                    new_mappings[app_id] = itad_id
-                else:
-                    failed_count += 1
-
+            failed_count += self._parse_itad_response(lookup_data, new_mappings)
             if pbar_update:
                 pbar_update(len(chunk), failed_count)
 
-        except (ValueError, ImportError) as e:
+        except (ValueError, ImportError, httpx.RequestError) as e:
             logger.error("ITAD bulk lookup chunk failed: %s", e)
-            failed_count += len(chunk)
-            if pbar_update:
-                pbar_update(len(chunk), failed_count)
-        except KeyboardInterrupt:
-            raise
-        except httpx.RequestError as e:
-            logger.error("ITAD bulk lookup chunk failed: %s", e)
-            failed_count += len(chunk)
-            if pbar_update:
-                pbar_update(len(chunk), failed_count)
+            failed_count = self._fail_chunk(chunk, failed_count, pbar_update)
 
+        return failed_count
+
+    async def _resolve_itad_chunks_with_tqdm(
+        self,
+        uncached: list[str],
+        chunk_size: int,
+        new_mappings: dict[str, str],
+    ) -> int:
+        """Run chunked ITAD lookups with a tqdm progress bar. Returns failed count."""
+        failed_count = 0
+        pbar = tqdm(
+            total=len(uncached),
+            desc="Resolving ITAD IDs",
+            unit="game",
+            leave=True,
+        )
+        try:
+
+            def pbar_update(size: int, current_failed: int) -> None:
+                pbar.update(size)
+                pbar.set_postfix_str(f"Mapped: {len(new_mappings)}, Failed: {current_failed} ")
+
+            for i in range(0, len(uncached), chunk_size):
+                chunk = uncached[i : i + chunk_size]
+                failed_count = await self._process_itad_chunk(
+                    chunk, new_mappings, failed_count, pbar_update
+                )
+        finally:
+            pbar.close()
+        return failed_count
+
+    async def _resolve_itad_chunks_simple(
+        self,
+        uncached: list[str],
+        chunk_size: int,
+        new_mappings: dict[str, str],
+    ) -> int:
+        """Run chunked ITAD lookups without a progress bar. Returns failed count."""
+        failed_count = 0
+        for i in range(0, len(uncached), chunk_size):
+            chunk = uncached[i : i + chunk_size]
+            failed_count = await self._process_itad_chunk(chunk, new_mappings, failed_count)
         return failed_count
 
     async def resolve_itad_ids(self, dry_run: bool = False) -> int:
@@ -854,39 +869,17 @@ class DatabasePopulator:
             print("   ✅ All games already have ITAD ID mappings")
             return 0
 
-        # Bulk lookup in chunks of 100
-        new_mappings = {}
-        failed_count = 0
+        new_mappings: dict[str, str] = {}
         chunk_size = 100
 
         if TQDM_AVAILABLE:
-            pbar = tqdm(
-                total=len(uncached),
-                desc="Resolving ITAD IDs",
-                unit="game",
-                leave=True,
+            failed_count = await self._resolve_itad_chunks_with_tqdm(
+                uncached, chunk_size, new_mappings
             )
-            try:
-
-                def pbar_update(size: int, failed_count: int):
-                    pbar.update(size)
-                    pbar.set_postfix_str(
-                        f"Mapped: {len(new_mappings)}, Failed: {failed_count} "
-                    )
-
-                for i in range(0, len(uncached), chunk_size):
-                    chunk = uncached[i : i + chunk_size]
-                    failed_count = await self._process_itad_chunk(
-                        chunk, new_mappings, failed_count, pbar_update
-                    )
-            finally:
-                pbar.close()
         else:
-            for i in range(0, len(uncached), chunk_size):
-                chunk = uncached[i : i + chunk_size]
-                failed_count = await self._process_itad_chunk(
-                    chunk, new_mappings, failed_count
-                )
+            failed_count = await self._resolve_itad_chunks_simple(
+                uncached, chunk_size, new_mappings
+            )
 
         # Cache new mappings
         if new_mappings:
@@ -919,28 +912,18 @@ class DatabasePopulator:
             logger.warning("Error processing game %s: %s", app_id, e)
             return None
 
-    async def populate_wishlists(
-        self, family_members: dict[str, str], dry_run: bool = False
-    ) -> int:
-        """Populate database with family member wishlists."""
-        print("\n🎯 Starting wishlist population...")
-
-        if (
-            not STEAMWORKS_API_KEY
-            or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE"
-        ):
-            print("❌ Steam API key not configured. Cannot fetch wishlists.")
-            return 0
-
+    async def _collect_family_wishlists(
+        self,
+        family_members: dict[str, str],
+        dry_run: bool,
+    ) -> list[list]:
+        """Fetch and cache each family member's wishlist. Returns the global wishlist list."""
         global_wishlist: list[list] = []
-        total_cached: int = 0
 
-        # Collect wishlists from all family members
         for i, (steam_id, name) in enumerate(family_members.items(), 1):
             print(f"\n📊 Processing {name}'s wishlist ({i}/{len(family_members)})...")
 
             try:
-                # Check for cached wishlist first
                 cached_wishlist = get_cached_wishlist(steam_id)
                 if cached_wishlist:
                     print(f"   💾 Using cached wishlist ({len(cached_wishlist)} items)")
@@ -952,7 +935,6 @@ class DatabasePopulator:
                     print(f"   🔍 Would fetch wishlist for {name}")
                     continue
 
-                # Fetch wishlist from API
                 wishlist_data = await self.get_wishlist(steam_id)
                 if not wishlist_data:
                     print(f"   ❌ Failed to get wishlist for {name}")
@@ -965,36 +947,80 @@ class DatabasePopulator:
 
                 print(f"   🎯 Found {len(wishlist_items)} wishlist items")
 
-                # Process wishlist items
-                user_wishlist_appids = []
-                for item in wishlist_items:
-                    app_id = str(item.get("appid"))
-                    if not app_id:
-                        continue
-
-                    user_wishlist_appids.append(app_id)
+                user_wishlist_appids = [
+                    str(item.get("appid")) for item in wishlist_items if item.get("appid")
+                ]
+                for app_id in user_wishlist_appids:
                     add_to_wishlist(global_wishlist, app_id, steam_id)
 
-                # Cache the wishlist
                 cache_wishlist(steam_id, user_wishlist_appids)
                 print(f"   ✅ {name}'s wishlist cached")
 
             except (
+                TimeoutError,
                 httpx.RequestError,
                 httpx.TimeoutException,
                 httpx.HTTPStatusError,
                 ValueError,
                 TypeError,
                 KeyError,
-                asyncio.TimeoutError,
             ) as e:
                 print(f"   ❌ Error processing {name}'s wishlist: {e}")
                 continue
 
-        # Process ALL wishlist games (not just common ones)
-        all_unique_games = {
-            item[0] for item in global_wishlist
-        }  # Use set comprehension
+        return global_wishlist
+
+    async def _fetch_uncached_wishlist_games(self, games_to_fetch: list[str]) -> int:
+        """Fetch and cache game details for uncached wishlist games. Returns count cached."""
+        total_cached = 0
+        pbar = None
+        if TQDM_AVAILABLE:
+            pbar = tqdm(
+                total=len(games_to_fetch),
+                desc="🎯 Wishlist Games",
+                unit="game",
+                leave=True,
+            )
+
+        batch_size = 10
+        for i in range(0, len(games_to_fetch), batch_size):
+            batch = games_to_fetch[i : i + batch_size]
+            batch_data = {}
+
+            tasks = [self._fetch_wishlist_item(app_id) for app_id in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for res in results:
+                if isinstance(res, tuple):
+                    batch_data[res[0]] = res[1]
+                    total_cached += 1
+
+            self.batch_write_games(batch_data)
+
+            if pbar:
+                pbar.update(len(batch))
+            else:
+                fetched = min(i + batch_size, len(games_to_fetch))
+                print(f"   📈 Progress: {fetched}/{len(games_to_fetch)} games processed")
+
+        if pbar:
+            pbar.close()
+
+        return total_cached
+
+    async def populate_wishlists(
+        self, family_members: dict[str, str], dry_run: bool = False
+    ) -> int:
+        """Populate database with family member wishlists."""
+        print("\n🎯 Starting wishlist population...")
+
+        if not STEAMWORKS_API_KEY or STEAMWORKS_API_KEY == "YOUR_STEAMWORKS_API_KEY_HERE":
+            print("❌ Steam API key not configured. Cannot fetch wishlists.")
+            return 0
+
+        global_wishlist = await self._collect_family_wishlists(family_members, dry_run)
+
+        all_unique_games = {item[0] for item in global_wishlist}
         if not all_unique_games:
             print("\n🎯 No wishlist games found")
             return 0
@@ -1005,57 +1031,16 @@ class DatabasePopulator:
             print("   🔍 Would process all wishlist games for caching")
             return 0
 
-        # Filter out games that are already cached
-        games_to_fetch = []
-        for app_id in all_unique_games:
-            if not get_cached_game_details(app_id):
-                games_to_fetch.append(app_id)
+        games_to_fetch = [
+            app_id for app_id in all_unique_games if not get_cached_game_details(app_id)
+        ]
 
         if not games_to_fetch:
             print("   ✅ All wishlist games already cached")
             return 0
 
         print(f"   🎯 Found {len(games_to_fetch)} new games to cache")
-
-        # Setup progress bar if available
-        pbar = None
-        if TQDM_AVAILABLE:
-            pbar = tqdm(
-                total=len(games_to_fetch),
-                desc="🎯 Wishlist Games",
-                unit="game",
-                leave=True,
-            )
-
-        # Process in batches for concurrency
-        batch_size = 10
-
-        for i in range(0, len(games_to_fetch), batch_size):
-            batch = games_to_fetch[i : i + batch_size]
-            batch_data = {}
-
-            # Run batch concurrently
-            tasks = [self._fetch_wishlist_item(app_id) for app_id in batch]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for res in results:
-                if isinstance(res, tuple):
-                    batch_data[res[0]] = res[1]
-                    total_cached += 1
-
-            # Write batch
-            self.batch_write_games(batch_data)
-
-            # Update progress
-            if pbar:
-                pbar.update(len(batch))
-            elif not TQDM_AVAILABLE:
-                print(
-                    f"   📈 Progress: {min(i + batch_size, len(games_to_fetch))}/{len(games_to_fetch)} games processed"
-                )
-
-        if pbar:
-            pbar.close()
+        total_cached = await self._fetch_uncached_wishlist_games(games_to_fetch)
 
         print("\n🎯 Wishlist population complete!")
         print(f"   💾 All wishlist games cached: {total_cached}")
@@ -1071,9 +1056,7 @@ async def main():
     parser.add_argument(
         "--library-only", action="store_true", help="Only scan family member libraries"
     )
-    parser.add_argument(
-        "--wishlist-only", action="store_true", help="Only scan wishlists"
-    )
+    parser.add_argument("--wishlist-only", action="store_true", help="Only scan wishlists")
     parser.add_argument("--fast", action="store_true", help="Use faster rate limiting")
     parser.add_argument("--slow", action="store_true", help="Use slower rate limiting")
     parser.add_argument(
@@ -1115,30 +1098,26 @@ async def main():
             print("❌ No family members found. Check your configuration.")
             return 1
 
-        start_time = datetime.now()
+        start_time = datetime.now(UTC)
         total_library_cached = 0
         total_wishlist_cached = 0
 
         # Populate family libraries
         if not args.wishlist_only:
-            total_library_cached += await populator.populate_family_library(
-                args.dry_run
-            )
+            total_library_cached += await populator.populate_family_library(args.dry_run)
             total_library_cached += await populator.populate_family_libraries(
                 family_members, args.dry_run
             )
 
         # Populate wishlists
         if not args.library_only:
-            total_wishlist_cached = await populator.populate_wishlists(
-                family_members, args.dry_run
-            )
+            total_wishlist_cached = await populator.populate_wishlists(family_members, args.dry_run)
 
         # Resolve ITAD IDs for all discovered games
         await populator.resolve_itad_ids(args.dry_run)
 
         # Final summary
-        end_time = datetime.now()
+        end_time = datetime.now(UTC)
         duration = end_time - start_time
     finally:
         await populator.close()
@@ -1166,12 +1145,12 @@ if __name__ == "__main__":
         print("\n⚠️  Operation cancelled by user")
         sys.exit(1)
     except (
+        TimeoutError,
         ValueError,
         TypeError,
         OSError,
         httpx.RequestError,
         httpx.HTTPStatusError,
-        asyncio.TimeoutError,
     ) as e:
         print(f"\n❌ Unexpected error: {e}")
         sys.exit(1)

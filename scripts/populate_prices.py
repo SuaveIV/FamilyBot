@@ -11,16 +11,15 @@ Usage:
     python scripts/populate_prices.py --dry-run          # Preview without changes
 """
 
-import logging
 import argparse
+import asyncio
 import json
-import os
+import logging
 import random
 import sys
-import asyncio
 import time
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 
@@ -34,7 +33,7 @@ except ImportError:
     ASYNC_TQDM_AVAILABLE = False
 
 # Add the src directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, str(Path(__file__).parent / ".." / "src"))
 
 from familybot.config import ITAD_API_KEY, ITAD_CACHE_TTL  # pylint: disable=wrong-import-position
 from familybot.lib.database import (
@@ -49,16 +48,23 @@ from familybot.lib.itad_price_repository import (
     cache_itad_price_enhanced,
     get_cached_itad_price,
 )
+from familybot.lib.logging_config import (
+    setup_script_logging,  # pylint: disable=wrong-import-position
+)
 from familybot.lib.steam_itad_mapping_repository import (
-    get_cached_itad_ids_bulk,
     bulk_cache_itad_mappings,
+    get_cached_itad_ids_bulk,
 )
 from familybot.lib.user_repository import load_family_members_from_db
-from familybot.lib.wishlist_repository import get_cached_wishlist  # pylint: disable=wrong-import-position
-from familybot.lib.logging_config import setup_script_logging  # pylint: disable=wrong-import-position
+from familybot.lib.wishlist_repository import (
+    get_cached_wishlist,  # pylint: disable=wrong-import-position
+)
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("populate_prices", "INFO")
+
+# Non-cryptographic RNG for rate-limiting jitter (avoids S311 on random.uniform)
+_rng = random.SystemRandom()
 
 # Suppress verbose HTTP request logging from other libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -83,15 +89,13 @@ class PricePopulator:
             return {
                 "data": {
                     "lowest_price": str(price_overview["final"] / 100),
-                    "lowest_price_formatted": price_overview.get(
-                        "final_formatted", "N/A"
-                    ),
+                    "lowest_price_formatted": price_overview.get("final_formatted", "N/A"),
                     "shop_name": "Steam",
                 },
                 "method": "steam_fallback",
                 "game_name": game_data.get("name"),
             }
-        elif is_free:
+        if is_free:
             return {
                 "data": {
                     "lowest_price": "0",
@@ -106,7 +110,8 @@ class PricePopulator:
     def __init__(self, max_concurrent: int = 50, rate_limit_mode: str = "adaptive"):
         """Initialize with async capabilities and configurable concurrency."""
         if max_concurrent < 1:
-            raise ValueError(f"max_concurrent must be >= 1, got {max_concurrent}")
+            msg = f"max_concurrent must be >= 1, got {max_concurrent}"
+            raise ValueError(msg)
         self.max_concurrent = max_concurrent
         self.rate_limit_mode = rate_limit_mode
 
@@ -156,9 +161,9 @@ class PricePopulator:
         print("Price Populator initialized")
         print(f"   Max concurrent requests: {max_concurrent}")
         print(f"   Rate limiting: {rate_limit_mode}")
-        print(
-            f"   Initial delays - Store: {self.current_delays['store']}s, ITAD: {self.current_delays['itad']}s"
-        )
+        store_delay = self.current_delays["store"]
+        itad_delay = self.current_delays["itad"]
+        print(f"   Initial delays - Store: {store_delay}s, ITAD: {itad_delay}s")
 
     async def aclose(self):
         """Close the async HTTP client."""
@@ -189,7 +194,10 @@ class PricePopulator:
                     self.current_delays[api_type] * 1.5, self.max_delays[api_type]
                 )
                 logger.debug(
-                    f"Slowing down {api_type}: {self.current_delays[api_type]:.2f}s (error rate: {error_rate:.1%})"
+                    "Slowing down %s: %.2fs (error rate: %.1f%%)",
+                    api_type,
+                    self.current_delays[api_type],
+                    error_rate * 100,
                 )
             elif (
                 error_rate < 0.05 and self.success_counts[api_type] > 20
@@ -198,7 +206,10 @@ class PricePopulator:
                     self.current_delays[api_type] * 0.8, self.min_delays[api_type]
                 )
                 logger.debug(
-                    f"Speeding up {api_type}: {self.current_delays[api_type]:.2f}s (error rate: {error_rate:.1%})"
+                    "Speeding up %s: %.2fs (error rate: %.1f%%)",
+                    api_type,
+                    self.current_delays[api_type],
+                    error_rate * 100,
                 )
 
             self.last_adjustment[api_type] = current_time
@@ -213,7 +224,7 @@ class PricePopulator:
             delay_needed = self.current_delays[api_type] - time_since_last
 
             if delay_needed > 0:
-                await asyncio.sleep(delay_needed + random.uniform(0, 0.02))
+                await asyncio.sleep(delay_needed + _rng.uniform(0, 0.02))
 
             self.last_request_times[api_type] = time.time()
 
@@ -221,11 +232,11 @@ class PricePopulator:
         self,
         url: str,
         method: str = "GET",
-        json_data: Optional[dict | list] = None,
-        params: Optional[dict] = None,
+        json_data: dict | list | None = None,
+        params: dict | None = None,
         api_type: str = "store",
         max_retries: int = 2,
-    ) -> Optional[httpx.Response]:
+    ) -> httpx.Response | None:
         """Make async HTTP request with adaptive rate limiting and retry logic."""
 
         for attempt in range(max_retries + 1):
@@ -235,11 +246,10 @@ class PricePopulator:
                 if method == "GET":
                     response = await self.client.get(url, params=params)
                 elif method == "POST":
-                    response = await self.client.post(
-                        url, json=json_data, params=params
-                    )
+                    response = await self.client.post(url, json=json_data, params=params)
                 else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
+                    msg = f"Unsupported HTTP method: {method}"
+                    raise ValueError(msg)
 
                 # Retry only transient errors: 429 (rate limited) or 5xx (server errors)
                 # Optionally retry 408 (request timeout). Client errors (4xx) fail fast.
@@ -249,7 +259,7 @@ class PricePopulator:
                     or response.status_code == 408
                 ):
                     if attempt < max_retries:
-                        backoff_time = 2**attempt + random.uniform(0, 1)
+                        backoff_time = 2**attempt + _rng.uniform(0, 1)
                         logger.warning(
                             "Retryable HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
                             response.status_code,
@@ -281,9 +291,7 @@ class PricePopulator:
             except (httpx.RequestError, httpx.TimeoutException, OSError) as e:
                 if attempt < max_retries:
                     backoff_time = 2**attempt
-                    logger.debug(
-                        "Request failed: %s, retrying in %.1fs", e, backoff_time
-                    )
+                    logger.debug("Request failed: %s, retrying in %.1fs", e, backoff_time)
                     await asyncio.sleep(backoff_time)
                     continue
                 logger.debug("Request failed after %d retries: %s", max_retries, e)
@@ -292,9 +300,7 @@ class PricePopulator:
 
         return None
 
-    def handle_api_response(
-        self, api_name: str, response: httpx.Response
-    ) -> Optional[dict]:
+    def handle_api_response(self, api_name: str, response: httpx.Response) -> dict | None:
         """Handle API response with error checking."""
         try:
             response.raise_for_status()
@@ -331,21 +337,15 @@ class PricePopulator:
         print(f"\nTotal unique wishlist games to process: {len(all_game_ids)}")
         return all_game_ids
 
-    async def fetch_steam_price_single(
-        self, app_id: str
-    ) -> tuple[str, bool, dict, str]:
+    async def fetch_steam_price_single(self, app_id: str) -> tuple[str, bool, dict, str]:
         """Fetch Steam price for a single game via Store API."""
         async with self.semaphore:
             try:
                 # Look up cached game details to get the real game name
                 # Run blocking DB lookup off the event loop
                 loop = asyncio.get_running_loop()
-                cached_game = await loop.run_in_executor(
-                    None, get_cached_game_details, app_id
-                )
-                cached_game_name = (
-                    cached_game.get("name") if cached_game else f"App {app_id}"
-                )
+                cached_game = await loop.run_in_executor(None, get_cached_game_details, app_id)
+                cached_game_name = cached_game.get("name") if cached_game else f"App {app_id}"
 
                 game_url = "https://store.steampowered.com/api/appdetails"
                 response = await self.make_request_with_retry(
@@ -356,9 +356,7 @@ class PricePopulator:
                 )
 
                 if response is not None:
-                    game_info = self.handle_api_response(
-                        f"Steam Store ({app_id})", response
-                    )
+                    game_info = self.handle_api_response(f"Steam Store ({app_id})", response)
                     if game_info:
                         app_data = game_info.get(str(app_id), {})
                         if app_data.get("success") is False:
@@ -380,9 +378,69 @@ class PricePopulator:
 
             return app_id, False, {}, "failed"
 
-    async def _resolve_itad_ids_bulk(
-        self, app_ids: list[str]
-    ) -> tuple[dict[str, str], list[str]]:
+    def _process_itad_lookup_chunk(
+        self,
+        chunk: list[str],
+        lookup_data: dict,
+        new_mappings: dict[str, str],
+        failed_appids: list[str],
+    ) -> None:
+        """Process a single ITAD lookup response chunk, updating new_mappings and failed_appids."""
+        for shop_query, itad_id in lookup_data.items():
+            app_id = shop_query.replace("app/", "")
+            if itad_id:
+                new_mappings[app_id] = itad_id
+            else:
+                failed_appids.append(app_id)
+
+        resolved_in_chunk = {q.replace("app/", "") for q in lookup_data}
+        failed_appids.extend(
+            app_id
+            for app_id in chunk
+            if app_id not in resolved_in_chunk and app_id not in new_mappings
+        )
+
+    async def _fetch_itad_lookup_chunk(
+        self,
+        chunk: list[str],
+        new_mappings: dict[str, str],
+        failed_appids: list[str],
+        pbar,
+    ) -> None:
+        """Handle network call and processing for a single ITAD lookup chunk."""
+        shop_queries = [f"app/{app_id}" for app_id in chunk]
+
+        try:
+            lookup_url = "https://api.isthereanydeal.com/lookup/id/shop/61/v1"
+            response = await self.make_request_with_retry(
+                lookup_url,
+                method="POST",
+                json_data=shop_queries,
+                params={"key": ITAD_API_KEY},
+                api_type="itad",
+            )
+
+            if response is None:
+                failed_appids.extend(chunk)
+            else:
+                lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
+                if not isinstance(lookup_data, dict):
+                    failed_appids.extend(chunk)
+                else:
+                    self._process_itad_lookup_chunk(chunk, lookup_data, new_mappings, failed_appids)
+                    if pbar:
+                        pbar.set_postfix_str(
+                            f"Found: {len(new_mappings)}, Failed: {len(failed_appids)}"
+                        )
+
+        except Exception as e:
+            logger.error("ITAD bulk lookup chunk failed: %s", e)
+            failed_appids.extend(chunk)
+
+        if pbar:
+            pbar.update(len(chunk))
+
+    async def _resolve_itad_ids_bulk(self, app_ids: list[str]) -> tuple[dict[str, str], list[str]]:
         """Resolve Steam AppIDs to ITAD IDs using cache and bulk lookup.
 
         Returns (appid_to_itad_id dict, list of failed appids).
@@ -412,55 +470,7 @@ class PricePopulator:
 
         for i in range(0, len(uncached_appids), chunk_size):
             chunk = uncached_appids[i : i + chunk_size]
-            shop_queries = [f"app/{app_id}" for app_id in chunk]
-
-            try:
-                lookup_url = "https://api.isthereanydeal.com/lookup/id/shop/61/v1"
-                response = await self.make_request_with_retry(
-                    lookup_url,
-                    method="POST",
-                    json_data=shop_queries,
-                    params={"key": ITAD_API_KEY},
-                    api_type="itad",
-                )
-
-                if response is None:
-                    failed_appids.extend(chunk)
-                    if pbar:
-                        pbar.update(len(chunk))
-                    continue
-
-                lookup_data = self.handle_api_response("ITAD Bulk Lookup", response)
-                if not isinstance(lookup_data, dict):
-                    failed_appids.extend(chunk)
-                    if pbar:
-                        pbar.update(len(chunk))
-                    continue
-
-                for shop_query, itad_id in lookup_data.items():
-                    app_id = shop_query.replace("app/", "")
-                    if itad_id:
-                        new_mappings[app_id] = itad_id
-                    else:
-                        failed_appids.append(app_id)
-
-                # Any in chunk not in response are failures
-                resolved_in_chunk = {q.replace("app/", "") for q in lookup_data.keys()}
-                for app_id in chunk:
-                    if app_id not in resolved_in_chunk and app_id not in new_mappings:
-                        failed_appids.append(app_id)
-
-                if pbar:
-                    pbar.update(len(chunk))
-                    pbar.set_postfix_str(
-                        f"Found: {len(new_mappings)}, Failed: {len(failed_appids)}"
-                    )
-
-            except Exception as e:
-                logger.error("ITAD bulk lookup chunk failed: %s", e)
-                failed_appids.extend(chunk)
-                if pbar:
-                    pbar.update(len(chunk))
+            await self._fetch_itad_lookup_chunk(chunk, new_mappings, failed_appids, pbar)
 
         if pbar:
             pbar.close()
@@ -473,6 +483,144 @@ class PricePopulator:
         # Merge cached + new
         all_mappings = {**cached_mappings, **new_mappings}
         return all_mappings, failed_appids
+
+    @staticmethod
+    def _extract_steam_deal(price_entry: dict) -> tuple[float | None, int, float | None, bool]:
+        """Extract current Steam deal info from an ITAD price entry.
+
+        Returns (current_price, discount_percent, original_price, steam_deal_found).
+        """
+        for deal in price_entry.get("deals") or []:
+            shop = deal.get("shop") if deal else None
+            if shop and shop.get("name") == "Steam":
+                price_obj = deal.get("price") if deal else None
+                regular_obj = deal.get("regular") if deal else None
+                return (
+                    price_obj.get("amount") if price_obj else None,
+                    deal.get("cut", 0) if deal else 0,
+                    regular_obj.get("amount") if regular_obj else None,
+                    True,
+                )
+        return None, 0, None, False
+
+    @staticmethod
+    def _build_itad_price_data(
+        hist_amount: float,
+        hist_shop: str,
+        current_price: float | None,
+        current_discount: int,
+        original_price: float | None,
+    ) -> dict:
+        """Build a price_data dict from ITAD historical and current deal info."""
+        price_data: dict = {
+            "lowest_price": str(hist_amount),
+            "lowest_price_formatted": f"${hist_amount}",
+            "shop_name": hist_shop,
+        }
+        if current_price is not None:
+            price_data["current_price"] = str(current_price)
+            price_data["current_price_formatted"] = f"${current_price}"
+            price_data["discount_percent"] = current_discount
+            if original_price is not None:
+                price_data["original_price"] = str(original_price)
+        return price_data
+
+    def _process_prices_data(
+        self,
+        prices_data: list,
+        itad_id_to_appid: dict[str, str],
+        itad_data: dict[str, dict],
+        no_steam_deal: set[str],
+    ) -> int:
+        """Process successfully returned prices data from ITAD."""
+        chunk_processed = 0
+        for price_entry in prices_data:
+            if not price_entry:
+                chunk_processed += 1
+                continue
+            itad_id = price_entry.get("id")
+            app_id = itad_id_to_appid.get(itad_id)
+            if not app_id:
+                chunk_processed += 1
+                continue
+
+            # Extract historical low
+            history_low_raw = price_entry.get("historyLow")
+            history_low = history_low_raw.get("all", {}) if history_low_raw else {}
+            hist_amount = history_low.get("amount")
+            shop_obj = history_low.get("shop") if history_low else None
+            hist_shop = (
+                shop_obj.get("name", "Historical Low (All Stores)")
+                if shop_obj
+                else "Historical Low (All Stores)"
+            )
+
+            current_price, current_discount, original_price, steam_deal_found = (
+                self._extract_steam_deal(price_entry)
+            )
+
+            if not steam_deal_found:
+                no_steam_deal.add(app_id)
+
+            if hist_amount is not None:
+                itad_data[app_id] = {
+                    "data": self._build_itad_price_data(
+                        hist_amount,
+                        hist_shop,
+                        current_price,
+                        current_discount,
+                        original_price,
+                    ),
+                    "method": "bulk",
+                    "game_name": None,
+                }
+            chunk_processed += 1
+
+        return chunk_processed
+
+    async def _fetch_itad_prices_chunk(
+        self,
+        chunk: list[str],
+        itad_id_to_appid: dict[str, str],
+        itad_data: dict[str, dict],
+        no_steam_deal: set[str],
+        pbar,
+    ) -> None:
+        """Handle network call and processing for a single ITAD prices chunk."""
+        try:
+            prices_url = "https://api.isthereanydeal.com/games/prices/v3"
+            response = await self.make_request_with_retry(
+                prices_url,
+                method="POST",
+                json_data=chunk,
+                params={"key": ITAD_API_KEY, "country": "US"},
+                api_type="itad",
+            )
+
+            if response is None:
+                logger.warning("ITAD prices chunk failed, skipping %d IDs", len(chunk))
+                if pbar:
+                    pbar.update(len(chunk))
+                return
+
+            prices_data = self.handle_api_response("ITAD Bulk Prices", response)
+            if not isinstance(prices_data, list):
+                if pbar:
+                    pbar.update(len(chunk))
+                return
+
+            chunk_processed = self._process_prices_data(
+                prices_data, itad_id_to_appid, itad_data, no_steam_deal
+            )
+
+            if pbar:
+                pbar.update(chunk_processed)
+                pbar.set_postfix_str(f"Prices: {len(itad_data)}, No Steam: {len(no_steam_deal)}")
+
+        except Exception as e:
+            logger.error("ITAD prices bulk chunk failed: %s", e)
+            if pbar:
+                pbar.update(len(chunk))
 
     async def _fetch_itad_prices_bulk(
         self, itad_ids: list[str], itad_id_to_appid: dict[str, str]
@@ -497,118 +645,16 @@ class PricePopulator:
 
         for i in range(0, len(itad_ids), chunk_size):
             chunk = itad_ids[i : i + chunk_size]
-
-            try:
-                prices_url = "https://api.isthereanydeal.com/games/prices/v3"
-                response = await self.make_request_with_retry(
-                    prices_url,
-                    method="POST",
-                    json_data=chunk,
-                    params={"key": ITAD_API_KEY, "country": "US"},
-                    api_type="itad",
-                )
-
-                if response is None:
-                    logger.warning(
-                        "ITAD prices chunk failed, skipping %d IDs", len(chunk)
-                    )
-                    if pbar:
-                        pbar.update(len(chunk))
-                    continue
-
-                prices_data = self.handle_api_response("ITAD Bulk Prices", response)
-                if not isinstance(prices_data, list):
-                    if pbar:
-                        pbar.update(len(chunk))
-                    continue
-
-                chunk_processed = 0
-                for price_entry in prices_data:
-                    if not price_entry:
-                        chunk_processed += 1
-                        continue
-                    itad_id = price_entry.get("id")
-                    app_id = itad_id_to_appid.get(itad_id)
-                    if not app_id:
-                        chunk_processed += 1
-                        continue
-
-                    # Extract historical low
-                    history_low_raw = price_entry.get("historyLow")
-                    history_low = (
-                        history_low_raw.get("all", {}) if history_low_raw else {}
-                    )
-                    hist_amount = history_low.get("amount")
-                    shop_obj = history_low.get("shop") if history_low else None
-                    hist_shop = (
-                        shop_obj.get("name", "Historical Low (All Stores)")
-                        if shop_obj
-                        else "Historical Low (All Stores)"
-                    )
-
-                    # Extract current Steam deal from deals array
-                    current_price = None
-                    current_discount = None
-                    original_price = None
-                    steam_deal_found = False
-
-                    for deal in price_entry.get("deals") or []:
-                        shop = deal.get("shop") if deal else None
-                        if shop and shop.get("name") == "Steam":
-                            price_obj = deal.get("price") if deal else None
-                            regular_obj = deal.get("regular") if deal else None
-                            current_price = (
-                                price_obj.get("amount") if price_obj else None
-                            )
-                            current_discount = deal.get("cut", 0) if deal else 0
-                            original_price = (
-                                regular_obj.get("amount") if regular_obj else None
-                            )
-                            steam_deal_found = True
-                            break
-
-                    if not steam_deal_found:
-                        no_steam_deal.add(app_id)
-
-                    if hist_amount is not None:
-                        price_data = {
-                            "lowest_price": str(hist_amount),
-                            "lowest_price_formatted": f"${hist_amount}",
-                            "shop_name": hist_shop,
-                        }
-                        if current_price is not None:
-                            price_data["current_price"] = str(current_price)
-                            price_data["current_price_formatted"] = f"${current_price}"
-                            price_data["discount_percent"] = current_discount
-                            if original_price is not None:
-                                price_data["original_price"] = str(original_price)
-
-                        itad_data[app_id] = {
-                            "data": price_data,
-                            "method": "bulk",
-                            "game_name": None,
-                        }
-                    chunk_processed += 1
-
-                if pbar:
-                    pbar.update(chunk_processed)
-                    pbar.set_postfix_str(
-                        f"Prices: {len(itad_data)}, No Steam: {len(no_steam_deal)}"
-                    )
-
-            except Exception as e:
-                logger.error("ITAD prices bulk chunk failed: %s", e)
-                if pbar:
-                    pbar.update(len(chunk))
+            await self._fetch_itad_prices_chunk(
+                chunk, itad_id_to_appid, itad_data, no_steam_deal, pbar
+            )
 
         if pbar:
             pbar.close()
 
         return itad_data, no_steam_deal
 
-    def batch_write_steam_data(
-        self, steam_data: dict[str, dict], batch_size: int = 100
-    ) -> int:
+    def batch_write_steam_data(self, steam_data: dict[str, dict], batch_size: int = 100) -> int:
         """Write Steam data to database in safe batches."""
         if not steam_data:
             return 0
@@ -625,9 +671,7 @@ class PricePopulator:
                 with get_write_connection() as conn:
                     for app_id, game_info in batch:
                         game_data = game_info["data"]
-                        cache_game_details(
-                            app_id, game_data, permanent=False, conn=conn
-                        )
+                        cache_game_details(app_id, game_data, permanent=False, conn=conn)
                     conn.commit()
                 written_count += len(batch)
                 logger.debug("Successfully wrote batch of %d Steam records", len(batch))
@@ -639,9 +683,7 @@ class PricePopulator:
                     try:
                         with get_write_connection() as conn:
                             game_data = game_info["data"]
-                            cache_game_details(
-                                app_id, game_data, permanent=False, conn=conn
-                            )
+                            cache_game_details(app_id, game_data, permanent=False, conn=conn)
                             conn.commit()
                         written_count += 1
                     except Exception as individual_error:
@@ -654,9 +696,28 @@ class PricePopulator:
         print(f"   Successfully wrote {written_count} Steam records to database")
         return written_count
 
-    def batch_write_itad_data(
-        self, itad_data: dict[str, dict], batch_size: int = 100
-    ) -> int:
+    def _write_itad_record(self, conn, app_id: str, price_info: dict) -> None:
+        """Write a single ITAD price record using an existing connection."""
+        price_data = price_info["data"]
+        lookup_method = price_info["method"]
+        game_name = price_info.get("game_name")
+
+        if not game_name:
+            cached_details = get_cached_game_details(app_id)
+            if cached_details:
+                game_name = cached_details.get("name")
+
+        cache_itad_price_enhanced(
+            app_id,
+            price_data,
+            lookup_method=lookup_method,
+            steam_game_name=game_name,
+            permanent=False,
+            cache_hours=ITAD_CACHE_TTL,
+            conn=conn,
+        )
+
+    def batch_write_itad_data(self, itad_data: dict[str, dict], batch_size: int = 100) -> int:
         """Write ITAD data to database in safe batches."""
         if not itad_data:
             return 0
@@ -672,25 +733,7 @@ class PricePopulator:
             try:
                 with get_write_connection() as conn:
                     for app_id, price_info in batch:
-                        price_data = price_info["data"]
-                        lookup_method = price_info["method"]
-                        game_name = price_info.get("game_name")
-
-                        # If name is missing, try to get it from local cache
-                        if not game_name:
-                            cached_details = get_cached_game_details(app_id)
-                            if cached_details:
-                                game_name = cached_details.get("name")
-
-                        cache_itad_price_enhanced(
-                            app_id,
-                            price_data,
-                            lookup_method=lookup_method,
-                            steam_game_name=game_name,
-                            permanent=False,
-                            cache_hours=ITAD_CACHE_TTL,
-                            conn=conn,
-                        )
+                        self._write_itad_record(conn, app_id, price_info)
                     conn.commit()
                 written_count += len(batch)
                 logger.debug("Successfully wrote batch of %d ITAD records", len(batch))
@@ -701,25 +744,7 @@ class PricePopulator:
                 for app_id, price_info in batch:
                     try:
                         with get_write_connection() as conn:
-                            price_data = price_info["data"]
-                            lookup_method = price_info["method"]
-                            game_name = price_info.get("game_name")
-
-                            # If name is missing, try to get it from local cache
-                            if not game_name:
-                                cached_details = get_cached_game_details(app_id)
-                                if cached_details:
-                                    game_name = cached_details.get("name")
-
-                            cache_itad_price_enhanced(
-                                app_id,
-                                price_data,
-                                lookup_method=lookup_method,
-                                steam_game_name=game_name,
-                                permanent=False,
-                                cache_hours=ITAD_CACHE_TTL,
-                                conn=conn,
-                            )
+                            self._write_itad_record(conn, app_id, price_info)
                             conn.commit()
                         written_count += 1
                     except Exception as individual_error:
@@ -732,6 +757,42 @@ class PricePopulator:
         print(f"   Successfully wrote {written_count} ITAD records to database")
         return written_count
 
+    async def _collect_steam_data(
+        self, games_to_process: list[str]
+    ) -> tuple[dict[str, dict], list]:
+        """Run async Steam API fetches and return (steam_data, steam_errors)."""
+        steam_data: dict[str, dict] = {}
+        steam_errors: list = []
+        tasks = [self.fetch_steam_price_single(app_id) for app_id in games_to_process]
+
+        if ASYNC_TQDM_AVAILABLE:
+            for task in atqdm(
+                asyncio.as_completed(tasks),
+                total=len(tasks),
+                desc="Steam API",
+                unit="game",
+            ):
+                app_id, success, game_data, source = await task
+                if success:
+                    steam_data[app_id] = {"data": game_data, "source": source}
+                else:
+                    steam_errors.append((app_id, source))
+        else:
+            for completed, coro in enumerate(asyncio.as_completed(tasks), 1):
+                app_id, success, game_data, source = await coro
+                if success:
+                    steam_data[app_id] = {"data": game_data, "source": source}
+                else:
+                    steam_errors.append((app_id, source))
+
+                if completed % 50 == 0:
+                    print(
+                        f"   API Progress: {completed}/{len(games_to_process)}"
+                        f" | Success: {len(steam_data)} | Errors: {len(steam_errors)}"
+                    )
+
+        return steam_data, steam_errors
+
     async def populate_steam_prices(
         self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
     ) -> int:
@@ -741,14 +802,14 @@ class PricePopulator:
             print("No game IDs to process")
             return 0
 
-        games_to_process = []
-        for gid in game_ids:
-            if force_refresh:
-                games_to_process.append(gid)
-            else:
-                cached_details = get_cached_game_details(gid)
-                if not cached_details or not cached_details.get("price_overview"):
-                    games_to_process.append(gid)
+        if force_refresh:
+            games_to_process = list(game_ids)
+        else:
+            games_to_process = [
+                gid
+                for gid in game_ids
+                if not (cd := get_cached_game_details(gid)) or not cd.get("price_overview")
+            ]
 
         games_skipped = len(game_ids) - len(games_to_process)
 
@@ -766,37 +827,7 @@ class PricePopulator:
 
         # Phase 1: Async data collection
         print("   Phase 1: Async API data collection...")
-        steam_data = {}
-        steam_errors = []
-
-        tasks = [self.fetch_steam_price_single(app_id) for app_id in games_to_process]
-
-        if ASYNC_TQDM_AVAILABLE:
-            for task in atqdm(
-                asyncio.as_completed(tasks),
-                total=len(tasks),
-                desc="Steam API",
-                unit="game",
-            ):
-                app_id, success, game_data, source = await task
-                if success:
-                    steam_data[app_id] = {"data": game_data, "source": source}
-                else:
-                    steam_errors.append((app_id, source))
-        else:
-            completed = 0
-            for coro in asyncio.as_completed(tasks):
-                app_id, success, game_data, source = await coro
-                if success:
-                    steam_data[app_id] = {"data": game_data, "source": source}
-                else:
-                    steam_errors.append((app_id, source))
-
-                completed += 1
-                if completed % 50 == 0:
-                    print(
-                        f"   API Progress: {completed}/{len(games_to_process)} | Success: {len(steam_data)} | Errors: {len(steam_errors)}"
-                    )
+        steam_data, steam_errors = await self._collect_steam_data(games_to_process)
 
         # Phase 2: Safe database writing
         print("   Phase 2: Safe database writing...")
@@ -807,6 +838,80 @@ class PricePopulator:
         print(f"   Errors: {len(steam_errors)}")
 
         return steam_prices_cached
+
+    @staticmethod
+    def _compute_fallback_ids(
+        mapping_failures: list[str],
+        appid_to_itad: dict[str, str],
+        itad_data: dict[str, dict],
+        no_steam_deal: set[str],
+    ) -> set[str]:
+        """Compute the set of app IDs that need a Steam API fallback."""
+        itad_appids_with_data = set(itad_data.keys())
+        fallback_ids: set[str] = set(mapping_failures)
+
+        # AppIDs mapped but ITAD returned no price data
+        fallback_ids.update(aid for aid in appid_to_itad if aid not in itad_appids_with_data)
+
+        # AppIDs with ITAD data but no Steam deal listed
+        fallback_ids.update(no_steam_deal)
+
+        # Only remove appids that have ITAD data AND have a Steam deal
+        fallback_ids -= itad_appids_with_data - no_steam_deal
+        return fallback_ids
+
+    async def _collect_steam_fallback_data(self, fallback_ids: set[str]) -> dict[str, dict]:
+        """Fetch Steam prices for fallback IDs and return a steam_fallback_data dict."""
+        steam_fallback_data: dict[str, dict] = {}
+        if not fallback_ids:
+            return steam_fallback_data
+
+        tasks = [self.fetch_steam_price_single(app_id) for app_id in fallback_ids]
+        if ASYNC_TQDM_AVAILABLE:
+            for task in atqdm(
+                asyncio.as_completed(tasks),
+                total=len(tasks),
+                desc="Steam Fallback",
+                unit="game",
+            ):
+                app_id, success, game_data, _source = await task
+                if success and game_data:
+                    entry = self._extract_steam_fallback_entry(game_data)
+                    if entry:
+                        steam_fallback_data[app_id] = entry
+        else:
+            for completed, coro in enumerate(asyncio.as_completed(tasks), 1):
+                app_id, success, game_data, _source = await coro
+                if success and game_data:
+                    entry = self._extract_steam_fallback_entry(game_data)
+                    if entry:
+                        steam_fallback_data[app_id] = entry
+                if completed % 10 == 0:
+                    print(f"   Steam Fallback Progress: {completed}/{len(fallback_ids)}")
+
+        return steam_fallback_data
+
+    @staticmethod
+    def _merge_itad_and_fallback(
+        itad_data: dict[str, dict], steam_fallback_data: dict[str, dict]
+    ) -> dict[str, dict]:
+        """Merge ITAD price data with Steam fallback entries."""
+        all_data = dict(itad_data)
+        for appid, steam_entry in steam_fallback_data.items():
+            if appid in itad_data:
+                itad_entry = all_data[appid]
+                if "data" in itad_entry and "data" in steam_entry:
+                    itad_entry["data"]["steam_current_price"] = steam_entry["data"].get(
+                        "lowest_price"
+                    )
+                    itad_entry["data"]["steam_current_price_formatted"] = steam_entry["data"].get(
+                        "lowest_price_formatted"
+                    )
+                if not itad_entry.get("game_name") and steam_entry.get("game_name"):
+                    itad_entry["game_name"] = steam_entry["game_name"]
+            else:
+                all_data[appid] = steam_entry
+        return all_data
 
     async def populate_itad_prices(
         self, game_ids: set[str], dry_run: bool = False, force_refresh: bool = False
@@ -837,96 +942,26 @@ class PricePopulator:
 
         # Phase 1: Resolve AppIDs to ITAD IDs (cache + bulk lookup)
         print("   Phase 1: Resolving AppIDs to ITAD IDs...")
-        appid_to_itad, mapping_failures = await self._resolve_itad_ids_bulk(
-            games_to_process
-        )
-
-        print(
-            f"   Resolved: {len(appid_to_itad)} | Failed to map: {len(mapping_failures)}"
-        )
+        appid_to_itad, mapping_failures = await self._resolve_itad_ids_bulk(games_to_process)
+        print(f"   Resolved: {len(appid_to_itad)} | Failed to map: {len(mapping_failures)}")
 
         # Phase 2: Bulk fetch prices from ITAD
         print("   Phase 2: Bulk fetching prices from ITAD...")
         itad_id_to_appid = {v: k for k, v in appid_to_itad.items()}
-        itad_ids = list(appid_to_itad.values())
-
         itad_data, no_steam_deal = await self._fetch_itad_prices_bulk(
-            itad_ids, itad_id_to_appid
+            list(appid_to_itad.values()), itad_id_to_appid
         )
+        print(f"   Prices received: {len(itad_data)} | No Steam deal: {len(no_steam_deal)}")
 
-        print(
-            f"   Prices received: {len(itad_data)} | No Steam deal: {len(no_steam_deal)}"
+        # Phase 3: Steam API fallback
+        fallback_ids = self._compute_fallback_ids(
+            mapping_failures, appid_to_itad, itad_data, no_steam_deal
         )
-
-        # Phase 3: Determine fallback set (mapping failures + no ITAD data + no Steam deal)
-        itad_appids_with_data = set(itad_data.keys())
-        fallback_ids = set()
-
-        # AppIDs that couldn't be mapped to ITAD IDs
-        fallback_ids.update(mapping_failures)
-
-        # AppIDs mapped but ITAD returned no price data
-        for appid in appid_to_itad:
-            if appid not in itad_appids_with_data:
-                fallback_ids.add(appid)
-
-        # AppIDs with ITAD data but no Steam deal listed
-        fallback_ids.update(no_steam_deal)
-
-        # Only remove appids that have ITAD data AND have a Steam deal
-        # (keep appids in no_steam_deal so we can get their current price from Steam)
-        remove_set = itad_appids_with_data - no_steam_deal
-        fallback_ids = fallback_ids - remove_set
-
         print(f"   Phase 3: Steam API fallback for {len(fallback_ids)} games...")
-        steam_fallback_data = {}
-        if fallback_ids:
-            tasks = [self.fetch_steam_price_single(app_id) for app_id in fallback_ids]
-            if ASYNC_TQDM_AVAILABLE:
-                for task in atqdm(
-                    asyncio.as_completed(tasks),
-                    total=len(tasks),
-                    desc="Steam Fallback",
-                    unit="game",
-                ):
-                    app_id, success, game_data, _source = await task
-                    if success and game_data:
-                        entry = self._extract_steam_fallback_entry(game_data)
-                        if entry:
-                            steam_fallback_data[app_id] = entry
-            else:
-                completed = 0
-                for coro in asyncio.as_completed(tasks):
-                    app_id, success, game_data, _source = await coro
-                    if success and game_data:
-                        entry = self._extract_steam_fallback_entry(game_data)
-                        if entry:
-                            steam_fallback_data[app_id] = entry
-                    completed += 1
-                    if completed % 10 == 0:
-                        print(
-                            f"   Steam Fallback Progress: {completed}/{len(fallback_ids)}"
-                        )
+        steam_fallback_data = await self._collect_steam_fallback_data(fallback_ids)
 
-        # Merge ITAD data with Steam fallback data
-        all_data = dict(itad_data)
-        # For appids in no_steam_deal, inject Steam's current price into ITAD records if present
-        for appid, steam_entry in steam_fallback_data.items():
-            if appid in itad_data:
-                # Merge non-destructively: add steam_current_price and game_name to ITAD record
-                itad_entry = all_data[appid]
-                if "data" in itad_entry and "data" in steam_entry:
-                    itad_entry["data"]["steam_current_price"] = steam_entry["data"].get(
-                        "lowest_price"
-                    )
-                    itad_entry["data"]["steam_current_price_formatted"] = steam_entry[
-                        "data"
-                    ].get("lowest_price_formatted")
-                # Update game_name from Steam entry if not already set
-                if not itad_entry.get("game_name") and steam_entry.get("game_name"):
-                    itad_entry["game_name"] = steam_entry["game_name"]
-            else:
-                all_data[appid] = steam_entry
+        # Merge and write
+        all_data = self._merge_itad_and_fallback(itad_data, steam_fallback_data)
 
         # Phase 4: Safe database writing
         print("   Phase 4: Safe database writing...")
@@ -940,9 +975,7 @@ class PricePopulator:
 
         return itad_prices_cached
 
-    async def refresh_current_prices(
-        self, game_ids: set[str], dry_run: bool = False
-    ) -> int:
+    async def refresh_current_prices(self, game_ids: set[str], dry_run: bool = False) -> int:
         """Refresh current Steam prices with force refresh."""
         print("\nRefreshing current Steam prices...")
         if not game_ids:
@@ -951,12 +984,39 @@ class PricePopulator:
         if dry_run:
             print(f"   DRY RUN: Would refresh {len(game_ids)} current prices")
             return 0
-        return await self.populate_steam_prices(
-            game_ids, dry_run=False, force_refresh=True
-        )
+        return await self.populate_steam_prices(game_ids, dry_run=False, force_refresh=True)
 
 
-async def main():
+async def _run_price_population(
+    populator: "PricePopulator",
+    all_game_ids: set[str],
+    args,
+) -> tuple[int, int]:
+    """Dispatch to the appropriate population mode and return (steam_cached, itad_cached)."""
+    dry_run = args.dry_run
+    force = args.force_refresh
+
+    if args.steam_only:
+        if args.refresh_current:
+            steam = await populator.refresh_current_prices(all_game_ids, dry_run)
+        else:
+            steam = await populator.populate_steam_prices(all_game_ids, dry_run, force)
+        return steam, 0
+
+    itad = await populator.populate_itad_prices(all_game_ids, dry_run, force)
+
+    if args.refresh_current:
+        steam = await populator.refresh_current_prices(all_game_ids, dry_run)
+    elif args.with_steam:
+        steam = await populator.populate_steam_prices(all_game_ids, dry_run, force)
+    else:
+        steam = 0
+
+    return steam, itad
+
+
+def parse_arguments():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Price data population for FamilyBot")
     parser.add_argument(
         "--steam-only", action="store_true", help="Only populate Steam Store prices"
@@ -969,7 +1029,10 @@ async def main():
     parser.add_argument(
         "--refresh-current",
         action="store_true",
-        help="Run ITAD population then refresh current Steam prices (useful during sales). Example: python scripts/populate_prices.py --refresh-current",
+        help=(
+            "Run ITAD population then refresh current Steam prices (useful during sales). "
+            "Example: python scripts/populate_prices.py --refresh-current"
+        ),
     )
     parser.add_argument(
         "--force-refresh",
@@ -1003,6 +1066,11 @@ async def main():
     if args.steam_only and args.with_steam:
         parser.error("--steam-only and --with-steam are mutually exclusive")
 
+    return args
+
+
+def _print_startup_banner(args) -> None:
+    """Print script startup banner and active modes."""
     print("FamilyBot Price Population Script\n" + "=" * 60)
     if args.dry_run:
         print("DRY RUN MODE - No changes will be made")
@@ -1011,6 +1079,44 @@ async def main():
     if args.force_refresh:
         print("FORCE REFRESH MODE - Will update all price data even if cached")
 
+
+def _get_max_concurrent(args) -> int:
+    """Determine max concurrent requests based on rate limit strategy."""
+    if args.rate_limit == "conservative":
+        return min(args.concurrent, 25)
+    if args.rate_limit == "aggressive":
+        return min(args.concurrent, 100)
+    return args.concurrent
+
+
+def _print_summary(
+    args,
+    duration_secs: float,
+    num_games: int,
+    steam_cached: int,
+    itad_cached: int,
+    max_concurrent: int,
+) -> None:
+    """Print execution summary."""
+    print("\n" + "=" * 60 + "\nPrice Population Complete!")
+    print(f"Duration: {duration_secs:.1f} seconds")
+    if num_games > 0:
+        print(f"Games processed: {num_games}")
+    print(f"Steam prices cached: {steam_cached}")
+    print(f"ITAD prices cached: {itad_cached}")
+    print(f"Total price entries updated: {steam_cached + itad_cached}")
+
+    if not args.dry_run:
+        print("\nPrice data population complete!")
+        print(f"   Performance: ~{max_concurrent}x faster than sequential processing")
+        print("   Connection reuse enabled to minimize data usage")
+        print("   Adaptive rate limiting prevents API throttling")
+
+
+async def main():
+    args = parse_arguments()
+    _print_startup_banner(args)
+
     try:
         init_db()
         print("Database initialized")
@@ -1018,18 +1124,11 @@ async def main():
         print(f"Failed to initialize database: {e}")
         return 1
 
-    # Adjust concurrent requests based on rate limiting strategy
-    if args.rate_limit == "conservative":
-        max_concurrent = min(args.concurrent, 25)
-    elif args.rate_limit == "aggressive":
-        max_concurrent = min(args.concurrent, 100)
-    else:  # adaptive
-        max_concurrent = args.concurrent
-
+    max_concurrent = _get_max_concurrent(args)
     populator = PricePopulator(max_concurrent, args.rate_limit)
     total_steam_cached, total_itad_cached = 0, 0
     all_game_ids = set()
-    start_time = datetime.now()
+    start_time = datetime.now(tz=UTC)
 
     try:
         family_members = populator.load_family_members()
@@ -1042,63 +1141,21 @@ async def main():
             print("No games found to process. Run populate_database.py first.")
             return 1
 
-        # --refresh-current enables Steam refresh even without explicit Steam mode flags
-        # This allows refreshing current prices during sales without full Steam population
-
-        if args.steam_only:
-            # Steam-only mode: only run Steam prices
-            if args.refresh_current:
-                total_steam_cached = await populator.refresh_current_prices(
-                    all_game_ids, args.dry_run
-                )
-            else:
-                total_steam_cached = await populator.populate_steam_prices(
-                    all_game_ids, args.dry_run, args.force_refresh
-                )
-        elif args.with_steam:
-            # ITAD + Steam mode
-            total_itad_cached = await populator.populate_itad_prices(
-                all_game_ids, args.dry_run, args.force_refresh
-            )
-            if args.refresh_current:
-                total_steam_cached = await populator.refresh_current_prices(
-                    all_game_ids, args.dry_run
-                )
-            else:
-                total_steam_cached = await populator.populate_steam_prices(
-                    all_game_ids, args.dry_run, args.force_refresh
-                )
-        elif args.refresh_current:
-            # --refresh-current without explicit Steam flag: enable Steam refresh
-            total_itad_cached = await populator.populate_itad_prices(
-                all_game_ids, args.dry_run, args.force_refresh
-            )
-            total_steam_cached = await populator.refresh_current_prices(
-                all_game_ids, args.dry_run
-            )
-        else:
-            # Default: ITAD only
-            total_itad_cached = await populator.populate_itad_prices(
-                all_game_ids, args.dry_run, args.force_refresh
-            )
+        total_steam_cached, total_itad_cached = await _run_price_population(
+            populator, all_game_ids, args
+        )
     finally:
         await populator.aclose()
 
-    duration = datetime.now() - start_time
-    print("\n" + "=" * 60 + "\nPrice Population Complete!")
-    print(f"Duration: {duration.total_seconds():.1f} seconds")
-    if all_game_ids:
-        print(f"Games processed: {len(all_game_ids)}")
-    print(f"Steam prices cached: {total_steam_cached}")
-    print(f"ITAD prices cached: {total_itad_cached}")
-    print(f"Total price entries updated: {total_steam_cached + total_itad_cached}")
-
-    if not args.dry_run:
-        print("\nPrice data population complete!")
-        print(f"   Performance: ~{max_concurrent}x faster than sequential processing")
-        print("   Connection reuse enabled to minimize data usage")
-        print("   Adaptive rate limiting prevents API throttling")
-
+    duration = datetime.now(UTC) - start_time
+    _print_summary(
+        args,
+        duration.total_seconds(),
+        len(all_game_ids),
+        total_steam_cached,
+        total_itad_cached,
+        max_concurrent,
+    )
     return 0
 
 

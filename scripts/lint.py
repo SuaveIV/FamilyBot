@@ -9,8 +9,27 @@ settings from .pylintrc.
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+
+
+def write_lint_log(log_file: Path, result: subprocess.CompletedProcess, cmd: list[str]):
+    """Write pylint output to a log file."""
+    with log_file.open("w", encoding="utf-8") as f:
+        f.write(f"Pylint run at {datetime.now(UTC).isoformat()}\n")
+        f.write(f"Exit code: {result.returncode}\n")
+        f.write(f"Command: {' '.join(cmd)}\n")
+        f.write("=" * 80 + "\n\n")
+
+        if result.stdout:
+            f.write("STDOUT:\n")
+            f.write(result.stdout)
+            f.write("\n")
+
+        if result.stderr:
+            f.write("STDERR:\n")
+            f.write(result.stderr)
+            f.write("\n")
 
 
 def main():
@@ -23,7 +42,7 @@ def main():
     lint_paths = ["src/", "scripts/"]
 
     # Build the pylint command
-    cmd = ["pylint", "--rcfile=.pylintrc"] + lint_paths
+    cmd = ["pylint", "--rcfile=.pylintrc", *lint_paths]
 
     try:
         # Set environment variables to force UTF-8 encoding
@@ -31,7 +50,7 @@ def main():
         env["PYTHONIOENCODING"] = "utf-8"
 
         # Run pylint and capture output with proper encoding
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             cmd,
             cwd=project_root,
             check=False,  # Don't raise exception on non-zero exit
@@ -40,6 +59,7 @@ def main():
             encoding="utf-8",
             errors="replace",  # Replace problematic characters instead of failing
             env=env,
+            shell=False,
         )
 
         # Print output to console
@@ -48,15 +68,6 @@ def main():
         if result.stderr:
             print(result.stderr, file=sys.stderr)
 
-        # Pylint exit codes:
-        # 0: No issues found
-        # 1: Fatal message issued
-        # 2: Error message issued
-        # 4: Warning message issued
-        # 8: Refactor message issued
-        # 16: Convention message issued
-        # 32: Usage error
-
         # Create log file if there are issues
         if result.returncode != 0:
             # Create logs directory if it doesn't exist
@@ -64,25 +75,10 @@ def main():
             logs_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate timestamp for log file
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             log_file = logs_dir / f"pylint_errors_{timestamp}.log"
 
-            # Write pylint output to log file
-            with open(log_file, "w", encoding="utf-8") as f:
-                f.write(f"Pylint run at {datetime.now().isoformat()}\n")
-                f.write(f"Exit code: {result.returncode}\n")
-                f.write(f"Command: {' '.join(cmd)}\n")
-                f.write("=" * 80 + "\n\n")
-
-                if result.stdout:
-                    f.write("STDOUT:\n")
-                    f.write(result.stdout)
-                    f.write("\n")
-
-                if result.stderr:
-                    f.write("STDERR:\n")
-                    f.write(result.stderr)
-                    f.write("\n")
+            write_lint_log(log_file, result, cmd)
 
         if result.returncode == 0:
             print("\nPylint completed successfully - no issues found!")
@@ -96,9 +92,7 @@ def main():
             print(f"\nPylint found errors - log saved to: {log_file}")
             sys.exit(1)
         else:
-            print(
-                f"\nPylint completed with warnings/suggestions (exit code: {result.returncode})"
-            )
+            print(f"\nPylint completed with warnings/suggestions (exit code: {result.returncode})")
             print(f"Log saved to: {log_file}")
             print("Consider addressing the issues above to improve code quality.")
 

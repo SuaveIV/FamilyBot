@@ -35,7 +35,8 @@ def debug_deals_detailed():
         for game in wishlist_games_with_prices:
             print(f"App ID: {game['appid']}, Name: {game['name']}")
             print(
-                f"  Discount: {game['discount']}%, Current: {game['current_price']}, Original: {game['original_price']}"
+                f"  Discount: {game['discount']}%, Current: {game['current_price']}, "
+                f"  Original: {game['original_price']}"
             )
     else:
         print("No wishlist games found with price data!")
