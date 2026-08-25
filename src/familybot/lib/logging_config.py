@@ -1,5 +1,4 @@
-"""
-Centralized logging configuration for FamilyBot.
+"""Centralized logging configuration for FamilyBot.
 
 This module provides comprehensive logging setup for both the main bot
 and utility scripts, with file rotation, error categorization, and
@@ -8,13 +7,14 @@ security-conscious logging practices.
 
 import logging
 import logging.handlers
+import re
 import sys
 from asyncio import Queue
 from pathlib import Path
-import re
 
 import coloredlogs
 from pythonjsonlogger import jsonlogger
+
 from .web_logging import WebSocketQueueHandler
 
 # Get the project root directory
@@ -22,14 +22,14 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 def sanitize_log_message(message: str) -> str:
-    """
-    Sanitize log messages to remove or mask sensitive information.
+    """Sanitize log messages to remove or mask sensitive information.
 
     Args:
         message: Raw log message
 
     Returns:
         Sanitized log message with sensitive data masked
+
     """
     # Mask potential API keys (look for long alphanumeric strings)
 
@@ -53,14 +53,14 @@ def sanitize_log_message(message: str) -> str:
 
 
 def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
-    """
-    Set up comprehensive logging for the main FamilyBot application.
+    """Set up comprehensive logging for the main FamilyBot application.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
     Returns:
         Configured logger instance
+
     """
     # Create logs directory if it doesn't exist
     logs_dir = PROJECT_ROOT / "logs"
@@ -167,8 +167,7 @@ def setup_bot_logging(log_level: str = "INFO") -> logging.Logger:
 
 
 def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.Logger:
-    """
-    Set up logging for utility scripts.
+    """Set up logging for utility scripts.
 
     Args:
         script_name: Name of the script (e.g., 'populate_database', 'populate_prices')
@@ -176,6 +175,7 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
 
     Returns:
         Configured logger instance
+
     """
     # Create logs directory if it doesn't exist
     logs_dir = PROJECT_ROOT / "logs" / "scripts"
@@ -247,14 +247,14 @@ def setup_script_logging(script_name: str, log_level: str = "INFO") -> logging.L
 
 
 def get_logger(name: str) -> logging.Logger:
-    """
-    Get a logger instance with the specified name.
+    """Get a logger instance with the specified name.
 
     Args:
         name: Logger name (typically __name__)
 
     Returns:
         Logger instance
+
     """
     return logging.getLogger(name)
 
@@ -262,14 +262,14 @@ def get_logger(name: str) -> logging.Logger:
 def log_private_profile_detection(
     logger: logging.Logger, user_name: str, steam_id: str, operation: str
 ):
-    """
-    Log private profile detection with consistent formatting.
+    """Log private profile detection with consistent formatting.
 
     Args:
         logger: Logger instance
         user_name: Friendly name of the user
         steam_id: Steam ID of the user
         operation: Operation that failed (e.g., 'wishlist', 'library')
+
     """
     logger.warning(
         "[PRIVATE_PROFILE] %s (%s): %s access blocked - profile is private",
@@ -285,14 +285,14 @@ def log_api_error(
     error: Exception,
     context: str | None = None,
 ):
-    """
-    Log API errors with consistent formatting and context.
+    """Log API errors with consistent formatting and context.
 
     Args:
         logger: Logger instance
         api_name: Name of the API (e.g., 'Steam Store', 'ITAD')
         error: Exception that occurred
         context: Additional context (e.g., user ID, app ID)
+
     """
     context_str = f" [{context}]" if context else ""
     logger.error(
@@ -303,14 +303,14 @@ def log_api_error(
 def log_rate_limit(
     logger: logging.Logger, api_name: str, backoff_time: float, reason: str = ""
 ):
-    """
-    Log rate limiting events.
+    """Log rate limiting events.
 
     Args:
         logger: Logger instance
         api_name: Name of the API being rate limited
         backoff_time: Time to wait before next request
         reason: Reason for rate limiting (optional)
+
     """
     reason_str = f" - {reason}" if reason else ""
     logger.warning(
@@ -321,14 +321,14 @@ def log_rate_limit(
 def log_performance_metric(
     logger: logging.Logger, operation: str, duration: float, count: int = 1
 ):
-    """
-    Log performance metrics for operations.
+    """Log performance metrics for operations.
 
     Args:
         logger: Logger instance
         operation: Name of the operation
         duration: Time taken in seconds
         count: Number of items processed
+
     """
     rate = count / duration if duration > 0 else 0
     logger.info(
@@ -360,14 +360,14 @@ def get_web_log_queue():
 
 
 def setup_web_logging(log_level: str = "INFO") -> logging.Logger:
-    """
-    Set up logging for the web UI.
+    """Set up logging for the web UI.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
     Returns:
         Configured logger instance
+
     """
     # Convert log level string to logging constant
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)

@@ -19,7 +19,7 @@ PROJECT_ROOT = current_script_path.parent.parent.parent.as_posix()
 CONFIG_FILE_PATH = Path(PROJECT_ROOT) / "config.yml"
 
 try:
-    with open(CONFIG_FILE_PATH, "r") as file:
+    with open(CONFIG_FILE_PATH) as file:
         config = yaml.safe_load(file)
 except FileNotFoundError:
     print(
@@ -94,7 +94,6 @@ ITAD_CACHE_TTL = (
 class ConfigurationError(Exception):
     """Raised when config.yml has invalid or missing required values."""
 
-    pass
 
 
 def validate_config() -> None:

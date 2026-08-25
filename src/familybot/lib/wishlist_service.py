@@ -18,8 +18,7 @@ logger = get_logger("wishlist_service")
 
 
 def add_to_wishlist(global_wishlist: list, app_id: str, user_steam_id: str) -> None:
-    """
-    Adds a game app ID to the global wishlist list of lists, tracking users interested.
+    """Adds a game app ID to the global wishlist list of lists, tracking users interested.
     Each item in global_wishlist is [app_id: str, [user_steam_ids: str]].
     """
     found = False
@@ -49,6 +48,7 @@ async def collect_wishlists(
 
     Returns:
         Global wishlist as list of [appid, [user_steam_ids]]
+
     """
     steam_api_manager = SteamAPIManager()
 
@@ -151,6 +151,7 @@ async def process_wishlist_duplicates(
 
     Returns:
         Dict with success status and formatted message about duplicates found
+
     """
     steam_api_manager = SteamAPIManager()
 
@@ -241,11 +242,10 @@ async def process_wishlist_duplicates(
             "success": True,
             "message": f"Wishlist refreshed. Details:\n{full_message}",
         }
-    else:
-        return {
-            "success": True,
-            "message": "Wishlist refreshed. No common wishlist games found for display.",
-        }
+    return {
+        "success": True,
+        "message": "Wishlist refreshed. No common wishlist games found for display.",
+    }
 
 
 async def check_wishlist() -> dict[str, Any]:
@@ -256,6 +256,7 @@ async def check_wishlist() -> dict[str, Any]:
 
     Returns:
         Dict with success status and message
+
     """
     logger.info("Running check_wishlist (cache-respecting for wishlists)...")
     try:
@@ -272,7 +273,7 @@ async def check_wishlist() -> dict[str, Any]:
         )
         return {
             "success": False,
-            "message": f"Error checking wishlist: {str(e)}",
+            "message": f"Error checking wishlist: {e!s}",
         }
 
 
@@ -284,6 +285,7 @@ async def force_wishlist() -> dict[str, Any]:
 
     Returns:
         Dict with success status and message
+
     """
     logger.info("Running force_wishlist (bypassing cache)...")
     try:
@@ -300,5 +302,5 @@ async def force_wishlist() -> dict[str, Any]:
         )
         return {
             "success": False,
-            "message": f"Error forcing wishlist refresh: {str(e)}",
+            "message": f"Error forcing wishlist refresh: {e!s}",
         }

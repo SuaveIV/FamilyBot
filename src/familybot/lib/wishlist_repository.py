@@ -1,7 +1,7 @@
 # In src/familybot/lib/wishlist_repository.py
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from familybot.config import WISHLIST_CACHE_TTL
 from familybot.lib.database import get_db_connection, get_write_connection
@@ -35,7 +35,7 @@ def cache_wishlist(steam_id: str, appids: list, cache_hours: int = WISHLIST_CACH
     try:
         with get_write_connection() as conn:
             cursor = conn.cursor()
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             expires_at = now + timedelta(hours=cache_hours)
 
             # Clear existing cache for this user

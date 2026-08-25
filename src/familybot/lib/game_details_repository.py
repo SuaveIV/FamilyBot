@@ -3,7 +3,7 @@
 import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from familybot.config import GAME_DETAILS_CACHE_TTL
 from familybot.lib.database import get_db_connection, get_write_connection
@@ -33,9 +33,7 @@ def _analyze_game_categories(categories: list) -> tuple[bool, bool, bool]:
 
     for cat in categories:
         cat_id = cat.get("id")
-        if cat_id == 1:  # Multi-player
-            is_multiplayer = True
-        elif cat_id == 36:  # Online Multi-Player
+        if cat_id == 1 or cat_id == 36:  # Multi-player
             is_multiplayer = True
         elif cat_id == 38:  # Online Co-op
             is_multiplayer = True
@@ -97,7 +95,7 @@ def _do_cache_game_details(
     price_source: str,
 ):
     """Internal: cache game details using an existing cursor."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at_str = None
     if not permanent and cache_hours:
         expires_at = now + timedelta(hours=cache_hours)

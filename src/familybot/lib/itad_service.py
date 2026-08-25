@@ -208,7 +208,7 @@ def prefetch_itad_prices(steam_app_ids: list[str]) -> None:
                 fetched_uuids.add(uuid)
                 app_id = uuid_to_appid[uuid]
 
-                if "historyLow" in price_data and price_data["historyLow"]:
+                if price_data.get("historyLow"):
                     history_low = price_data["historyLow"].get("all", {})
                     price_amount = history_low.get("amount")
                     shop_name = history_low.get("shop", {}).get(

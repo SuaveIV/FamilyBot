@@ -1,7 +1,7 @@
 # In src/familybot/lib/discord_user_repository.py
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from familybot.lib.database import get_db_connection, get_write_connection
 
@@ -35,7 +35,7 @@ def cache_discord_user(discord_id: str, username: str, cache_hours: int = 1):
         with get_write_connection() as conn:
             cursor = conn.cursor()
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             expires_at = now + timedelta(hours=cache_hours)
 
             cursor.execute(

@@ -13,6 +13,7 @@ async def purge_game_details_cache() -> dict[str, Any]:
 
     Returns:
         Dict with success status and message indicating number of entries deleted.
+
     """
     try:
         with get_write_connection() as conn:
@@ -39,6 +40,7 @@ async def purge_itad_cache() -> dict[str, Any]:
 
     Returns:
         Dict with success status and message indicating number of entries deleted.
+
     """
     try:
         with get_write_connection() as conn:

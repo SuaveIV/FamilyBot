@@ -1,6 +1,7 @@
 """API utility functions for Steam and other external services."""
 
 import json
+
 import aiohttp
 
 from familybot.lib.logging_config import get_logger
@@ -19,6 +20,7 @@ async def handle_api_response(
 
     Returns:
         Parsed JSON dict on success, None on failure
+
     """
     try:
         response.raise_for_status()

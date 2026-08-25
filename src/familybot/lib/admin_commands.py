@@ -16,18 +16,18 @@ from familybot.config import STEAMWORKS_API_KEY
 from familybot.lib.family_library_repository import (
     cache_family_library,
 )
-from familybot.lib.user_games_repository import cache_user_games
-from familybot.lib.wishlist_repository import cache_wishlist, get_cached_wishlist
+from familybot.lib.family_utils import get_family_game_list_url
 from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
-from familybot.lib.family_utils import get_family_game_list_url
 from familybot.lib.logging_config import setup_script_logging
-from familybot.lib.wishlist_service import add_to_wishlist
+from familybot.lib.user_games_repository import cache_user_games
 
 # TokenBucket will be imported from utils for now
 from familybot.lib.utils import TokenBucket
+from familybot.lib.wishlist_repository import cache_wishlist, get_cached_wishlist
+from familybot.lib.wishlist_service import add_to_wishlist
 
 # Setup enhanced logging for this script
 logger = setup_script_logging("admin_commands", "INFO")
@@ -102,9 +102,8 @@ class DatabasePopulator:
                         )
                         await asyncio.sleep(backoff_time)
                         continue
-                    else:
-                        logger.error(f"Max retries exceeded for {url}")
-                        return None
+                    logger.error(f"Max retries exceeded for {url}")
+                    return None
 
                 return response
 
@@ -116,11 +115,10 @@ class DatabasePopulator:
                     )
                     await asyncio.sleep(backoff_time)
                     continue
-                else:
-                    logger.error(
-                        f"Request failed after {self.max_retries} retries: {e}"
-                    )
-                    return None
+                logger.error(
+                    f"Request failed after {self.max_retries} retries: {e}"
+                )
+                return None
 
         return None
 

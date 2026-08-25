@@ -6,8 +6,7 @@ from interactions import Client, Message
 
 
 class FamilyBotClient(Client):
-    """
-    A custom client class that extends interactions.Client with application-specific methods
+    """A custom client class that extends interactions.Client with application-specific methods
     that are dynamically added at runtime. This provides type hinting for static analysis.
     """
 

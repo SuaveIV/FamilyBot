@@ -30,7 +30,7 @@ except Exception as e:
 def check_token_exp() -> bool:
     """Checks if the webapi_token is expired."""
     try:
-        with open(TOKEN_EXP_FILE_PATH, "r") as token_exp_file:
+        with open(TOKEN_EXP_FILE_PATH) as token_exp_file:
             token_exp_str = token_exp_file.readline().strip()
             if not token_exp_str:
                 logger.warning(
@@ -68,7 +68,7 @@ def check_token_exp() -> bool:
 def get_token() -> str:
     """Retrieves the webapi_token from file."""
     try:
-        with open(TOKEN_FILE_PATH, "r") as token_file:
+        with open(TOKEN_FILE_PATH) as token_file:
             token = token_file.readline().strip()
             logger.debug(f"Loaded webapi_token (length {len(token)}).")
             return token

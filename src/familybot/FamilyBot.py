@@ -4,17 +4,17 @@
 import argparse
 import asyncio
 import os
+import sqlite3  # Standard library import should come before third-party imports
 import sys
 from datetime import datetime
 from typing import TYPE_CHECKING, cast
-import sqlite3  # Standard library import should come before third-party imports
 
 import uvicorn
 from interactions import Client, GuildText, Intents, listen
-from interactions.ext import prefixed_commands
 from interactions.client.errors import (
     LibraryException,
 )  # Corrected import for Discord API error handling
+from interactions.ext import prefixed_commands
 
 from familybot.config import (
     ADMIN_DISCORD_ID,
@@ -24,16 +24,16 @@ from familybot.config import (
     WEB_UI_PORT,
 )
 from familybot.lib.database import get_db_connection, get_write_connection, init_db
-from familybot.lib.user_repository import (
-    sync_family_members_from_config,
-)
-from familybot.lib.logging_config import setup_bot_logging
-from familybot.lib.types import FamilyBotClient
 from familybot.lib.discord_utils import split_message
-from familybot.web.api import app as web_app
 from familybot.lib.family_library_repository import (
     purge_family_library_cache,
 )
+from familybot.lib.logging_config import setup_bot_logging
+from familybot.lib.types import FamilyBotClient
+from familybot.lib.user_repository import (
+    sync_family_members_from_config,
+)
+from familybot.web.api import app as web_app
 from familybot.web.api import set_bot_client
 
 if TYPE_CHECKING:
@@ -187,12 +187,11 @@ async def get_pinned_message(chan_id: int) -> list:
         if isinstance(channel, GuildText):
             pinned_messages = await channel.fetch_pinned_messages()
             return pinned_messages
-        else:
-            logger.warning(
-                "Channel %s is not a text channel and does not support fetching pinned messages.",
-                chan_id,
-            )
-            return []
+        logger.warning(
+            "Channel %s is not a text channel and does not support fetching pinned messages.",
+            chan_id,
+        )
+        return []
     except LibraryException as e:
         logger.error("Error fetching pinned messages from channel %s: %s", chan_id, e)
         return []

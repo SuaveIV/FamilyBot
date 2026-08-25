@@ -281,7 +281,8 @@ def _run_column_migrations(cursor: sqlite3.Cursor):
 
 def init_db():
     """Initializes the database schema by creating tables if they don't exist
-    and adding new columns if they are missing (for schema evolution)."""
+    and adding new columns if they are missing (for schema evolution).
+    """
     try:
         with get_write_connection() as conn:
             cursor = conn.cursor()
