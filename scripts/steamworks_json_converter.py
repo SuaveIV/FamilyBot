@@ -20,12 +20,12 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 
 def convert_owned_games(
-    data: dict[str, Any], steam_id: Optional[str] = None
+    data: dict[str, Any], steam_id: str | None = None
 ) -> dict[str, Any]:
     """Convert GetOwnedGames API response to FamilyBot format."""
     response = data.get("response", {})
@@ -49,7 +49,7 @@ def convert_owned_games(
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.now(timezone.utc)
+                    "detected_at": datetime.now(UTC)
                     .isoformat()
                     .replace("+00:00", "Z"),
                 }
@@ -95,7 +95,7 @@ def convert_player_summaries(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def convert_wishlist(
-    data: dict[str, Any], steam_id: Optional[str] = None
+    data: dict[str, Any], steam_id: str | None = None
 ) -> dict[str, Any]:
     """Convert GetWishlist API response to FamilyBot format."""
     response = data.get("response", {})
@@ -115,7 +115,7 @@ def convert_wishlist(
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.now(timezone.utc)
+                    "detected_at": datetime.now(UTC)
                     .isoformat()
                     .replace("+00:00", "Z"),
                 }
@@ -165,7 +165,7 @@ def convert_family_library(data: dict[str, Any]) -> dict[str, Any]:
                 {
                     "type": "saved_game",
                     "appid": appid,
-                    "detected_at": datetime.now(timezone.utc)
+                    "detected_at": datetime.now(UTC)
                     .isoformat()
                     .replace("+00:00", "Z"),
                 }
@@ -224,7 +224,7 @@ def main():
     try:
         if args.file:
             print(f"📁 Loading JSON from file: {args.file}", file=sys.stderr)
-            with open(args.file, "r", encoding="utf-8") as f:
+            with open(args.file, encoding="utf-8") as f:
                 json_data = json.load(f)
         elif args.json:
             print("📝 Parsing JSON from command line", file=sys.stderr)

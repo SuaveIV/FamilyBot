@@ -10,7 +10,7 @@ def remove_trailing_whitespace():
         for file in files:
             if file.endswith(".py"):
                 file_path = os.path.join(root, file)
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     lines = f.readlines()
 
                 updated_lines = [line.rstrip() for line in lines]
