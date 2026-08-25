@@ -1,6 +1,5 @@
 # In src/familybot/web/routes/admin.py
-"""
-Admin action endpoints — database population, cache purges, plugin triggers.
+"""Admin action endpoints — database population, cache purges, plugin triggers.
 All mutating operations; none require auth beyond being reachable
 (deploy behind a firewall or VPN in production).
 """
@@ -11,13 +10,13 @@ from fastapi import APIRouter, HTTPException
 
 from familybot.lib.admin_commands import DatabasePopulator
 from familybot.lib.family_library_repository import purge_family_library_cache
-from familybot.lib.user_repository import load_family_members_from_db
-from familybot.lib.wishlist_repository import purge_wishlist_cache
 from familybot.lib.plugin_admin_actions import (
     force_new_game_action,
     force_wishlist_action,
     purge_game_details_cache_action,
 )
+from familybot.lib.user_repository import load_family_members_from_db
+from familybot.lib.wishlist_repository import purge_wishlist_cache
 from familybot.web.models import CommandResponse
 from familybot.web.state import update_last_activity
 

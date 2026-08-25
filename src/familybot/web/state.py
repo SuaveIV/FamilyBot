@@ -1,12 +1,11 @@
 # In src/familybot/web/state.py
-"""
-Shared mutable state for the FamilyBot web UI.
+"""Shared mutable state for the FamilyBot web UI.
 
 Kept in a dedicated module so every router can import the same
 references without circular dependencies or duplicate globals.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from familybot.lib.types import FamilyBotClient
 
@@ -19,7 +18,7 @@ def set_bot_client(client: FamilyBotClient) -> None:
     """Called from FamilyBot.py after the Discord client is created."""
     global _bot_client, _bot_start_time
     _bot_client = client
-    _bot_start_time = datetime.now(timezone.utc)
+    _bot_start_time = datetime.now(UTC)
 
 
 def get_bot_client() -> FamilyBotClient | None:
@@ -32,7 +31,7 @@ def get_bot_start_time() -> datetime | None:
 
 def update_last_activity() -> None:
     global _last_activity
-    _last_activity = datetime.now(timezone.utc)
+    _last_activity = datetime.now(UTC)
 
 
 def get_last_activity() -> datetime | None:

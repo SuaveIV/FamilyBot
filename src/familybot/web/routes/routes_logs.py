@@ -1,14 +1,13 @@
 # In src/familybot/web/routes/logs.py
-"""
-Log viewing endpoints:
-  - GET  /api/logs       — recent log entries from log files
-  - WS   /ws/logs        — live log stream via WebSocket
+"""Log viewing endpoints:
+- GET  /api/logs       — recent log entries from log files
+- WS   /ws/logs        — live log stream via WebSocket
 """
 
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket
@@ -66,7 +65,7 @@ async def websocket_logs(websocket: WebSocket):
                 try:
                     entry = await asyncio.wait_for(queue.get(), timeout=1.0)
                     await websocket.send_text(entry)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await websocket.send_text('{"type":"heartbeat"}')
             else:
                 await asyncio.sleep(1.0)
@@ -92,7 +91,7 @@ def _parse_log_line(line: str, fallback_module: str) -> LogEntry | None:
         try:
             ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
         except Exception:
-            ts = datetime.now(timezone.utc)
+            ts = datetime.now(UTC)
         return LogEntry(
             timestamp=ts,
             level=data.get("levelname", "INFO"),
@@ -108,7 +107,7 @@ def _parse_log_line(line: str, fallback_module: str) -> LogEntry | None:
         try:
             ts = datetime.fromisoformat(parts[0].replace("Z", "+00:00"))
         except Exception:
-            ts = datetime.now(timezone.utc)
+            ts = datetime.now(UTC)
         return LogEntry(
             timestamp=ts,
             level=parts[1].strip(),

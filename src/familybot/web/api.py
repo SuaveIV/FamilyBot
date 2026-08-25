@@ -1,6 +1,5 @@
 # In src/familybot/web/api.py
-"""
-FamilyBot Web UI — FastAPI application entry point.
+"""FamilyBot Web UI — FastAPI application entry point.
 
 Creates the app, wires up middleware and static files, then delegates
 all routing to the modules in familybot.web.routes.

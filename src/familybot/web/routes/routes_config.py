@@ -1,6 +1,5 @@
 # In src/familybot/web/routes/config.py
-"""
-Configuration status and family-member listing endpoints.
+"""Configuration status and family-member listing endpoints.
 """
 
 import logging
