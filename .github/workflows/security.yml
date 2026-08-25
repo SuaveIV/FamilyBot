@@ -57,18 +57,18 @@ jobs:
           uv run ruff check src/ scripts/
         continue-on-error: false
 
-      - name: Run pip-audit for vulnerable dependencies
+      - name: Run uv audit for vulnerable dependencies
         run: |
-          uv run pip-audit -r requirements-hashes.txt -s osv
+          uv audit --preview-features audit-command --locked || { echo "❌ Vulnerabilities found"; exit 1; }
         continue-on-error: false
 
-      - name: Generate CycloneDX SBOM (Supply Bill of Materials)
+      - name: Generate CycloneDX SBOM (Software Bill of Materials)
         run: |
-          uv run pip-audit -r requirements-hashes.txt -s osv --format cyclonedx --output sbom.xml || true
+          uv export --extra dev --format cyclonedx1.5 -o sbom.xml || true
           if [ -f sbom.xml ]; then
             echo "✅ SBOM generated: sbom.xml"
           else
-            echo "⚠️  Note: SBOM generation requires pip-audit with CycloneDX support"
+            echo "⚠️  Note: SBOM generation failed"
           fi
 
       - name: Upload SBOM as artifact
@@ -129,7 +129,7 @@ jobs:
 
             ✅ Checks Performed:
             - Ruff security linting (S rules: hardcoded secrets, unsafe deserialization, SQL injection)
-            - pip-audit against OSV vulnerability database
+            - uv audit against OSV vulnerability database
             - Hash-pinned lockfile verification
             - CycloneDX SBOM generation (if available)
 
@@ -143,7 +143,7 @@ jobs:
               comment = `## ⚠️ Supply Chain Security Check Failed
 
             ❌ Failed checks:
-            ${securityResult !== 'success' ? '- Security scanning (Ruff + pip-audit)' : ''}
+            ${securityResult !== 'success' ? '- Security scanning (Ruff + uv audit)' : ''}
             ${depReviewResult !== 'success' ? '- Dependency review' : ''}
 
             Please review the GitHub Actions logs for details and resolve the issues before merging.`;

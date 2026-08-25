@@ -41,24 +41,29 @@ reinstall:
     just setup
     @echo "✅ Clean reinstall complete!"
 
-# Generate a new lockfile from pyproject.toml
+# Generate a new lockfile (uv.lock) and export requirements files from it
 lock:
-    @echo "🔒 Generating lockfile from pyproject.toml..."
-    mise exec -- uv pip compile pyproject.toml --extra dev -o requirements.txt
-    @echo "✅ requirements.txt lockfile updated."
+    @echo "🔒 Generating lockfile (uv.lock) from pyproject.toml..."
+    mise exec -- uv lock
+    mise exec -- uv export --extra dev --no-hashes -o requirements.txt
+    mise exec -- uv export --extra dev -o requirements-hashes.txt
+    @echo "✅ uv.lock and requirements*.txt regenerated."
 
-# Generate a hash-pinned lockfile (recommended for supply chain security)
+# Regenerate the requirements exports from the existing uv.lock
 lock-hashes:
-    @echo "🔒 Generating hash-pinned lockfile from pyproject.toml..."
-    mise exec -- uv pip compile pyproject.toml --extra dev --generate-hashes -o requirements-hashes.txt
-    @echo "✅ requirements-hashes.txt hash-pinned lockfile created."
-    @echo "💡 This lockfile verifies every package by SHA256 hash at install time."
+    @echo "🔒 Re-exporting requirements files from uv.lock..."
+    mise exec -- uv export --extra dev --no-hashes -o requirements.txt
+    mise exec -- uv export --extra dev -o requirements-hashes.txt
+    @echo "✅ requirements.txt and requirements-hashes.txt regenerated."
+    @echo "💡 Use requirements-hashes.txt to install with SHA256 hash verification."
     @echo "📖 See: https://bernat.tech/posts/securing-python-supply-chain/"
 
-# Upgrade all dependencies in the lockfile to the latest safe versions
+# Upgrade all dependencies in the lockfile to the latest compatible versions
 update-deps:
-    @echo "⬆️  Upgrading dependencies to their latest compatible versions (respecting ~=)..."
-    mise exec -- uv pip compile pyproject.toml --extra dev --upgrade -o requirements.txt
+    @echo "⬆️  Upgrading dependencies to their latest compatible versions..."
+    mise exec -- uv lock --upgrade
+    mise exec -- uv export --extra dev --no-hashes -o requirements.txt
+    mise exec -- uv export --extra dev -o requirements-hashes.txt
     @echo "✅ Lockfile updated. Run 'just install-deps' to apply the changes."
 
 # Verify installation is working
@@ -250,15 +255,15 @@ type-check:
     @echo "🧐 Running mypy type checker..."
     mise exec -- uv run mypy src/ scripts/
 
-# Run pip-audit for security vulnerabilities (against standard lockfile)
+# Run uv audit for security vulnerabilities (project lockfile)
 audit:
-     @echo "🛡️ Running pip-audit for security vulnerabilities..."
-     mise exec -- uv run pip-audit -r requirements.txt -s osv
+     @echo "🛡️ Running uv audit for security vulnerabilities... (enable preview)"
+     mise exec -- uv audit --preview-features audit-command --locked
 
-# Run pip-audit for security vulnerabilities (against hash-pinned lockfile)
+# Run uv audit against the hash-pinned lockfile (alias; uv audits the uv.lock project)
 audit-hashes:
-     @echo "🛡️ Running pip-audit against hash-pinned lockfile..."
-     mise exec -- uv run pip-audit -r requirements-hashes.txt -s osv
+     @echo "🛡️ Running uv audit against the project lockfile..."
+     mise exec -- uv audit --preview-features audit-command --locked
 
 # Install dependencies with time-based constraints (supply chain security)
 install-safe older_than_days='7':
@@ -279,8 +284,8 @@ security-status:
     @echo "   Rules: S105 (hardcoded secrets), S301 (pickle), S608 (SQL injection)"
     @echo "   Run: ruff check --select S src/ scripts/"
     @echo ""
-    @echo "✅ Pip-audit integration:"
-    @echo "   Run: just audit-hashes (checks against OSV database)"
+    @echo "✅ uv audit integration:"
+    @echo "   Run: just audit-hashes (checks uv.lock against OSV database)"
     @echo ""
     @echo "✅ GitHub Actions:"
     @if [ -f ".github/workflows/security.yml" ]; then echo "   ✓ Security workflow configured"; else echo "   ✗ Missing"; fi

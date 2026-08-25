@@ -14,28 +14,30 @@ This could happen to **any** Python package, including FamilyBot's dependencies.
 
 ## Security Layers Implemented
 
-### 1. Hash-Pinned Lockfile (✅ Implemented)
+### 1. uv.lock Single Source of Truth (✅ Implemented)
 
-**File:** `requirements-hashes.txt`
+**Files:** `uv.lock` (committed), `requirements.txt`, `requirements-hashes.txt` (exports)
 
-Every dependency is pinned to an exact version with its SHA256 hash. This protects against:
+`uv.lock` is the canonical lockfile and is committed to git. The `requirements*.txt` files are exported from it for compatibility with scripts and workflows that use `uv pip install -r`.
 
-- **Tampering in transit** (MITM attacks)
-- **Cache poisoning** on shared systems
-- **Mirror compromises**
+- `uv.lock` — full, universal resolution record (single source of truth)
+- `requirements.txt` — no-hash export
+- `requirements-hashes.txt` — export with SHA256 hashes for supply-chain-safe installs
 
 **Does NOT protect against:** Legitimate PyPI uploads of malicious code (but narrows attack surface significantly)
 
-#### Generate or update the hash-pinned lockfile
+#### Generate or update the hash-pinned export
 
 ```bash
-just lock-hashes
+just lock                # re-lock from pyproject.toml + regenerate exports
+just lock-hashes         # re-export requirements files from existing uv.lock
 ```
 
 Or manually:
 
 ```bash
-uv pip compile pyproject.toml --extra dev --generate-hashes -o requirements-hashes.txt
+uv lock                                  # refresh the lock
+uv export --extra dev -o requirements-hashes.txt   # hashed export
 ```
 
 #### Install with hash verification
@@ -68,22 +70,24 @@ ruff check --select S src/ scripts/  # Security rules only
 
 Security linting runs automatically on every commit via `.pre-commit-config.yaml`.
 
-### 3. Pip-audit for Vulnerability Scanning (✅ Implemented)
+### 3. uv audit for Vulnerability Scanning (✅ Implemented)
 
 **Database:** OSV (Open Source Vulnerabilities)
 
-Checks your entire dependency tree against the OSV database for known CVEs.
+Built into uv. Checks the entire dependency tree (from `uv.lock`) against the OSV database for known CVEs.
 
-#### Run pip-audit
+#### Run uv audit
 
 ```bash
-just audit             # Against requirements.txt
-just audit-hashes      # Against requirements-hashes.txt (recommended)
+just audit             # against the project uv.lock
+just audit-hashes      # alias (same project lockfile)
 ```
 
 #### In CI/CD
 
-GitHub Actions runs pip-audit automatically on every push and pull request. When a new CVE is disclosed, pip-audit will catch it within hours.
+GitHub Actions runs `uv audit` automatically on every push and pull request. When a new CVE is disclosed, uv audit will catch it within hours.
+
+> **Note:** `uv audit` is a preview feature. Current invocations pass `--preview-features audit-command` to enable it. It is pinned via `uv = "0.12.5"` in `.mise.toml` for reproducibility.
 
 ### 4. GitHub Actions Security Workflow (✅ Implemented)
 
@@ -100,8 +104,8 @@ The workflow:
 1. Verifies lockfile contains hashes
 2. Installs dependencies from `requirements-hashes.txt` with hash verification
 3. Runs Ruff security linting
-4. Runs pip-audit against OSV database
-5. Generates CycloneDX SBOM (Software Bill of Materials)
+4. Runs uv audit against OSV database
+5. Generates CycloneDX SBOM (via `uv export --format cyclonedx1.5`)
 6. Posts results to pull requests
 
 #### View results
@@ -119,7 +123,7 @@ The SBOM generated in CI lists every dependency, making this trivial.
 #### Generate locally
 
 ```bash
-uv run pip-audit -r requirements-hashes.txt --format cyclonedx --output sbom.xml
+uv export --extra dev --format cyclonedx1.5 -o sbom.xml
 ```
 
 #### Download from CI
@@ -161,7 +165,7 @@ The date is automatically calculated from "7 days ago."
 1. **March 24, 2026**: LiteLLM malicious versions uploaded
 2. **March 24 (hours later)**: Discovered via automated scanning
 3. **March 25**: Security advisory published
-4. **March 26**: pip-audit and GitHub advisories updated
+4. **March 26**: uv audit and GitHub advisories updated
 5. **With 7-day buffer on March 31**: Cutoff is March 24; packages from March 24 and earlier are eligible for installation
 
 ## Defense-in-Depth Strategy
@@ -170,7 +174,7 @@ The date is automatically calculated from "7 days ago."
 | ----- | --------------- | --------------- |
 | **Hash pinning** | Transit tampering, cache poisoning | `requirements-hashes.txt` |
 | **Ruff security** | Vulnerabilities in our code | `pyproject.toml` [tool.ruff.lint] |
-| **Pip-audit** | Known CVEs in dependencies | Pre-commit + CI/CD |
+| **uv audit** | Known CVEs in dependencies | CI/CD |
 | **SBOM** | Slow incident response | CycloneDX in CI artifacts |
 | **Time-based constraints** | Fresh compromises | `--exclude-newer` flag |
 | **Pre-commit hooks** | Local developer errors (can be bypassed) | `.pre-commit-config.yaml` - Enforced via CI/branch-protection |
@@ -251,7 +255,7 @@ GitHub Actions will automatically run security checks and publish artifacts.
 ### Weekly
 
 - Review any GitHub security alerts in your repository settings
-- Check pip-audit results from the daily scheduled CI run
+- Check uv audit results from the daily scheduled CI run
 
 ### Monthly
 
@@ -307,7 +311,7 @@ just check
 - [Securing the Python Supply Chain](https://bernat.tech/posts/securing-python-supply-chain/) - Bernát Gábor (the definitive guide)
 - [LiteLLM Supply Chain Attack](https://futuresearch.ai/blog/litellm-pypi-supply-chain-attack/) - Technical breakdown
 - [PEP 751: Lockfile Specification](https://peps.python.org/pep-0751/) - Future of Python lockfiles
-- [OSV Database](https://osv.dev/) - The vulnerability database pip-audit queries
+- [OSV Database](https://osv.dev/) - The vulnerability database uv audit queries
 - [uv Documentation](https://docs.astral.sh/uv/) - Modern Python packaging
 
 ## Questions?
@@ -316,6 +320,6 @@ If you have questions about FamilyBot's security posture, file an issue on GitHu
 
 ---
 
-**Last updated:** April 5, 2026
+**Last updated:** August 25, 2026
 **Based on:** LiteLLM attack incident (March 24, 2026)
 **Maintained by:** FamilyBot maintainers
