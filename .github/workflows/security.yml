@@ -6,10 +6,12 @@ on:
     paths:
       - 'pyproject.toml'
       - 'requirements*.txt'
+      - 'uv.lock'
       - 'src/**/*.py'
       - 'scripts/**/*.py'
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
   schedule:
     # Run daily at 2 AM UTC to catch newly disclosed vulnerabilities
     - cron: '0 2 * * *'
