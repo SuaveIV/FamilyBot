@@ -3,13 +3,14 @@
 import logging
 import sqlite3
 
+from steam.steamid import SteamID
+
 from familybot.config import FAMILY_USER_DICT
 from familybot.lib.database import (
     _has_migration_run,
     get_db_connection,
     get_write_connection,
 )
-from steam.steamid import SteamID
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +121,7 @@ def _migrate_family_members_from_config(conn: sqlite3.Connection) -> None:
 
 
 def load_family_members_from_db() -> dict:
-    """
-    Loads family member data (steam_id: friendly_name) from the database,
+    """Loads family member data (steam_id: friendly_name) from the database,
     performing a one-time migration from config.yml if necessary.
     """
     members = {}
@@ -186,7 +186,8 @@ def get_steam_id_from_friendly_name(friendly_name: str) -> str | None:
 def get_steam_id_from_discord_id(discord_id: str) -> str | None:
     """Retrieves the SteamID associated with a given Discord ID.
     Checks family_members table first (for config-driven members with discord_id set),
-    then falls back to users table (for !register users)."""
+    then falls back to users table (for !register users).
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()

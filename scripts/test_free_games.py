@@ -1,16 +1,16 @@
+import argparse
 import asyncio
 import logging
-import argparse
 import sys
-import os
-from unittest.mock import MagicMock, AsyncMock, patch
+from pathlib import Path
 from typing import Any, cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add src to path so we can import familybot
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from familybot.plugins.free_games import FreeGames
 from familybot.lib.types import FamilyBotClient
+from familybot.plugins.free_games import FreeGames
 
 # Configure logging
 logging.basicConfig(
@@ -28,13 +28,7 @@ def create_bsky_post(uri: str, text: str, url: str) -> dict[str, Any]:
             "uri": uri,
             "record": {
                 "text": text,
-                "facets": [
-                    {
-                        "features": [
-                            {"$type": "app.bsky.richtext.facet#link", "uri": url}
-                        ]
-                    }
-                ],
+                "facets": [{"features": [{"$type": "app.bsky.richtext.facet#link", "uri": url}]}],
             },
         }
     }
@@ -98,20 +92,6 @@ MOCK_BLUESKY_POSTS = [
     ),
 ]
 
-MOCK_REDDIT_RESPONSES = {
-    "https://www.reddit.com/r/GameDeals/comments/valid_post.json": {
-        "link_flair_text": "100% OFF",
-        "url": "https://store.steampowered.com/app/reddit_game",
-    },
-    "https://www.reddit.com/r/GameDeals/comments/expired_post.json": {
-        "link_flair_text": "Expired",
-        "url": "https://store.steampowered.com/app/reddit_expired",
-    },
-    "https://www.reddit.com/r/GameDeals/comments/excluded_domain_post.json": {
-        "link_flair_text": "100% OFF",
-        "url": "https://givee.club/game/123",
-    },
-}
 
 MOCK_STEAM_DETAILS = {
     "12345": {"name": "Great Free Game", "short_description": "A truly great game."},
@@ -124,21 +104,15 @@ MOCK_STEAM_DETAILS = {
 # --- Mocks for Network Calls ---
 
 
-async def mock_fetch_bluesky_posts(*args, **kwargs) -> list[dict[str, Any]]:
+async def mock_fetch_bluesky_posts(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
     logger.info("[MOCK] _fetch_bluesky_posts called, returning mock data.")
     return MOCK_BLUESKY_POSTS
 
 
-async def mock_get_reddit_post_details(self, reddit_url: str) -> dict[str, Any] | None:
-    logger.info(f"[MOCK] _get_reddit_post_details called for {reddit_url}")
-    # Append .json if it's not there for matching the key
-    if not reddit_url.endswith(".json"):
-        reddit_url += ".json"
-    return MOCK_REDDIT_RESPONSES.get(reddit_url)
 
 
 async def mock_fetch_game_details(
-    steam_id: str, steam_api_manager: Any
+    steam_id: str, _steam_api_manager: Any, session: Any = None  # noqa: ARG001
 ) -> dict[str, Any] | None:
     logger.info(f"[MOCK] fetch_game_details called for Steam ID: {steam_id}")
     return MOCK_STEAM_DETAILS.get(steam_id)
@@ -147,9 +121,7 @@ async def mock_fetch_game_details(
 async def run_live_test():
     """Runs a live test against the actual Bluesky, Reddit, and Steam APIs."""
     logger.info("--- Starting LIVE Free Games Plugin Test ---")
-    logger.warning(
-        "This test makes REAL network requests to Bluesky, Reddit, and Steam."
-    )
+    logger.warning("This test makes REAL network requests to Bluesky, Reddit, and Steam.")
     logger.warning("Output will be printed to the console.")
 
     # Mock the bot
@@ -219,10 +191,6 @@ async def main():
             new=mock_fetch_bluesky_posts,
         ),
         patch(
-            "familybot.plugins.free_games.FreeGames._get_reddit_post_details",
-            new=mock_get_reddit_post_details,
-        ),
-        patch(
             "familybot.plugins.free_games.fetch_game_details",
             new=mock_fetch_game_details,
         ),
@@ -231,7 +199,7 @@ async def main():
         logger.info("--- Test 1: Initialization (Marking existing posts as seen) ---")
         await plugin.scheduled_bsky_free_games_check()
         # On the first run, it should see all posts but not send notifications
-        assert len(plugin._seen_bsky_posts) == len(MOCK_BLUESKY_POSTS), (
+        assert len(plugin._seen_bsky_posts) == len(MOCK_BLUESKY_POSTS), (  # noqa: S101
             f"Expected {len(MOCK_BLUESKY_POSTS)} seen posts, got {len(plugin._seen_bsky_posts)}"
         )
         mock_channel.send.assert_not_called()
@@ -271,29 +239,25 @@ async def main():
         # Check the initial "Checking..." message
         mock_ctx.send.assert_any_call("Checking for free games...")
 
-        # We expect 4 valid games to be posted:
+        # We expect 7 valid games to be posted:
         # - Great Free Game (Steam)
         # - Awesome Free Game (Epic)
         # - Prime Free Game (Amazon)
-        # - Game from Reddit (Steam)
-        # - A great game from GOG
+        # - Game from Reddit (Reddit link)
+        # - Reddit post linking to excluded domain (Reddit link)
         # - A great game from GOG (GOG)
-        # - A cool indie game from Itch.io
+        # - A cool indie game from Itch.io (Itch.io)
         # The other 4 posts should be filtered out.
-        # The other 5 posts should be filtered out.
         call_count = mock_channel.send.call_count
         logger.info(f"Found {call_count} channel send calls.")
-        assert call_count == 6, f"Expected 6 game announcements, but got {call_count}"
+        assert call_count == 7, f"Expected 7 game announcements, but got {call_count}"  # noqa: S101
 
-        logger.info("OK: Correct number of games (6) were announced.")
+        logger.info("OK: Correct number of games (7) were announced.")
         logger.info("Filtered out:")
         logger.info(" - 'Expired Game' (text filter)")
         logger.info(" - 'DLC that requires paid base game' (text filter)")
         logger.info(" - '(DLC) Some Cool Skin Pack' (text filter)")
-        logger.info(" - 'Expired game from Reddit' (Reddit flair scraping filter)")
-        logger.info(
-            " - 'Reddit post linking to excluded domain' (domain filter after Reddit scrape)"
-        )
+        logger.info(" - 'Expired game from Reddit' (text filter on title containing 'expired')")
 
         # --- Test 4: Manual trigger with no new games ---
         logger.info("\n--- Test 4: Manual trigger with no new games ---")
@@ -314,9 +278,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Test script for the Free Games plugin."
-    )
+    parser = argparse.ArgumentParser(description="Test script for the Free Games plugin.")
     parser.add_argument(
         "--live",
         action="store_true",

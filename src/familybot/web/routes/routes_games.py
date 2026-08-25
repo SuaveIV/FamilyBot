@@ -1,9 +1,8 @@
 # In src/familybot/web/routes/games.py
-"""
-Game-related API endpoints:
-  - Family library listing
-  - Recently added games
-  - Batch Steam game-info lookup (name + cover art)
+"""Game-related API endpoints:
+- Family library listing
+- Recently added games
+- Batch Steam game-info lookup (name + cover art)
 """
 
 import asyncio
@@ -136,8 +135,7 @@ class GameInfoItem(BaseModel):
 
 @router.post("/api/game-info/batch", response_model=dict[str, GameInfoItem])
 async def get_game_info_batch(body: GameInfoBatchRequest):
-    """
-    Return name + cover-art URL for up to 50 Steam App IDs.
+    """Return name + cover-art URL for up to 50 Steam App IDs.
 
     Hits game_details_cache first; fetches from the Steam Store API for
     anything missing, caches the results permanently, then returns the

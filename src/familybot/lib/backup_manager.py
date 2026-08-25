@@ -63,6 +63,6 @@ def backup_database() -> bool:
         cleanup_old_backups()
 
         return True
-    except IOError as e:
+    except OSError as e:
         logger.error(f"❌ Failed to backup database: {e}")
         return False

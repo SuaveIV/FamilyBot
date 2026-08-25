@@ -15,12 +15,14 @@ logger = get_logger(__name__)
 
 
 def get_common_elements_in_lists(list_of_lists: list) -> list:
-    """
-    Finds elements common to ALL sublists in a list of lists.
+    """Finds elements common to ALL sublists in a list of lists.
+
     Args:
         list_of_lists: A list where each element is itself a list of items.
+
     Returns:
         A sorted list of elements that are present in every sublist.
+
     """
     if not list_of_lists:
         return []
@@ -36,12 +38,12 @@ def get_common_elements_in_lists(list_of_lists: list) -> list:
 
 
 class ProgressTracker:
-    """
-    Tracks progress and generates formatted progress messages with time estimation.
+    """Tracks progress and generates formatted progress messages with time estimation.
 
     Args:
         total_items: Total number of items to process
         progress_interval: Percentage interval for reporting (default: 10)
+
     """
 
     def __init__(
@@ -105,10 +107,9 @@ class ProgressTracker:
 
             if remaining >= SECONDS_PER_MINUTE:
                 return f" | ⏱️ ~{int(remaining / SECONDS_PER_MINUTE)} min remaining"
-            elif remaining >= 1:
+            if remaining >= 1:
                 return f" | ⏱️ ~{int(remaining)} sec remaining"
-            else:
-                return " | ⏱️ Almost done!"
+            return " | ⏱️ Almost done!"
 
         except (ZeroDivisionError, OverflowError, ValueError):
             logger.warning("Error calculating time estimation")
@@ -119,12 +120,12 @@ class TokenBucket:
     """Token bucket rate limiter for controlling API request rates."""
 
     def __init__(self, rate: float, capacity: int | None = None):
-        """
-        Initialize token bucket.
+        """Initialize token bucket.
 
         Args:
             rate: Tokens per second (e.g., 1/1.5 = 0.67 for one request every 1.5 seconds)
             capacity: Maximum tokens in bucket (defaults to rate * 10)
+
         """
         self.rate = rate
         self.capacity: int = (

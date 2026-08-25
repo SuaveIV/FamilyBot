@@ -5,8 +5,8 @@ This script tests the token extraction functionality without running the full bo
 """
 
 import asyncio
-import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add the src directory to the Python path
@@ -33,28 +33,23 @@ import base64
 import binascii
 import json
 import re
-import tempfile
 import shutil
-from datetime import datetime
+import tempfile
 
 
 class TokenTester:
     def __init__(self):
-        self.actual_token_save_dir = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
+        self.actual_token_save_dir = Path(PROJECT_ROOT) / TOKEN_SAVE_PATH
         self.browser_profile_path = (
-            os.path.join(PROJECT_ROOT, BROWSER_PROFILE_PATH)
-            if BROWSER_PROFILE_PATH
-            else None
+            Path(PROJECT_ROOT) / BROWSER_PROFILE_PATH if BROWSER_PROFILE_PATH else None
         )
         # Create a temporary directory for test token storage
         self.test_token_save_dir = tempfile.mkdtemp()
-        print(
-            f"Created temporary directory for test tokens: {self.test_token_save_dir}"
-        )
+        print(f"Created temporary directory for test tokens: {self.test_token_save_dir}")
 
     def __del__(self):
         # Clean up the temporary directory when the object is deleted
-        if os.path.exists(self.test_token_save_dir):
+        if Path(self.test_token_save_dir).exists():
             shutil.rmtree(self.test_token_save_dir)
             print(f"Cleaned up temporary directory: {self.test_token_save_dir}")
 
@@ -66,7 +61,7 @@ class TokenTester:
             print("⚠️  No browser profile path configured")
             return False
 
-        if not os.path.exists(self.browser_profile_path):
+        if not Path(self.browser_profile_path).exists():
             print(f"❌ Browser profile not found at: {self.browser_profile_path}")
             print("   Run 'uv run python scripts/setup_browser.py' first")
             return False
@@ -79,7 +74,7 @@ class TokenTester:
         print("\n🔍 Testing token extraction...")
 
         if self.browser_profile_path:
-            if not os.path.exists(self.browser_profile_path):
+            if not Path(self.browser_profile_path).exists():
                 print(f"❌ Saved browser profile missing at: {self.browser_profile_path}")
                 print("   Please run test_browser_profile() or setup first.")
                 sys.exit(1)
@@ -101,9 +96,7 @@ class TokenTester:
 
                 # Navigate to Steam points summary page
                 print("   Navigating to Steam API endpoint...")
-                await page.goto(
-                    "https://store.steampowered.com/pointssummary/ajaxgetasyncconfig"
-                )
+                await page.goto("https://store.steampowered.com/pointssummary/ajaxgetasyncconfig")
                 await page.wait_for_load_state("networkidle")
 
                 # Get page content
@@ -115,9 +108,7 @@ class TokenTester:
                 ):
                     print("❌ CRITICAL: Steam returned empty data response.")
                     print("   This means your session is expired or invalid.")
-                    print(
-                        "   Run 'uv run python scripts/setup_browser.py' to refresh login."
-                    )
+                    print("   Run 'uv run python scripts/setup_browser.py' to refresh login.")
                     return False
 
                 # Try to click rawdata-tab if it exists
@@ -133,7 +124,7 @@ class TokenTester:
 
                 # Extract token from page content
                 print("   Searching for webapi_token...")
-                token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'
+                token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'  # noqa: S105
                 match = re.search(token_pattern, content)
 
                 if not match:
@@ -167,8 +158,8 @@ class TokenTester:
             key_info = json.loads(base64.b64decode(padded_coded_string).decode("utf-8"))
             exp_timestamp = key_info["exp"]
 
-            exp_time = datetime.fromtimestamp(exp_timestamp)
-            now = datetime.now()
+            exp_time = datetime.fromtimestamp(exp_timestamp, tz=UTC)
+            now = datetime.now(tz=UTC)
             time_remaining = exp_time - now
 
             print("✅ Token decoded successfully")
@@ -193,29 +184,28 @@ class TokenTester:
         print("\n🔍 Testing token storage...")
 
         try:
-            token_file_path = os.path.join(self.test_token_save_dir, "token")
-            with open(token_file_path, "w") as token_file:
+            token_file_path = Path(self.test_token_save_dir) / "token"
+            with token_file_path.open("w") as token_file:
                 token_file.write(token)
 
-            exp_file_path = os.path.join(self.test_token_save_dir, "token_exp")
-            with open(exp_file_path, "w") as exp_time_file:
+            exp_file_path = Path(self.test_token_save_dir) / "token_exp"
+            with exp_file_path.open("w") as exp_time_file:
                 exp_time_file.write(str(exp_timestamp))
 
             print(f"✅ Token saved to: {token_file_path}")
             print(f"✅ Expiry saved to: {exp_file_path}")
 
             # Verify files can be read back
-            with open(token_file_path, "r") as f:
+            with token_file_path.open("r") as f:
                 saved_token = f.read().strip()
-            with open(exp_file_path, "r") as f:
+            with exp_file_path.open("r") as f:
                 saved_exp = f.read().strip()
 
             if saved_token == token and saved_exp == str(exp_timestamp):
                 print("✅ Token files verified successfully")
                 return True
-            else:
-                print("❌ Token file verification failed")
-                return False
+            print("❌ Token file verification failed")
+            return False
 
         except Exception as e:
             print(f"❌ Error saving token: {e}")
@@ -246,9 +236,9 @@ class TokenTester:
 
         # Optional: Compare with live token
         try:
-            live_token_path = os.path.join(self.actual_token_save_dir, "token")
-            if os.path.exists(live_token_path):
-                with open(live_token_path, "r") as f:
+            live_token_path = Path(self.actual_token_save_dir) / "token"
+            if live_token_path.exists():
+                with live_token_path.open("r") as f:
                     live_token = f.read().strip()
 
                 print("\n🔍 Comparing with live bot token...")
@@ -256,12 +246,10 @@ class TokenTester:
                     print("✅ Live token matches the newly fetched token.")
                 else:
                     print("⚠️  Live token differs from the newly fetched token.")
-                    print(
-                        "   (This is normal if the live token is older but still valid,"
-                    )
+                    print("   (This is normal if the live token is older but still valid,")
                     print("    or if the live token has expired and needs a refresh.)")
             else:
-                print("\nℹ️  No live token found to compare with.")
+                print("\n  No live token found to compare with.")
         except Exception as e:
             print(f"\n⚠️  Could not compare with live token: {e}")
 
@@ -274,9 +262,8 @@ class TokenTester:
             print("   - !token_status (check current token)")
             print("   - !force_token (force token update)")
             return True
-        else:
-            print("❌ Some tests failed. Please check the errors above.")
-            return False
+        print("❌ Some tests failed. Please check the errors above.")
+        return False
 
 
 async def main():

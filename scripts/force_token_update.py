@@ -10,9 +10,8 @@ import base64
 import json
 import logging
 import re
-import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add the src directory to the Python path
@@ -32,9 +31,7 @@ except ImportError as e:
     sys.exit(1)
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -42,13 +39,9 @@ async def get_token_with_camoufox() -> str:
     """Extract Steam webapi_token using Camoufox."""
     logger.info("Starting token extraction...")
 
-    profile_path = (
-        os.path.join(PROJECT_ROOT, BROWSER_PROFILE_PATH)
-        if BROWSER_PROFILE_PATH
-        else None
-    )
+    profile_path = Path(PROJECT_ROOT) / BROWSER_PROFILE_PATH if BROWSER_PROFILE_PATH else None
 
-    if not profile_path or not os.path.exists(profile_path):
+    if not profile_path or not profile_path.exists():
         logger.error(f"Browser profile not found at {profile_path}")
         logger.error("Run 'uv run python scripts/setup_browser.py' first.")
         return ""
@@ -56,15 +49,13 @@ async def get_token_with_camoufox() -> str:
     logger.info("Launching headless browser...")
     async with AsyncCamoufox(
         persistent_context=True,
-        user_data_dir=profile_path,
+        user_data_dir=str(profile_path),
         headless=True,
     ) as context:
         page = await context.new_page()
         try:
             logger.info("Navigating to Steam...")
-            await page.goto(
-                "https://store.steampowered.com/pointssummary/ajaxgetasyncconfig"
-            )
+            await page.goto("https://store.steampowered.com/pointssummary/ajaxgetasyncconfig")
             await page.wait_for_load_state("networkidle")
 
             content = await page.content()
@@ -76,8 +67,8 @@ async def get_token_with_camoufox() -> str:
                     await rawdata_tab.click()
                     await page.wait_for_timeout(1000)
                     content = await page.content()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not click rawdata-tab: {e}")
 
             # Check for empty JSON response
             if '{"success":1,"data":[]}' in content or (
@@ -89,7 +80,7 @@ async def get_token_with_camoufox() -> str:
                 return ""
 
             # Extract using regex
-            token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'
+            token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'  # noqa: S105
             match = re.search(token_pattern, content)
 
             if not match:
@@ -111,14 +102,14 @@ async def get_token_with_camoufox() -> str:
 
 def save_token(token: str) -> bool:
     """Save the token and its expiration to the live tokens directory."""
-    token_save_dir = os.path.join(PROJECT_ROOT, TOKEN_SAVE_PATH)
+    token_save_dir = Path(PROJECT_ROOT) / TOKEN_SAVE_PATH
 
     try:
-        os.makedirs(token_save_dir, exist_ok=True)
+        token_save_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. Save Token
-        token_path = os.path.join(token_save_dir, "token")
-        with open(token_path, "w") as f:
+        token_path = token_save_dir / "token"
+        with token_path.open("w") as f:
             f.write(token)
 
         # 2. Decode & Save Expiry
@@ -129,11 +120,11 @@ def save_token(token: str) -> bool:
         key_info = json.loads(base64.b64decode(padded).decode("utf-8"))
         exp_ts = key_info["exp"]
 
-        exp_path = os.path.join(token_save_dir, "token_exp")
-        with open(exp_path, "w") as f:
+        exp_path = token_save_dir / "token_exp"
+        with exp_path.open("w") as f:
             f.write(str(exp_ts))
 
-        exp_dt = datetime.fromtimestamp(exp_ts)
+        exp_dt = datetime.fromtimestamp(exp_ts, tz=UTC)
         logger.info(f"✅ Token updated! Expires at: {exp_dt}")
         return True
 
@@ -144,10 +135,9 @@ def save_token(token: str) -> bool:
 
 async def main():
     token = await get_token_with_camoufox()
-    if token:
-        if save_token(token):
-            print("\n🎉 Token force update completed successfully.")
-            sys.exit(0)
+    if token and save_token(token):
+        print("\n🎉 Token force update completed successfully.")
+        sys.exit(0)
 
     print("\n❌ Token update failed.")
     sys.exit(1)

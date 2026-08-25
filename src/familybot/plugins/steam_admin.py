@@ -1,6 +1,7 @@
+import asyncio
 import time
 from datetime import datetime
-import asyncio
+
 import aiohttp
 from interactions import Extension, GuildText
 from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
@@ -10,25 +11,25 @@ from familybot.config import (
     STEAMWORKS_API_KEY,
     WISHLIST_CHANNEL_ID,
 )
+from familybot.lib.discord_utils import split_message
+from familybot.lib.family_game_manager import get_saved_games
+from familybot.lib.family_utils import format_message
 from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
+from familybot.lib.itad_service import prefetch_itad_prices
+from familybot.lib.logging_config import get_logger
+from familybot.lib.steam_api_manager import SteamAPIManager
+from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
+from familybot.lib.types import FamilyBotClient
 from familybot.lib.user_repository import load_family_members_from_db
+from familybot.lib.utils import ProgressTracker
 from familybot.lib.wishlist_repository import (
     cache_wishlist,
     get_cached_wishlist,
 )
-from familybot.lib.family_game_manager import get_saved_games
-from familybot.lib.family_utils import format_message
-from familybot.lib.logging_config import get_logger
-from familybot.lib.types import FamilyBotClient
-from familybot.lib.discord_utils import split_message
-from familybot.lib.itad_service import prefetch_itad_prices
-from familybot.lib.utils import ProgressTracker
 from familybot.lib.wishlist_service import add_to_wishlist
-from familybot.lib.steam_api_manager import SteamAPIManager
-from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
 logger = get_logger(__name__)
 
@@ -86,8 +87,7 @@ class steam_admin(Extension):
     async def force_deals_command(
         self, ctx: PrefixedContext, target_friendly_name: str | None = None
     ):
-        """
-        Admin command to force check deals for a specific user's wishlist or all wishlists.
+        """Admin command to force check deals for a specific user's wishlist or all wishlists.
         Usage: !force_deals [friendly_name]
         If friendly_name is provided, checks only that user's wishlist.
         If no friendly_name is provided, checks all family wishlists.
@@ -265,8 +265,7 @@ class steam_admin(Extension):
 
     @prefixed_command(name="force_deals_unlimited")
     async def force_deals_unlimited_command(self, ctx: PrefixedContext):
-        """
-        Admin command to force check deals for ALL wishlist games (no limit) and post results to the wishlist channel.
+        """Admin command to force check deals for ALL wishlist games (no limit) and post results to the wishlist channel.
         Only posts deals for games that are family sharing enabled.
         """
         if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
@@ -388,8 +387,7 @@ class steam_admin(Extension):
 
     @prefixed_command(name="purge_cache")
     async def purge_cache_command(self, ctx: PrefixedContext):
-        """
-        Admin command to purge game details cache and force fresh data with USD pricing.
+        """Admin command to purge game details cache and force fresh data with USD pricing.
         """
         if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
             await ctx.send(
@@ -410,8 +408,7 @@ class steam_admin(Extension):
 
     @prefixed_command(name="purge_prices")
     async def purge_prices_command(self, ctx: PrefixedContext):
-        """
-        Admin command to purge ITAD price cache and Steam-ITAD mapping cache.
+        """Admin command to purge ITAD price cache and Steam-ITAD mapping cache.
         """
         if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
             await ctx.send(
@@ -434,8 +431,7 @@ class steam_admin(Extension):
 
     @prefixed_command(name="full_library_scan")
     async def full_library_scan_command(self, ctx: PrefixedContext):
-        """
-        Admin command to scan all family members' complete game libraries.
+        """Admin command to scan all family members' complete game libraries.
         Uses rate limiting to avoid API limits and caches all owned games.
         """
         if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:
@@ -616,8 +612,7 @@ class steam_admin(Extension):
 
     @prefixed_command(name="full_wishlist_scan")
     async def full_wishlist_scan_command(self, ctx: PrefixedContext):
-        """
-        Admin command to perform a comprehensive wishlist scan of ALL common games.
+        """Admin command to perform a comprehensive wishlist scan of ALL common games.
         Uses slower rate limiting to avoid API limits and provides progress updates.
         """
         if str(ctx.author_id) != str(ADMIN_DISCORD_ID) or ctx.guild is not None:

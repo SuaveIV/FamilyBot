@@ -1,23 +1,10 @@
-import sqlite3
 import json
+import sqlite3
 from pathlib import Path
 
 
-def debug_deals():
-    """Debug script to examine price data and deal detection logic"""
-    db_path = Path("bot_data.db")
-
-    if not db_path.exists():
-        print("Database not found!")
-        return
-
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    print("=== DEBUGGING DEALS DETECTION ===\n")
-
-    # 1. Check game_details_cache structure and sample data
+def check_game_details_cache(cursor: sqlite3.Cursor) -> None:
+    """Check game_details_cache structure and sample data."""
     print("1. Checking game_details_cache structure:")
     cursor.execute("PRAGMA table_info(game_details_cache)")
     columns = cursor.fetchall()
@@ -40,7 +27,9 @@ def debug_deals():
             price_data = json.loads(game["price_data"])
             print(f"Price Data: {price_data}")
 
-    # 3. Check itad_price_cache
+
+def check_itad_price_cache(cursor: sqlite3.Cursor) -> None:
+    """Check itad_price_cache structure and sample data."""
     print("\n3. Checking itad_price_cache structure:")
     cursor.execute("PRAGMA table_info(itad_price_cache)")
     columns = cursor.fetchall()
@@ -53,7 +42,9 @@ def debug_deals():
     for price in itad_prices:
         print(f"App ID: {price['appid']}, Lowest Price: {price['lowest_price']}")
 
-    # 5. Check for games with discounts
+
+def check_current_discounts(cursor: sqlite3.Cursor) -> None:
+    """Check for games with current discounts."""
     print("\n5. Games with current discounts:")
     cursor.execute("""
         SELECT appid, name,
@@ -71,25 +62,28 @@ def debug_deals():
         for game in discounted_games:
             print(f"App ID: {game['appid']}, Name: {game['name']}")
             print(
-                f"  Discount: {game['discount']}%, Current: {game['current_price']}, Original: {game['original_price']}"
+                f"  Discount: {game['discount']}%, Current: {game['current_price']}, "
+                f"Original: {game['original_price']}"
             )
     else:
         print("No games with discounts found in cache!")
 
-    # 6. Check wishlist data
+
+def check_wishlist_data(cursor: sqlite3.Cursor) -> None:
+    """Check wishlist_cache data."""
     print("\n6. Checking wishlist_cache:")
     cursor.execute("SELECT COUNT(*) as total FROM wishlist_cache")
     wishlist_count = cursor.fetchone()["total"]
     print(f"Total wishlist entries: {wishlist_count}")
 
-    cursor.execute(
-        "SELECT steam_id, COUNT(*) as game_count FROM wishlist_cache GROUP BY steam_id"
-    )
+    cursor.execute("SELECT steam_id, COUNT(*) as game_count FROM wishlist_cache GROUP BY steam_id")
     wishlist_by_user = cursor.fetchall()
     for user in wishlist_by_user:
         print(f"  Steam ID {user['steam_id']}: {user['game_count']} games")
 
-    # 7. Check for games that should qualify for deals
+
+def check_deal_candidates(cursor: sqlite3.Cursor) -> None:
+    """Check for games that should qualify for deals."""
     print("\n7. Potential deal candidates (discount >= 30%):")
     cursor.execute("""
         SELECT gdc.appid,
@@ -110,10 +104,32 @@ def debug_deals():
         for game in deal_candidates:
             print(f"App ID: {game['appid']}, Name: {game['name']}")
             print(
-                f"  Discount: {game['discount']}%, Current: {game['current_price']}, Historical Low: {game['lowest_price']}"
+                f"  Discount: {game['discount']}%, Current: {game['current_price']}, "
+                f"  Historical Low: {game['lowest_price']}"
             )
     else:
         print("No deal candidates found!")
+
+
+def debug_deals() -> None:
+    """Debug script to examine price data and deal detection logic."""
+    db_path = Path("bot_data.db")
+
+    if not db_path.exists():
+        print("Database not found!")
+        return
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    print("=== DEBUGGING DEALS DETECTION ===\n")
+
+    check_game_details_cache(cursor)
+    check_itad_price_cache(cursor)
+    check_current_discounts(cursor)
+    check_wishlist_data(cursor)
+    check_deal_candidates(cursor)
 
     conn.close()
 

@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from familybot.lib.database import get_db_connection, get_write_connection
 
@@ -72,7 +72,7 @@ def cache_itad_mapping(
     appid: str, itad_id: str, conn: sqlite3.Connection | None = None
 ):
     """Cache a single Steam AppID to ITAD ID mapping."""
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     def _do_insert(cursor: sqlite3.Cursor):
         cursor.execute(
@@ -101,7 +101,7 @@ def bulk_cache_itad_mappings(
     if not mappings:
         return 0
 
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     def _do_bulk_insert(cursor: sqlite3.Cursor):
         cursor.executemany(

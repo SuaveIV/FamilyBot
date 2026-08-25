@@ -1,16 +1,17 @@
 # In src/familybot/lib/family_utils.py
 
+import asyncio
 import json
 import logging
-import asyncio
 
 import aiohttp
 
-from familybot.config import FAMILY_STEAM_ID  # Import FAMILY_USER_DICT here
-from familybot.config import FAMILY_USER_DICT
-from familybot.lib.token_manager import get_token  # <<< IMPORT get_token here
+from familybot.config import (
+    FAMILY_STEAM_ID,  # Import FAMILY_USER_DICT here
+    FAMILY_USER_DICT,
+)
 from familybot.lib.itad_service import get_lowest_price
-
+from familybot.lib.token_manager import get_token  # <<< IMPORT get_token here
 
 # Setup logging for this specific module
 logger = logging.getLogger(__name__)
@@ -178,10 +179,10 @@ async def format_message(
             f"Formatted message too long ({len(final_message)} chars). Retrying with short format."
         )
         return await format_message(wishlist, short=True, cached_data=new_cached_data)
-    elif len(final_message) > 1900 and short:
+    if len(final_message) > 1900 and short:
         logger.warning("Shortened message still too long. Sending generic message.")
         return "# 📝 Family Wishlist \n Can't create a message or it will be too long"
-    elif not final_message.strip().endswith("\n"):
+    if not final_message.strip().endswith("\n"):
         final_message += "\n"
 
     return final_message

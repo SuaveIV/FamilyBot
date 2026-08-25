@@ -1,15 +1,15 @@
 # In src/familybot/web/routes/wishlist.py
-"""
-Wishlist API endpoint.
-Returns paginated wishlist entries with optional per-member filtering.
+"""Wishlist API endpoint.
+
+Returns paginated wishlist entries with optional per-member filtering
 """
 
+import contextlib
 import json
 import logging
 import sqlite3
 
-from fastapi import APIRouter, Depends
-from fastapi import Query
+from fastapi import APIRouter, Depends, Query
 
 from familybot.web.dependencies import get_db
 from familybot.web.models import WishlistItem
@@ -23,10 +23,9 @@ async def get_wishlist_summary(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=200),
     family_member_id: str | None = None,
-    conn=Depends(get_db),
+    conn: sqlite3.Connection = Depends(get_db),  # noqa: B008
 ):
-    """
-    Return a paginated list of wishlist entries.
+    """Return a paginated list of wishlist entries.
 
     When family_member_id is omitted, all members' wishlists are returned
     (including duplicates where the same game appears on multiple wishlists —
@@ -40,7 +39,7 @@ async def get_wishlist_summary(
             # Count unique appids for the specific member
             count_q = "SELECT COUNT(DISTINCT w.appid) FROM wishlist_cache w WHERE w.steam_id = ?"
             # Get unique appids for the specific member, then join to get details
-            data_q = f"""
+            data_q = """
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM (
                     SELECT DISTINCT w2.appid, w2.steam_id
@@ -51,14 +50,14 @@ async def get_wishlist_summary(
                        ON w.appid = g.appid
                       AND (g.permanent = 1 OR g.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
                 ORDER BY g.name, w.steam_id
-                LIMIT {limit} OFFSET {offset}
+                LIMIT ? OFFSET ?
             """
-            params: list = [family_member_id]
+            params: list = [family_member_id, limit, offset]
         else:
             # Count unique appids across all members
             count_q = "SELECT COUNT(DISTINCT w.appid) FROM wishlist_cache w"
             # Get unique appids across all members, then join to get details
-            data_q = f"""
+            data_q = """
                 SELECT w.appid, w.steam_id, g.name, g.price_data
                 FROM (
                     SELECT DISTINCT w2.appid, w2.steam_id
@@ -68,9 +67,9 @@ async def get_wishlist_summary(
                        ON w.appid = g.appid
                       AND (g.permanent = 1 OR g.expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
                 ORDER BY g.name, w.steam_id
-                LIMIT {limit} OFFSET {offset}
+                LIMIT ? OFFSET ?
             """
-            params = []
+            params = [limit, offset]
 
         cursor.execute(count_q, params)
         total_items: int = cursor.fetchone()[0]
@@ -86,10 +85,8 @@ async def get_wishlist_summary(
     for row in rows:
         price_data = None
         if row["price_data"]:
-            try:
+            with contextlib.suppress(Exception):
                 price_data = json.loads(row["price_data"])
-            except Exception:
-                pass
         items.append(
             WishlistItem(
                 appid=row["appid"],

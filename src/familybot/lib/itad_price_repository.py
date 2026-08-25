@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from familybot.config import ITAD_CACHE_TTL
 from familybot.lib.database import get_db_connection, get_write_connection
@@ -66,7 +66,7 @@ def _do_cache_itad_price(
     steam_game_name: str | None,
 ):
     """Internal: cache ITAD price using an existing cursor."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if permanent:
         expires_at_str = None
         permanent_val = 1

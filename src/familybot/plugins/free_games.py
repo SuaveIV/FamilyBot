@@ -1,6 +1,8 @@
+"""Free games plugin monitoring freegamefindings.bsky.social."""
+
 import asyncio
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import aiohttp
@@ -16,16 +18,19 @@ from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
 from familybot.config import ADMIN_DISCORD_ID, EPIC_CHANNEL_ID
 from familybot.lib.logging_config import get_logger
-from familybot.lib.types import FamilyBotClient
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import fetch_game_details
+from familybot.lib.types import FamilyBotClient
 
 # Setup enhanced logging
 logger = get_logger(__name__)
 
 
 class FreeGames(Extension):
+    """Extension to track and announce free games from Bluesky."""
+
     def __init__(self, bot: FamilyBotClient):
+        """Initialize the FreeGames extension."""
         self.bot: FamilyBotClient = bot
         self.steam_api_manager = SteamAPIManager()
         logger.info("Free Games Plugin loaded")
@@ -35,17 +40,17 @@ class FreeGames(Extension):
         self._first_bsky_run = True
 
     async def _send_admin_dm(self, message: str) -> None:
-        """Helper to send error/warning messages to the bot admin via DM."""
+        """Send error/warning messages to the bot admin via DM."""
         try:
             admin_user = await self.bot.fetch_user(ADMIN_DISCORD_ID)
             if admin_user:
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
                 await admin_user.send(f"Free Games Plugin Error ({now_str}): {message}")
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
     def _extract_steam_id(self, url: str) -> str | None:
-        """Extracts the Steam App ID from a store URL."""
+        """Extract the Steam App ID from a store URL."""
         match = re.search(r"store\.steampowered\.com/app/(\d+)", url)
         if match:
             return match.group(1)
@@ -57,10 +62,10 @@ class FreeGames(Extension):
 
     @Task.create(IntervalTrigger(minutes=30))
     async def scheduled_bsky_free_games_check(self) -> None:
-        """Checks freegamefindings.bsky.social for new free games via Bluesky API."""
+        """Check freegamefindings.bsky.social for new free games via Bluesky API."""
         await self._process_feed(manual=False, ctx=None)
 
-    # [help]|force_free|Manually triggers a check for new free games. For Steam games, provides rich embeds.|!force_free|Admin-only. Responds in the invoked channel.
+    # [help]|force_free|Manually triggers a check for new free games. For Steam games, provides rich embeds.|!force_free|Admin-only. Responds in the invoked channel.  # noqa: E501
     @prefixed_command(name="force_free")
     async def force_free_command(self, ctx: PrefixedContext):
         """Manually triggers the Free Games check."""
@@ -77,10 +82,10 @@ class FreeGames(Extension):
         else:
             await ctx.send("Unauthorized. This command can only be used by the admin.")
 
-    # [help]|show_last_free_games|Displays the last 10 free games found on freegamefindings.bsky.social, with minimal filtering.|!show_last_free_games|Publicly available. Does not affect tracking.
+    # [help]|show_last_free_games|Displays the last 10 free games found on freegamefindings.bsky.social, with minimal filtering.|!show_last_free_games|Publicly available. Does not affect tracking.  # noqa: E501
     @prefixed_command(name="show_last_free_games")
     async def show_last_free_games_command(self, ctx: PrefixedContext):
-        """Displays the last 10 free games found on freegamefindings.bsky.social."""
+        """Display the last 10 free games found on freegamefindings.bsky.social."""
         await ctx.send("Fetching last 10 free games...")
         async with aiohttp.ClientSession() as session:
             posts = await self._fetch_bluesky_posts(session)
@@ -101,10 +106,7 @@ class FreeGames(Extension):
                 if (
                     "expired" in title_lower
                     or "(dlc)" in title_lower
-                    or any(
-                        excluded_domain in domain
-                        for excluded_domain in excluded_domains
-                    )
+                    or any(excluded_domain in domain for excluded_domain in excluded_domains)
                     or "raffle" in title_lower
                     or "sweepstake" in title_lower
                 ):
@@ -131,11 +133,15 @@ class FreeGames(Extension):
             await ctx.send("No recent free games found that meet display criteria.")
 
     async def _fetch_bluesky_posts(self, session: aiohttp.ClientSession) -> list:
-        """Fetches posts from freegamefindings.bsky.social."""
+        """Fetch posts from freegamefindings.bsky.social."""
         bsky_url = "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=freegamefindings.bsky.social&limit=10"
         # Use a common browser user-agent to avoid looking like a bot
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
         }
 
         max_retries = 3
@@ -150,9 +156,7 @@ class FreeGames(Extension):
                     timeout=aiohttp.ClientTimeout(total=timeout_seconds),
                 ) as response:
                     if response.status != 200:
-                        logger.warning(
-                            "Bluesky API returned status %s", response.status
-                        )
+                        logger.warning("Bluesky API returned status %s", response.status)
                         # If it's a 5xx error, maybe retry. If 4xx, probably don't.
                         if 500 <= response.status < 600:
                             if attempt < max_retries - 1:
@@ -161,7 +165,7 @@ class FreeGames(Extension):
                         return []
                     data = await response.json()
                     return data.get("feed", [])
-            except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+            except (TimeoutError, aiohttp.ClientError) as e:
                 logger.warning(
                     "Attempt %s/%s failed to fetch Bluesky posts: %s",
                     attempt + 1,
@@ -178,68 +182,14 @@ class FreeGames(Extension):
                         exc_info=True,
                     )
             except Exception as e:
-                logger.error(
-                    "Unexpected error fetching Bluesky posts: %s", e, exc_info=True
-                )
+                logger.error("Unexpected error fetching Bluesky posts: %s", e, exc_info=True)
                 return []
 
         return []
 
-    async def _get_reddit_post_details(
-        self, reddit_url: str, session: aiohttp.ClientSession
-    ) -> dict | None:
-        """Fetches details from a Reddit post's JSON endpoint."""
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        final_url = reddit_url
 
-        try:
-            # If it's a short URL (redd.it), resolve it to the full URL first.
-            if "redd.it" in urlparse(final_url).netloc:
-                async with session.head(
-                    final_url,
-                    headers=headers,
-                    allow_redirects=True,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 200:
-                        final_url = str(response.url)
-                    else:
-                        logger.warning(
-                            "Failed to resolve redd.it URL %s, status: %s",
-                            reddit_url,
-                            response.status,
-                        )
-                        # Continue with original URL as a fallback
-
-            # Now append .json to the (potentially resolved) URL
-            if not final_url.endswith(".json"):
-                final_url += ".json"
-
-            async with session.get(
-                final_url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status != 200:
-                    logger.warning(
-                        "Reddit API returned status %s for %s",
-                        response.status,
-                        final_url,
-                    )
-                    return None
-                post_data = await response.json()
-                # The actual post is usually the first item in the first list
-                post = post_data[0]["data"]["children"][0]["data"]
-                return {
-                    "link_flair_text": post.get("link_flair_text", ""),
-                    "url": post.get("url"),  # The URL the post links to
-                }
-        except Exception as e:
-            logger.error("Error fetching Reddit post details for %s: %s", final_url, e)
-            return None
-
-    def _extract_game_details_from_post(self, post_item: dict) -> dict | None:
-        """Extracts game details (platform, title, URL) from a raw Bluesky post item."""
+    def _extract_game_details_from_post(self, post_item: dict) -> dict | None:  # noqa: C901
+        """Extract game details (platform, title, URL) from a raw Bluesky post item."""
         post_record = post_item.get("post", {}).get("record", {})
         full_text = post_record.get("text", "")
         post_uri = post_item.get("post", {}).get("uri")
@@ -262,9 +212,7 @@ class FreeGames(Extension):
             platform_match = re.search(r"\[(.*?)\]", full_text)
             if platform_match:
                 platform = platform_match.group(1).strip()
-                game_title = (
-                    full_text.replace(f"[{platform}]", "").strip().split("\n")[0]
-                )
+                game_title = full_text.replace(f"[{platform}]", "").strip().split("\n")[0]
 
         extracted_url = None
         for facet in post_record.get("facets", []):
@@ -295,15 +243,15 @@ class FreeGames(Extension):
             "full_text": full_text,  # Include full text for filtering later if needed
         }
 
-    async def _process_single_post(
+    async def _process_single_post(  # noqa: C901
         self,
         post_item: dict,
         manual: bool,
         ctx: PrefixedContext | None,
         session: aiohttp.ClientSession,
     ) -> bool:
-        """
-        Process a single Bluesky post: filter, extract details, and send notification.
+        """Process a single Bluesky post: filter, extract details, and send notification.
+
         Returns True if a notification was sent, False otherwise.
         """
         post_record = post_item.get("post", {}).get("record", {})
@@ -345,9 +293,7 @@ class FreeGames(Extension):
         is_steam = "[steam]" in title_lower
         is_epic = "[epic" in title_lower or "[egs]" in title_lower
         is_amazon = (
-            "[amazon]" in title_lower
-            or "[luna]" in title_lower
-            or "[prime gaming]" in title_lower
+            "[amazon]" in title_lower or "[luna]" in title_lower or "[prime gaming]" in title_lower
         )
         is_gog = "[gog]" in title_lower
         is_itch = "[itch" in title_lower
@@ -357,47 +303,11 @@ class FreeGames(Extension):
 
         # --- Specific Logic for "Directly Free" Steam Games ---
         if is_steam:
-            is_reddit_link = any(
-                d in domain for d in ["redd.it", "reddit.com", "www.reddit.com"]
-            )
+            is_reddit_link = any(d in domain for d in ["redd.it", "reddit.com", "www.reddit.com"])
             is_steam_store_link = "store.steampowered.com" in domain
 
             if not is_steam_store_link and not is_reddit_link:
                 return False
-
-            if is_reddit_link:
-                reddit_details = await self._get_reddit_post_details(
-                    game_details["url"], session
-                )
-                if not reddit_details:
-                    logger.warning(
-                        "Could not fetch details from Reddit for %s, skipping.",
-                        game_details["url"],
-                    )
-                    return False
-
-                # Filter based on Reddit flair
-                flair_lower = (reddit_details.get("link_flair_text") or "").lower()
-                if any(keyword in flair_lower for keyword in exclusion_keywords):
-                    logger.info("Skipping Reddit post due to flair: '%s'", flair_lower)
-                    return False
-
-                # Update the game URL to the one from the Reddit post for accuracy
-                if reddit_details.get("url"):
-                    game_details["url"] = reddit_details["url"]
-                    # Re-parse domain for Steam store check
-                    domain = urlparse(game_details["url"]).netloc.lower()
-
-                    # Re-check the new domain from Reddit against exclusions
-                    if any(
-                        excluded_domain in domain
-                        for excluded_domain in excluded_domains
-                    ):
-                        logger.info(
-                            "Skipping Reddit post linking to excluded domain: %s",
-                            domain,
-                        )
-                        return False
 
         self._seen_bsky_posts.add(post_uri)  # Use post_uri for deduplication
 
@@ -407,11 +317,7 @@ class FreeGames(Extension):
         )
 
         # If manual, post to context channel, otherwise post to default channel
-        channel = (
-            ctx.channel
-            if manual and ctx
-            else await self.bot.fetch_channel(EPIC_CHANNEL_ID)
-        )
+        channel = ctx.channel if manual and ctx else await self.bot.fetch_channel(EPIC_CHANNEL_ID)
 
         if not channel:
             return False
@@ -428,9 +334,7 @@ class FreeGames(Extension):
                 if steam_data:
                     # Steam Embed
                     embed = Embed()
-                    embed.title = (
-                        f"FREE: {steam_data.get('name', game_details['title'])}"
-                    )
+                    embed.title = f"FREE: {steam_data.get('name', game_details['title'])}"
                     embed.url = game_details["url"]
                     embed.description = steam_data.get(
                         "short_description", "No description available."
@@ -477,9 +381,7 @@ class FreeGames(Extension):
                         dev_pub = f"**Dev:** {dev_str}\n**Pub:** {pub_str}"
                         embed.add_field(name="Creator(s)", value=dev_pub, inline=True)
 
-                    embed.set_footer(
-                        text="Source: bsky.app/profile/freegamefindings.bsky.social"
-                    )
+                    embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
 
                     await channel.send(embeds=embed)  # type: ignore
                     embed_sent = True
@@ -497,9 +399,7 @@ class FreeGames(Extension):
             )
 
             embed.add_field(name="Platform", value="Epic Games Store", inline=True)
-            embed.set_footer(
-                text="Source: bsky.app/profile/freegamefindings.bsky.social"
-            )
+            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
 
             await channel.send(embeds=embed)  # type: ignore
             embed_sent = True
@@ -517,9 +417,7 @@ class FreeGames(Extension):
             )
 
             embed.add_field(name="Platform", value="Amazon Prime Gaming", inline=True)
-            embed.set_footer(
-                text="Source: bsky.app/profile/freegamefindings.bsky.social"
-            )
+            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
 
             await channel.send(embeds=embed)  # type: ignore
             embed_sent = True
@@ -537,9 +435,7 @@ class FreeGames(Extension):
             )
 
             embed.add_field(name="Platform", value="GOG.com", inline=True)
-            embed.set_footer(
-                text="Source: bsky.app/profile/freegamefindings.bsky.social"
-            )
+            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
 
             await channel.send(embeds=embed)  # type: ignore
             embed_sent = True
@@ -557,9 +453,7 @@ class FreeGames(Extension):
             )
 
             embed.add_field(name="Platform", value="Itch.io", inline=True)
-            embed.set_footer(
-                text="Source: bsky.app/profile/freegamefindings.bsky.social"
-            )
+            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
 
             await channel.send(embeds=embed)  # type: ignore
             embed_sent = True
@@ -577,13 +471,13 @@ class FreeGames(Extension):
 
         return True
 
-    async def _process_feed(
+    async def _process_feed(  # noqa: C901
         self,
         manual: bool = False,
         ctx: PrefixedContext | None = None,
         force_check: bool = False,
     ) -> None:
-        """Checks freegamefindings.bsky.social for new free games via Bluesky API."""
+        """Check freegamefindings.bsky.social for new free games via Bluesky API."""
         logger.info("Checking freegamefindings.bsky.social...")
 
         try:
@@ -607,13 +501,16 @@ class FreeGames(Extension):
                         len(self._seen_bsky_posts),
                     )
                     if manual and ctx:
-                        await ctx.send(
-                            f"Initialized tracker with {len(self._seen_bsky_posts)} existing posts. No new notifications sent."
+                        msg = (
+                            f"Initialized tracker with {len(self._seen_bsky_posts)} "
+                            "existing posts. No new notifications sent."
                         )
+                        await ctx.send(msg)
                     return
 
                 games_found = 0
-                # Process posts (newest first in API response, so process in reverse to get oldest new ones first)
+                # Process posts (newest first in API response, so process in reverse to
+                # get oldest new ones first).
                 # If it's a forced check, process all posts. Otherwise, only process new ones.
                 posts_to_process = reversed(posts) if force_check else posts
 
@@ -628,13 +525,15 @@ class FreeGames(Extension):
         except Exception as e:
             logger.error("Error checking Bluesky: %s", e, exc_info=True)
             if manual and ctx:
-                await ctx.send(f"Error occurred during check: {str(e)}")
+                await ctx.send(f"Error occurred during check: {e!s}")
 
     @listen()
     async def on_startup(self):
+        """Start the scheduled free games check task on bot startup."""
         self.scheduled_bsky_free_games_check.start()
         logger.info("Free Games tasks started.")
 
 
 def setup(bot):
+    """Set up the FreeGames extension."""
     FreeGames(bot)

@@ -1,7 +1,8 @@
 import asyncio
-import aiohttp
 import re
 from datetime import datetime
+
+import aiohttp
 
 from familybot.config import ADMIN_DISCORD_ID
 from familybot.lib.constants import (
@@ -15,8 +16,8 @@ from familybot.lib.game_details_repository import (
 )
 from familybot.lib.itad_price_repository import get_cached_itad_price
 from familybot.lib.logging_config import get_logger
-from familybot.lib.types import FamilyBotClient
 from familybot.lib.steam_api_manager import SteamAPIManager
+from familybot.lib.types import FamilyBotClient
 
 
 def parse_price_string(price: str) -> float | None:
@@ -69,8 +70,7 @@ async def fetch_game_details(
     steam_api_manager: SteamAPIManager,
     session: aiohttp.ClientSession | None = None,
 ) -> dict | None:
-    """
-    Fetch game details from cache or Steam Store API.
+    """Fetch game details from cache or Steam Store API.
     Returns the 'data' dict for the game if found, else None.
     """
     try:
@@ -117,8 +117,7 @@ async def process_game_deal(
     historical_low_buffer: float = HISTORICAL_LOW_BUFFER,
     require_family_shared: bool = False,
 ) -> dict | None:
-    """
-    Process a game to check for deals.
+    """Process a game to check for deals.
     Prefers ITAD cached data when available, falls back to Steam API.
     Returns a dict with deal info if found, else None.
     """

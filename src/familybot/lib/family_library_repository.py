@@ -1,8 +1,8 @@
 # In src/familybot/lib/family_library_repository.py
 
-import logging
 import json
-from datetime import datetime, timedelta, timezone
+import logging
+from datetime import UTC, datetime, timedelta
 
 from familybot.config import FAMILY_LIBRARY_CACHE_TTL
 from familybot.lib.database import get_db_connection, get_write_connection
@@ -49,7 +49,7 @@ def cache_family_library(
     try:
         with get_write_connection() as conn:
             cursor = conn.cursor()
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             expires_at = now + timedelta(hours=cache_hours)
 
             # Clear existing cache

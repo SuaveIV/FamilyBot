@@ -1,26 +1,26 @@
 """Family library fetching and new game detection services."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import aiohttp
 
 from familybot.lib.api_utils import handle_api_response
+from familybot.lib.family_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_library_repository import (
     cache_family_library,
     get_cached_family_library,
 )
-from familybot.lib.family_game_manager import get_saved_games, set_saved_games
 from familybot.lib.family_utils import get_family_game_list_url
 from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
+from familybot.lib.itad_service import get_lowest_price
 from familybot.lib.logging_config import get_logger
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.user_repository import load_family_members_from_db
-from familybot.lib.itad_service import get_lowest_price
 
 logger = get_logger("family_library_service")
 
@@ -36,6 +36,7 @@ async def fetch_family_library_from_api(session: aiohttp.ClientSession) -> list:
 
     Raises:
         Exception: If API call fails or no games found
+
     """
     steam_api_manager = SteamAPIManager()
     await steam_api_manager.rate_limit_steam_api()
@@ -71,6 +72,7 @@ async def process_new_games(
 
     Returns:
         Dict with success status and message about new games found
+
     """
     steam_api_manager = SteamAPIManager()
 
@@ -90,7 +92,7 @@ async def process_new_games(
 
     all_games_for_db_update = []
     current_utc_iso = (
-        datetime.now(timezone.utc)
+        datetime.now(UTC)
         .isoformat(timespec="milliseconds")
         .replace("+00:00", "Z")
     )
@@ -239,14 +241,12 @@ async def process_new_games(
                 "success": True,
                 "message": f"New games detected: {len(new_games_to_process)} games processed. Details:\n{full_message}",
             }
-        else:
-            return {
-                "success": True,
-                "message": "No new family shared games detected for notification.",
-            }
-    else:
-        logger.info("No new games detected.")
-        return {"success": True, "message": "No new games detected."}
+        return {
+            "success": True,
+            "message": "No new family shared games detected for notification.",
+        }
+    logger.info("No new games detected.")
+    return {"success": True, "message": "No new games detected."}
 
 
 async def check_new_game() -> dict[str, Any]:
@@ -257,6 +257,7 @@ async def check_new_game() -> dict[str, Any]:
 
     Returns:
         Dict with success status and message
+
     """
     logger.info("Running check_new_game (cache-respecting)...")
 
@@ -291,7 +292,7 @@ async def check_new_game() -> dict[str, Any]:
         )
         return {
             "success": False,
-            "message": f"Error checking for new games: {str(e)}",
+            "message": f"Error checking for new games: {e!s}",
         }
 
 
@@ -302,6 +303,7 @@ async def force_new_game() -> dict[str, Any]:
 
     Returns:
         Dict with success status and message
+
     """
     logger.info("Running force_new_game (bypassing cache)...")
 
@@ -324,5 +326,5 @@ async def force_new_game() -> dict[str, Any]:
         )
         return {
             "success": False,
-            "message": f"Error forcing new game notification: {str(e)}",
+            "message": f"Error forcing new game notification: {e!s}",
         }

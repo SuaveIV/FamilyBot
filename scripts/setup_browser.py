@@ -53,17 +53,16 @@ async def setup_browser_profile():
                     if "Target closed" in str(e) or "closed" in str(e).lower():
                         print("Browser window was closed by user.")
                         break
-                    else:
-                        # Unexpected RuntimeError, track and check retry limit
-                        consecutive_errors += 1
-                        print(f"⚠️  Unexpected browser error: {e}")
-                        if consecutive_errors >= MAX_RETRIES:
-                            print(
-                                f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
-                            )
-                            setup_failed = True
-                            break
-                        await asyncio.sleep(3)  # Brief delay before retry
+                    # Unexpected RuntimeError, track and check retry limit
+                    consecutive_errors += 1
+                    print(f"⚠️  Unexpected browser error: {e}")
+                    if consecutive_errors >= MAX_RETRIES:
+                        print(
+                            f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
+                        )
+                        setup_failed = True
+                        break
+                    await asyncio.sleep(3)  # Brief delay before retry
 
                 except asyncio.CancelledError:
                     # Task was cancelled, break the loop immediately

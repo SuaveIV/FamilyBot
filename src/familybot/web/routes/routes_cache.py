@@ -1,6 +1,5 @@
 # In src/familybot/web/routes/cache.py
-"""
-Cache inspection and purge endpoints.
+"""Cache inspection and purge endpoints.
 """
 
 import logging

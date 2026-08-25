@@ -3,7 +3,7 @@
 import logging
 import os
 import sqlite3
-from datetime import datetime, timezone  # Import datetime to get current time
+from datetime import UTC, datetime  # Import datetime to get current time
 
 from familybot.config import PROJECT_ROOT
 from familybot.lib.database import get_db_connection
@@ -35,7 +35,7 @@ def _migrate_gamelist_to_db(conn: sqlite3.Connection):
             f"Attempting to migrate games from old file: {OLD_GAME_LIST_FILE_PATH}"
         )
         try:
-            with open(OLD_GAME_LIST_FILE_PATH, "r") as f:
+            with open(OLD_GAME_LIST_FILE_PATH) as f:
                 appids_to_insert = []
                 for line in f:
                     appid = line.strip()
@@ -100,7 +100,8 @@ def set_saved_games(game_data_list: list) -> None:  # Renamed parameter for clar
     """Updates the list of saved game AppIDs in the database.
     This is cumulative; it adds new games or updates timestamps for existing ones,
     but does NOT remove games that are missing from the input list.
-    game_data_list should be a list of (appid, detected_at_timestamp_str) tuples."""
+    game_data_list should be a list of (appid, detected_at_timestamp_str) tuples.
+    """
     conn = None
     try:
         conn = get_db_connection()
@@ -116,7 +117,7 @@ def set_saved_games(game_data_list: list) -> None:  # Renamed parameter for clar
                 appids_to_insert.append(
                     (
                         str(item),
-                        datetime.now(timezone.utc)
+                        datetime.now(UTC)
                         .isoformat(timespec="milliseconds")
                         .replace("+00:00", "Z"),
                     )

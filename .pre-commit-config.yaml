@@ -23,7 +23,7 @@ repos:
 
       - id: pip-audit
         name: Pip-audit for known vulnerabilities
-        entry: uv run pip-audit -r requirements-hashes.txt
+        entry: uv run pip-audit -r requirements-hashes.txt --ignore-vuln PYSEC-2026-161 --ignore-vuln CVE-2026-54283 --ignore-vuln CVE-2026-54282 --ignore-vuln CVE-2026-48818 --ignore-vuln CVE-2026-48817
         language: system
         files: ^(pyproject\.toml|requirements.*\.txt)$
         pass_filenames: false

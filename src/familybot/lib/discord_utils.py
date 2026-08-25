@@ -6,8 +6,7 @@ logger = get_logger(__name__)
 
 
 def split_message(message: str, max_length: int = 1900) -> list[str]:
-    """
-    Split a message into multiple parts that fit within Discord's character limit.
+    """Split a message into multiple parts that fit within Discord's character limit.
 
     Args:
         message: The message to split
@@ -15,6 +14,7 @@ def split_message(message: str, max_length: int = 1900) -> list[str]:
 
     Returns:
         List of message parts
+
     """
     if len(message) <= max_length:
         return [message]
@@ -70,8 +70,7 @@ def truncate_message_list(
     footer_template: str = "\n... and {count} more items!",
     max_length: int = 1900,
 ) -> str:
-    """
-    Truncates a list of items to fit within Discord's message limit.
+    """Truncates a list of items to fit within Discord's message limit.
 
     Args:
         items: List of strings to include in the message
@@ -81,6 +80,7 @@ def truncate_message_list(
 
     Returns:
         Formatted message string that fits within the character limit
+
     """
     if not items:
         return header
@@ -122,5 +122,4 @@ def truncate_message_list(
             f"Message truncated: showing {len(truncated_items)} items, hiding {remaining_count} items"
         )
         return result
-    else:
-        return header + "\n".join(truncated_items)
+    return header + "\n".join(truncated_items)

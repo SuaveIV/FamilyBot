@@ -1,13 +1,11 @@
 # In src/familybot/web/routes/routes_common_games.py
-"""
-Common Games API endpoint.
+"""Common Games API endpoint.
 Returns games owned by multiple family members.
 """
 
 import json
 import logging
 import sqlite3
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -19,10 +17,10 @@ router = APIRouter()
 
 
 class PriceData(BaseModel):
-    initial: Optional[int] = None
-    final: Optional[int] = None
-    discount_percent: Optional[int] = None
-    is_free: Optional[bool] = None
+    initial: int | None = None
+    final: int | None = None
+    discount_percent: int | None = None
+    is_free: bool | None = None
 
 
 class CommonGameItem(BaseModel):
@@ -30,10 +28,10 @@ class CommonGameItem(BaseModel):
     game_name: str
     owner_count: int
     owner_steam_ids: list[str]
-    price_data: Optional[PriceData] = None
-    is_multiplayer: Optional[bool] = None
-    is_coop: Optional[bool] = None
-    is_free: Optional[bool] = None
+    price_data: PriceData | None = None
+    is_multiplayer: bool | None = None
+    is_coop: bool | None = None
+    is_free: bool | None = None
     has_game_details: bool
 
 
@@ -50,8 +48,7 @@ def get_common_games(
     sort: str = Query("name", regex="^(name|owners)$"),
     conn=Depends(get_db),
 ):
-    """
-    Return a paginated list of games owned by multiple family members.
+    """Return a paginated list of games owned by multiple family members.
 
     - min_owners: Minimum number of members who own the game (default 2)
     - sort: Sort by 'name' (alphabetical) or 'owners' (most owners first)

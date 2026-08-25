@@ -1,41 +1,42 @@
 #!/usr/bin/env python3
-"""
-FamilyBot JSON Database Importer
+"""FamilyBot JSON Database Importer.
 
 This script allows you to import JSON data into the FamilyBot database.
 It can handle various types of data and will only add records that match existing users.
 
 Usage:
     python scripts/json_database_importer.py --file data.json
-    python scripts/json_database_importer.py --json '{"type": "user", "discord_id": "123", "steam_id": "456"}'
+    python scripts/json_database_importer.py --json \
+        '{"type": "user", "discord_id": "123", "steam_id": "456"}'
     python scripts/json_database_importer.py --stdin < data.json
 
 Supported JSON formats:
 1. User data: {"type": "user", "discord_id": "123456789", "steam_id": "76561198000000000"}
-2. Family member: {"type": "family_member", "steam_id": "76561198000000000", "friendly_name": "John", "discord_id": "123456789"}
+2. Family member:
+   {"type": "family_member", "steam_id": "76561198000000000", "friendly_name": "John", "discord_id": "123456789"}
 3. Saved game: {"type": "saved_game", "appid": "730", "detected_at": "2023-01-01T00:00:00Z"}
-4. Game details: {"type": "game_details", "appid": "730", "name": "Counter-Strike 2", "type": "game", "is_free": true, ...}
-5. Batch operations: {"type": "batch", "data": [{"type": "user", ...}, {"type": "family_member", ...}]}
-"""
+4. Game details:
+   {"type": "game_details", "appid": "730", "name": "Counter-Strike 2", "type": "game", "is_free": true, ...}
+5. Batch operations:
+   {"type": "batch", "data": [{"type": "user", ...}, {"type": "family_member", ...}]}
+"""  # noqa: E501
 
 import argparse
 import json
 import logging
-import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 # Add the src directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from familybot.lib.database import get_db_connection, init_db
 from familybot.lib.game_details_repository import cache_game_details
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -77,9 +78,7 @@ class JSONDatabaseImporter:
                 users["steam_ids"][row["steam_id"]] = row["discord_id"]
 
             # Get family members
-            cursor.execute(
-                "SELECT steam_id, friendly_name, discord_id FROM family_members"
-            )
+            cursor.execute("SELECT steam_id, friendly_name, discord_id FROM family_members")
             family_members = {}
             for row in cursor.fetchall():
                 family_members[row["steam_id"]] = {
@@ -91,7 +90,8 @@ class JSONDatabaseImporter:
             conn.close()
 
             self.log_action(
-                f"Loaded {len(users['discord_ids'])} users and {len(family_members)} family members",
+                f"Loaded {len(users['discord_ids'])} users "
+                f"and {len(family_members)} family members",
                 "debug",
             )
 
@@ -105,9 +105,7 @@ class JSONDatabaseImporter:
         required_fields = ["discord_id", "steam_id"]
         for field in required_fields:
             if field not in data:
-                self.log_action(
-                    f"Missing required field '{field}' in user data", "error"
-                )
+                self.log_action(f"Missing required field '{field}' in user data", "error")
                 return False
 
         # Validate Discord ID format (should be numeric string)
@@ -133,9 +131,7 @@ class JSONDatabaseImporter:
         required_fields = ["steam_id", "friendly_name"]
         for field in required_fields:
             if field not in data:
-                self.log_action(
-                    f"Missing required field '{field}' in family member data", "error"
-                )
+                self.log_action(f"Missing required field '{field}' in family member data", "error")
                 return False
 
         return True
@@ -143,9 +139,7 @@ class JSONDatabaseImporter:
     def validate_saved_game_data(self, data: dict[str, Any]) -> bool:
         """Validate saved game data structure."""
         if "appid" not in data:
-            self.log_action(
-                "Missing required field 'appid' in saved game data", "error"
-            )
+            self.log_action("Missing required field 'appid' in saved game data", "error")
             return False
 
         return True
@@ -155,9 +149,7 @@ class JSONDatabaseImporter:
         required_fields = ["appid", "name"]
         for field in required_fields:
             if field not in data:
-                self.log_action(
-                    f"Missing required field '{field}' in game details data", "error"
-                )
+                self.log_action(f"Missing required field '{field}' in game details data", "error")
                 return False
 
         return True
@@ -174,24 +166,23 @@ class JSONDatabaseImporter:
         if discord_id in existing_users["discord_ids"]:
             existing_steam_id = existing_users["discord_ids"][discord_id]
             if existing_steam_id == steam_id:
-                self.log_action(
-                    f"User {discord_id} already exists with same Steam ID", "debug"
-                )
+                self.log_action(f"User {discord_id} already exists with same Steam ID", "debug")
                 self.stats["skipped"] += 1
                 return True
-            else:
-                self.log_action(
-                    f"User {discord_id} exists but with different Steam ID ({existing_steam_id} vs {steam_id})",
-                    "warning",
-                )
-                self.stats["skipped"] += 1
-                return False
+            self.log_action(
+                f"User {discord_id} exists but with different Steam ID "
+                f"({existing_steam_id} vs {steam_id})",
+                "warning",
+            )
+            self.stats["skipped"] += 1
+            return False
 
         if steam_id in existing_users["steam_ids"]:
             existing_discord_id = existing_users["steam_ids"][steam_id]
             if existing_discord_id != discord_id:
                 self.log_action(
-                    f"Steam ID {steam_id} already linked to different Discord ID ({existing_discord_id})",
+                    f"Steam ID {steam_id} already linked to different "
+                    f"Discord ID ({existing_discord_id})",
                     "warning",
                 )
                 self.stats["skipped"] += 1
@@ -199,9 +190,7 @@ class JSONDatabaseImporter:
 
         # Add the user
         if self.dry_run:
-            self.log_action(
-                f"[DRY RUN] Would add user: Discord {discord_id} -> Steam {steam_id}"
-            )
+            self.log_action(f"[DRY RUN] Would add user: Discord {discord_id} -> Steam {steam_id}")
         else:
             try:
                 conn = get_db_connection()
@@ -225,9 +214,7 @@ class JSONDatabaseImporter:
         self.stats["added"] += 1
         return True
 
-    def import_family_member(
-        self, data: dict[str, Any], existing_users: dict[str, Any]
-    ) -> bool:
+    def import_family_member(self, data: dict[str, Any], existing_users: dict[str, Any]) -> bool:
         """Import a single family member record."""
         if not self.validate_family_member_data(data):
             return False
@@ -239,10 +226,7 @@ class JSONDatabaseImporter:
         # Check if family member already exists
         if steam_id in existing_users["family_members"]:
             existing = existing_users["family_members"][steam_id]
-            if (
-                existing["friendly_name"] == friendly_name
-                and existing["discord_id"] == discord_id
-            ):
+            if existing["friendly_name"] == friendly_name and existing["discord_id"] == discord_id:
                 self.log_action(
                     f"Family member {steam_id} ({friendly_name}) already exists",
                     "debug",
@@ -260,14 +244,13 @@ class JSONDatabaseImporter:
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT OR REPLACE INTO family_members (steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO family_members "
+                    "(steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
                     (steam_id, friendly_name, discord_id),
                 )
                 conn.commit()
                 conn.close()
-                self.log_action(
-                    f"Added family member: {friendly_name} (Steam {steam_id})"
-                )
+                self.log_action(f"Added family member: {friendly_name} (Steam {steam_id})")
 
                 # Update our tracking
                 existing_users["family_members"][steam_id] = {
@@ -282,17 +265,13 @@ class JSONDatabaseImporter:
         self.stats["added"] += 1
         return True
 
-    def import_saved_game(
-        self, data: dict[str, Any], existing_users: dict[str, Any]
-    ) -> bool:
+    def import_saved_game(self, data: dict[str, Any], _existing_users: dict[str, Any]) -> bool:
         """Import a saved game record."""
         if not self.validate_saved_game_data(data):
             return False
 
         appid = str(data["appid"])
-        detected_at = data.get(
-            "detected_at", datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        )
+        detected_at = data.get("detected_at", datetime.now(UTC).isoformat().replace("+00:00", "Z"))
 
         # Add the saved game
         if self.dry_run:
@@ -316,9 +295,7 @@ class JSONDatabaseImporter:
         self.stats["added"] += 1
         return True
 
-    def import_game_details(
-        self, data: dict[str, Any], existing_users: dict[str, Any]
-    ) -> bool:
+    def import_game_details(self, data: dict[str, Any], _existing_users: dict[str, Any]) -> bool:
         """Import game details using the existing cache system."""
         if not self.validate_game_details_data(data):
             return False
@@ -336,9 +313,7 @@ class JSONDatabaseImporter:
 
         # Add the game details
         if self.dry_run:
-            self.log_action(
-                f"[DRY RUN] Would cache game details: {appid} ({game_data['name']})"
-            )
+            self.log_action(f"[DRY RUN] Would cache game details: {appid} ({game_data['name']})")
         else:
             try:
                 cache_game_details(appid, game_data, permanent=False)
@@ -351,9 +326,7 @@ class JSONDatabaseImporter:
         self.stats["added"] += 1
         return True
 
-    def import_single_record(
-        self, data: dict[str, Any], existing_users: dict[str, Any]
-    ) -> bool:
+    def import_single_record(self, data: dict[str, Any], existing_users: dict[str, Any]) -> bool:
         """Import a single record based on its type."""
         self.stats["processed"] += 1
 
@@ -403,14 +376,14 @@ class JSONDatabaseImporter:
                         success_count += 1
 
                 self.log_action(
-                    f"Batch complete: {success_count}/{len(batch_data)} records processed successfully"
+                    f"Batch complete: {success_count}/{len(batch_data)} "
+                    "records processed successfully"
                 )
                 return success_count > 0
-            else:
-                # Handle single record
-                return self.import_single_record(json_data, existing_users)
+            # Handle single record
+            return self.import_single_record(json_data, existing_users)
 
-        elif isinstance(json_data, list):
+        if isinstance(json_data, list):
             # Handle list of records
             self.log_action(f"Processing list of {len(json_data)} records")
             success_count = 0
@@ -424,9 +397,8 @@ class JSONDatabaseImporter:
             )
             return success_count > 0
 
-        else:
-            self.log_action("JSON data must be an object or array", "error")
-            return False
+        self.log_action("JSON data must be an object or array", "error")
+        return False
 
     def print_stats(self):
         """Print import statistics."""
@@ -442,8 +414,30 @@ class JSONDatabaseImporter:
             print("\n🔍 DRY RUN MODE - No changes were made to the database")
 
 
-def main():
-    """Main function."""
+def load_json_data(args: argparse.Namespace) -> Any:
+    """Load JSON data based on provided arguments."""
+    try:
+        if args.file:
+            print(f"📁 Loading JSON from file: {args.file}")
+            with Path(args.file).open(encoding="utf-8") as f:
+                return json.load(f)
+        if args.json:
+            print("📝 Parsing JSON from command line")
+            return json.loads(args.json)
+        if args.stdin:
+            print("📥 Reading JSON from stdin")
+            return json.load(sys.stdin)
+    except FileNotFoundError:
+        print(f"❌ File not found: {args.file}")
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON: {e}")
+    except Exception as e:
+        print(f"❌ Error loading JSON: {e}")
+    return None
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Import JSON data into FamilyBot database",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -454,9 +448,7 @@ def main():
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--file", "-f", help="JSON file to import")
     input_group.add_argument("--json", "-j", help="JSON string to import")
-    input_group.add_argument(
-        "--stdin", action="store_true", help="Read JSON from stdin"
-    )
+    input_group.add_argument("--stdin", action="store_true", help="Read JSON from stdin")
 
     # Options
     parser.add_argument(
@@ -465,11 +457,14 @@ def main():
         action="store_true",
         help="Show what would be done without making changes",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    """Run the main logic."""
+    args = parse_arguments()
 
     print("🚀 FamilyBot JSON Database Importer")
     print("=" * 50)
@@ -486,27 +481,8 @@ def main():
         return 1
 
     # Load JSON data
-    json_data = None
-    try:
-        if args.file:
-            print(f"📁 Loading JSON from file: {args.file}")
-            with open(args.file, "r", encoding="utf-8") as f:
-                json_data = json.load(f)
-        elif args.json:
-            print("📝 Parsing JSON from command line")
-            json_data = json.loads(args.json)
-        elif args.stdin:
-            print("📥 Reading JSON from stdin")
-            json_data = json.load(sys.stdin)
-
-    except FileNotFoundError:
-        print(f"❌ File not found: {args.file}")
-        return 1
-    except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON: {e}")
-        return 1
-    except Exception as e:
-        print(f"❌ Error loading JSON: {e}")
+    json_data = load_json_data(args)
+    if json_data is None:
         return 1
 
     # Import data
@@ -519,9 +495,8 @@ def main():
         if success:
             print("\n🎉 Import completed successfully!")
             return 0
-        else:
-            print("\n❌ Import failed or no records were processed")
-            return 1
+        print("\n❌ Import failed or no records were processed")
+        return 1
 
     except Exception as e:
         print(f"\n❌ Unexpected error during import: {e}")

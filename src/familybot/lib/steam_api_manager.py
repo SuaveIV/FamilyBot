@@ -1,6 +1,7 @@
 import asyncio
-import time
 import random
+import time
+
 import aiohttp
 from steam.webapi import WebAPI
 
@@ -131,7 +132,7 @@ class SteamAPIManager:
 
                         return SimpleResponse(response.status, text, json_data)
 
-                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                except (TimeoutError, aiohttp.ClientError) as e:
                     if attempt < self.max_retries:
                         backoff_time = self.base_backoff * (2**attempt)
                         logger.warning(
@@ -147,6 +148,5 @@ class SteamAPIManager:
 
         if session:
             return await _do_request(session)
-        else:
-            async with aiohttp.ClientSession() as new_session:
-                return await _do_request(new_session)
+        async with aiohttp.ClientSession() as new_session:
+            return await _do_request(new_session)

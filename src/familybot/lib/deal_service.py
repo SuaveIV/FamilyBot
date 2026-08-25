@@ -28,6 +28,7 @@ async def force_deals(
 
     Returns:
         Dict with success status and message about deals found
+
     """
     logger.info("Running force_deals...")
 
@@ -145,12 +146,11 @@ async def force_deals(
                 final_message = "".join(message_parts)
                 logger.info(f"Force deals: Found {len(deals_found)} deals")
                 return {"success": True, "message": final_message}
-            else:
-                logger.info(f"Force deals: No deals found among {games_checked} games")
-                return {
-                    "success": True,
-                    "message": f"📊 **Force deals complete!** No significant deals found among {games_checked} games checked.",
-                }
+            logger.info(f"Force deals: No deals found among {games_checked} games")
+            return {
+                "success": True,
+                "message": f"📊 **Force deals complete!** No significant deals found among {games_checked} games checked.",
+            }
 
     except Exception as e:
         logger.critical(

@@ -1,5 +1,5 @@
-import time
 import asyncio
+import time
 
 import aiohttp
 from interactions import Extension
@@ -10,6 +10,7 @@ from familybot.config import (
     FAMILY_STEAM_ID,
     STEAMWORKS_API_KEY,
 )
+from familybot.lib.discord_utils import split_message
 from familybot.lib.family_library_repository import (
     cache_family_library,
     get_cached_family_library,
@@ -18,6 +19,13 @@ from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
+from familybot.lib.itad_service import get_lowest_price
+
+# Import enhanced logging configuration
+from familybot.lib.logging_config import get_logger
+from familybot.lib.steam_api_manager import SteamAPIManager
+from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
+from familybot.lib.types import FamilyBotClient
 from familybot.lib.user_repository import (
     get_steam_id_from_friendly_name,
     load_family_members_from_db,
@@ -26,15 +34,7 @@ from familybot.lib.wishlist_repository import (
     cache_wishlist,
     get_cached_wishlist,
 )
-
-# Import enhanced logging configuration
-from familybot.lib.logging_config import get_logger
-from familybot.lib.types import FamilyBotClient
-from familybot.lib.discord_utils import split_message
-from familybot.lib.itad_service import get_lowest_price
 from familybot.lib.wishlist_service import add_to_wishlist
-from familybot.lib.steam_api_manager import SteamAPIManager
-from familybot.lib.steam_helpers import process_game_deal, send_admin_dm
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)
@@ -428,7 +428,7 @@ class steam_family(Extension):
                                     response.raise_for_status()
                                     wishlist_json = await response.json()
                                     break
-                            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                            except (TimeoutError, aiohttp.ClientError) as e:
                                 if attempt < max_retries - 1:
                                     await asyncio.sleep(2**attempt)
                                     continue
