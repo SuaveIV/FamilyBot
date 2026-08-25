@@ -4,8 +4,8 @@ import base64
 import binascii
 import json
 import logging
-import re
 import os
+import re
 from datetime import datetime
 
 from interactions import Extension, IntervalTrigger, Task, listen
@@ -150,7 +150,7 @@ class token_sender(Extension):
             token_file_path = os.path.join(self.actual_token_save_dir, "token")
             saved_token = ""
             try:
-                with open(token_file_path, "r") as token_file:
+                with open(token_file_path) as token_file:
                     saved_token = token_file.readline().strip()
             except FileNotFoundError:
                 logger.info(
@@ -213,7 +213,7 @@ class token_sender(Extension):
                 # Check token expiry
                 exp_file_path = os.path.join(self.actual_token_save_dir, "token_exp")
                 try:
-                    with open(exp_file_path, "r") as exp_time_file:
+                    with open(exp_file_path) as exp_time_file:
                         exp_time_str = exp_time_file.readline().strip()
                         if exp_time_str:
                             exp_time = float(exp_time_str)
@@ -312,11 +312,11 @@ class token_sender(Extension):
                     return
 
                 # Read token info
-                with open(token_file_path, "r") as f:
+                with open(token_file_path) as f:
                     token = f.read().strip()
 
                 if os.path.exists(exp_file_path):
-                    with open(exp_file_path, "r") as f:
+                    with open(exp_file_path) as f:
                         exp_timestamp = float(f.read().strip())
 
                     exp_time = datetime.fromtimestamp(exp_timestamp)

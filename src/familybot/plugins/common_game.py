@@ -17,17 +17,17 @@ from familybot.lib.discord_user_repository import (
     cache_discord_user,
     get_cached_discord_user,
 )
+from familybot.lib.discord_utils import truncate_message_list
 from familybot.lib.game_details_repository import (
     cache_game_details,
     get_cached_game_details,
 )
+from familybot.lib.logging_config import get_logger
+from familybot.lib.types import FamilyBotClient
 from familybot.lib.user_games_repository import (
     cache_user_games,
     get_cached_user_games,
 )
-from familybot.lib.logging_config import get_logger
-from familybot.lib.types import FamilyBotClient
-from familybot.lib.discord_utils import truncate_message_list
 from familybot.lib.utils import get_common_elements_in_lists
 
 # Setup enhanced logging for this specific module
@@ -44,7 +44,7 @@ def _migrate_users_to_db(conn: sqlite3.Connection):
             f"Attempting to migrate users from old file: {OLD_REGISTER_CSV_PATH}"
         )
         try:
-            with open(OLD_REGISTER_CSV_PATH, "r") as f:
+            with open(OLD_REGISTER_CSV_PATH) as f:
                 users_to_insert = []
                 for line in f:
                     line = line.strip()
@@ -193,6 +193,7 @@ class common_games(Extension):
 
         Returns:
             The Steam ID (SteamID64) if found, None otherwise.
+
         """
         if (
             not STEAMWORKS_API_KEY
@@ -223,9 +224,8 @@ class common_games(Extension):
 
         if session is not None:
             return await _do_resolve(session)
-        else:
-            async with aiohttp.ClientSession() as new_session:
-                return await _do_resolve(new_session)
+        async with aiohttp.ClientSession() as new_session:
+            return await _do_resolve(new_session)
 
     """
     [help]|!common_games|get the multiplayer games that the given person have in common| !common_games user1 user2 ... | Accepts Discord IDs, @mentions, Steam IDs, Steam profile names, or Discord usernames in quotes (e.g., "Username"). The users need to be registered before. ***This command can be used in bot DM***
@@ -294,7 +294,7 @@ class common_games(Extension):
                                 f"'{arg}' could not be resolved; the user is not registered."
                             )
                             return
-                        elif found_discord_id not in target_discord_ids:
+                        if found_discord_id not in target_discord_ids:
                             target_discord_ids.append(found_discord_id)
                         else:
                             await ctx.send(
@@ -316,7 +316,7 @@ class common_games(Extension):
                                 f"Steam profile '{arg}' was found, but no registered Discord user matches that Steam ID."
                             )
                             return
-                        elif found_discord_id not in target_discord_ids:
+                        if found_discord_id not in target_discord_ids:
                             target_discord_ids.append(found_discord_id)
                         else:
                             await ctx.send(

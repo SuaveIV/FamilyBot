@@ -8,9 +8,9 @@ from string import Template
 from interactions import Extension, listen
 
 from familybot.config import HELP_CHANNEL_ID, PLUGIN_PATH
+from familybot.lib.discord_utils import truncate_message_list
 from familybot.lib.logging_config import get_logger
 from familybot.lib.types import FamilyBotClient
-from familybot.lib.discord_utils import truncate_message_list
 
 # Setup enhanced logging for this specific module
 logger = get_logger(__name__)
@@ -59,7 +59,7 @@ class help_message(Extension):
                 file_path = os.path.join(PLUGIN_PATH, file_name)
                 commands_in_file = []
                 try:
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         for line in f:
                             line = line.strip()
                             if (
@@ -71,8 +71,7 @@ class help_message(Extension):
                                 if len(parts) == 5:
                                     # Fix the !! issue by cleaning the name field
                                     name = parts[1].strip()
-                                    if name.startswith("!"):
-                                        name = name[1:]  # Remove the leading !
+                                    name = name.removeprefix("!")  # Remove the leading !
 
                                     data = {
                                         "name": name,
