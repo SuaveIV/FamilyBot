@@ -137,8 +137,10 @@ platformdirs==4.11.4
     #   camoufox
     #   pylint
     #   virtualenv
-playwright==1.62.0
-    # via camoufox
+playwright==1.60.0
+    # via
+    #   camoufox
+    #   familybot
 pre-commit==4.0.1
     # via familybot
 propcache==0.5.2
