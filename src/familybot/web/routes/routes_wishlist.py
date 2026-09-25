@@ -52,7 +52,8 @@ async def get_wishlist_summary(
                 ORDER BY g.name, w.steam_id
                 LIMIT ? OFFSET ?
             """
-            params: list = [family_member_id, limit, offset]
+            count_params: list = [family_member_id]
+            data_params: list = [family_member_id, limit, offset]
         else:
             # Count unique appids across all members
             count_q = "SELECT COUNT(DISTINCT w.appid) FROM wishlist_cache w"
@@ -69,15 +70,16 @@ async def get_wishlist_summary(
                 ORDER BY g.name, w.steam_id
                 LIMIT ? OFFSET ?
             """
-            params = [limit, offset]
+            count_params = []
+            data_params = [limit, offset]
 
-        cursor.execute(count_q, params)
+        cursor.execute(count_q, count_params)
         total_items: int = cursor.fetchone()[0]
 
-        cursor.execute(data_q, params)
+        cursor.execute(data_q, data_params)
         rows = cursor.fetchall()
 
-    except sqlite3.OperationalError as exc:
+    except sqlite3.Error as exc:
         logger.warning("Wishlist query failed: %s", exc)
         return {"items": [], "total_items": 0}
 

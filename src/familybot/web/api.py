@@ -10,6 +10,8 @@ FamilyBot.py imports:
 Both are re-exported here for backwards compatibility.
 """
 
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -31,12 +33,24 @@ from familybot.web.state import set_bot_client  # re-exported for FamilyBot.py
 
 __all__ = ["app", "set_bot_client"]
 
+# ── Lifecycle ─────────────────────────────────────────────────────────────────
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Handle application startup and shutdown lifecycle."""
+    setup_web_logging()
+    yield
+    logging.getLogger(__name__).info("FamilyBot Web UI shutting down.")
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="FamilyBot Web UI",
     description="Web interface for FamilyBot Discord bot",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # ── Middleware ────────────────────────────────────────────────────────────────
@@ -71,17 +85,3 @@ app.include_router(route_config.router)
 app.include_router(route_admin.router)
 app.include_router(route_logs.router)
 app.include_router(route_pages.router)  # HTML routes last — avoids shadowing API paths
-
-# ── Lifecycle ─────────────────────────────────────────────────────────────────
-
-
-@app.on_event("startup")
-async def startup_event():
-    setup_web_logging()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    import logging
-
-    logging.getLogger(__name__).info("FamilyBot Web UI shutting down.")

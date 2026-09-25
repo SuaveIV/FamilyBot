@@ -45,7 +45,7 @@ def get_common_games(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=200),
     min_owners: int = Query(2, ge=1, le=20),
-    sort: str = Query("name", regex="^(name|owners)$"),
+    sort: str = Query("name", pattern="^(name|owners)$"),
     conn=Depends(get_db),
 ):
     """Return a paginated list of games owned by multiple family members.
