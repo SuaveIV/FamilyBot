@@ -20,39 +20,45 @@ router = APIRouter()
 async def dashboard(request: Request):
     """Render the main dashboard page."""
     return templates.TemplateResponse(
-        "dashboard.html", {"request": request, "active_page": "dashboard"}
+        request=request, name="dashboard.html", context={"active_page": "dashboard"}
     )
 
 
 @router.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
     """Render the logs page."""
-    return templates.TemplateResponse("logs.html", {"request": request, "active_page": "logs"})
+    return templates.TemplateResponse(
+        request=request, name="logs.html", context={"active_page": "logs"}
+    )
 
 
 @router.get("/config", response_class=HTMLResponse)
 async def config_page(request: Request):
     """Render the configuration page."""
-    return templates.TemplateResponse("config.html", {"request": request, "active_page": "config"})
+    return templates.TemplateResponse(
+        request=request, name="config.html", context={"active_page": "config"}
+    )
 
 
 @router.get("/wishlist", response_class=HTMLResponse)
 async def wishlist_page(request: Request):
     """Render the wishlist page."""
     return templates.TemplateResponse(
-        "wishlist.html", {"request": request, "active_page": "wishlist"}
+        request=request, name="wishlist.html", context={"active_page": "wishlist"}
     )
 
 
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
     """Render the admin page."""
-    return templates.TemplateResponse("admin.html", {"request": request, "active_page": "admin"})
+    return templates.TemplateResponse(
+        request=request, name="admin.html", context={"active_page": "admin"}
+    )
 
 
 @router.get("/common-games", response_class=HTMLResponse)
 async def common_games_page(request: Request):
     """Render the common games page."""
     return templates.TemplateResponse(
-        "common_games.html", {"request": request, "active_page": "common-games"}
+        request=request, name="common_games.html", context={"active_page": "common-games"}
     )
