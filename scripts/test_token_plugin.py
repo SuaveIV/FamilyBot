@@ -1,40 +1,38 @@
 #!/usr/bin/env python3
-"""
-Test script for the token_sender plugin.
-This script tests the token extraction functionality without running the full bot.
+"""Test script for the token_sender plugin.
+
+Tests token acquisition functionality (HTTP renewal with browser fallback)
+without running the full Discord bot.
 """
 
 import asyncio
+import shutil
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-try:
-    from camoufox.async_api import AsyncCamoufox
+if sys.platform == "win32":
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if callable(reconf):
+            reconf(encoding="utf-8", errors="replace")
 
-    CAMOUFOX_AVAILABLE = True
-except ImportError:
-    CAMOUFOX_AVAILABLE = False
-    print("❌ Camoufox not available. Please install with: uv add camoufox")
-    sys.exit(1)
-
-# Import configuration
 try:
     from familybot.config import BROWSER_PROFILE_PATH, PROJECT_ROOT, TOKEN_SAVE_PATH
+    from familybot.lib.token_service import (
+        acquire_fresh_token,
+        decode_token_expiry,
+        extract_refresh_token,
+        save_token_files,
+    )
 except ImportError as e:
-    print(f"❌ Could not import configuration: {e}")
+    print(f"❌ Could not import configuration or services: {e}")
     print("Make sure you're running this from the FamilyBot root directory")
     sys.exit(1)
-
-import base64
-import binascii
-import json
-import re
-import shutil
-import tempfile
 
 
 class TokenTester:
@@ -43,170 +41,95 @@ class TokenTester:
         self.browser_profile_path = (
             Path(PROJECT_ROOT) / BROWSER_PROFILE_PATH if BROWSER_PROFILE_PATH else None
         )
-        # Create a temporary directory for test token storage
-        self.test_token_save_dir = tempfile.mkdtemp()
+        self.test_token_save_dir = Path(tempfile.mkdtemp())
         print(f"Created temporary directory for test tokens: {self.test_token_save_dir}")
 
-    def __del__(self):
-        # Clean up the temporary directory when the object is deleted
-        if Path(self.test_token_save_dir).exists():
+    def cleanup(self):
+        if self.test_token_save_dir.exists():
             shutil.rmtree(self.test_token_save_dir)
             print(f"Cleaned up temporary directory: {self.test_token_save_dir}")
 
-    async def test_browser_profile(self):
-        """Test if the browser profile exists and is accessible."""
-        print("🔍 Testing browser profile...")
+    def __del__(self):
+        self.cleanup()
 
-        if not self.browser_profile_path:
-            print("⚠️  No browser profile path configured")
-            return False
+    async def test_credentials_source(self):
+        """Test if browser profile or stored refresh token exists."""
+        print("🔍 Testing credentials and profile availability...")
 
-        if not Path(self.browser_profile_path).exists():
-            print(f"❌ Browser profile not found at: {self.browser_profile_path}")
-            print("   Run 'uv run python scripts/setup_browser.py' first")
-            return False
+        refresh_token = extract_refresh_token(
+            profile_path=self.browser_profile_path,
+            token_dir=self.actual_token_save_dir,
+        )
+        if refresh_token:
+            print("✅ Found durable steamRefresh_steam credential.")
+            return True
 
-        print(f"✅ Browser profile found at: {self.browser_profile_path}")
-        return True
+        if self.browser_profile_path and self.browser_profile_path.exists():
+            print(f"✅ Browser profile directory found at: {self.browser_profile_path}")
+            return True
+
+        print("❌ No valid credentials or browser profile found.")
+        print("   Run 'uv run python scripts/setup_browser.py' first")
+        return False
 
     async def test_token_extraction(self):
-        """Test the token extraction process."""
-        print("\n🔍 Testing token extraction...")
-
-        if self.browser_profile_path:
-            if not Path(self.browser_profile_path).exists():
-                print(f"❌ Saved browser profile missing at: {self.browser_profile_path}")
-                print("   Please run test_browser_profile() or setup first.")
-                sys.exit(1)
-            print(f"   Using browser profile: {self.browser_profile_path}")
-            camoufox_kwargs = {
-                "persistent_context": True,
-                "user_data_dir": self.browser_profile_path,
-                "headless": True,
-            }
-        else:
-            print("   Using default browser (no profile)")
-            camoufox_kwargs = {
-                "headless": True,
-            }
-
+        """Test acquiring a fresh token via HTTP or fallback."""
+        print("\n🔍 Testing token acquisition...")
         try:
-            async with AsyncCamoufox(**camoufox_kwargs) as context:
-                page = await context.new_page()
-
-                # Navigate to Steam points summary page
-                print("   Navigating to Steam API endpoint...")
-                await page.goto("https://store.steampowered.com/pointssummary/ajaxgetasyncconfig")
-                await page.wait_for_load_state("networkidle")
-
-                # Get page content
-                content = await page.content()
-
-                # Check for empty JSON response
-                if '{"success":1,"data":[]}' in content or (
-                    len(content) < 200 and '"success":1' in content
-                ):
-                    print("❌ CRITICAL: Steam returned empty data response.")
-                    print("   This means your session is expired or invalid.")
-                    print("   Run 'uv run python scripts/setup_browser.py' to refresh login.")
-                    return False
-
-                # Try to click rawdata-tab if it exists
-                try:
-                    rawdata_tab = page.locator("#rawdata-tab")
-                    if await rawdata_tab.count() > 0:
-                        print("   Found rawdata-tab, clicking...")
-                        await rawdata_tab.click()
-                        await page.wait_for_timeout(1000)
-                        content = await page.content()
-                except Exception as e:
-                    print(f"   No rawdata-tab found (this is normal): {e}")
-
-                # Extract token from page content
-                print("   Searching for webapi_token...")
-                token_pattern = r'"webapi_token"\s*:\s*"([^"]+)"'  # noqa: S105
-                match = re.search(token_pattern, content)
-
-                if not match:
-                    print("❌ Could not find 'webapi_token' in page source")
-                    print("   This usually means you're not logged into Steam")
-                    print("   Run 'uv run python scripts/setup_browser.py' to log in")
-                    return False
-
-                extracted_key = match.group(1)
-
-                if not extracted_key:
-                    print("❌ Extracted token is empty")
-                    return False
-
-                print(f"✅ Successfully extracted token: {extracted_key[:20]}...")
-                return extracted_key
-
+            token, method = await acquire_fresh_token(
+                profile_path=self.browser_profile_path,
+                token_dir=self.actual_token_save_dir,
+                prefer_http=True,
+            )
+            print(f"✅ Successfully acquired token via '{method}' method!")
+            print(f"   Token preview: {token[:20]}...")
+            return token, method
         except Exception as e:
-            print(f"❌ Error during token extraction: {e}")
-            return False
+            print(f"❌ Error during token acquisition: {e}")
+            return None, ""
 
-    def test_token_decoding(self, token):
+    def test_token_decoding(self, token: str):
         """Test token decoding and expiry extraction."""
         print("\n🔍 Testing token decoding...")
-
         try:
-            coded_string = token.split(".")[1]
-            padded_coded_string = coded_string.replace("-", "+").replace("_", "/")
-            padded_coded_string += "=" * (-len(padded_coded_string) % 4)
-
-            key_info = json.loads(base64.b64decode(padded_coded_string).decode("utf-8"))
-            exp_timestamp = key_info["exp"]
-
+            exp_timestamp = decode_token_expiry(token)
             exp_time = datetime.fromtimestamp(exp_timestamp, tz=UTC)
             now = datetime.now(tz=UTC)
             time_remaining = exp_time - now
 
             print("✅ Token decoded successfully")
-            print(f"   Expires at: {exp_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"   Expires at: {exp_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
             print(f"   Time remaining: {str(time_remaining).split('.')[0]}")
 
-            if time_remaining.total_seconds() < 0:
-                print("⚠️  Token has already expired!")
-            elif time_remaining.total_seconds() < 3600:
-                print("⚠️  Token expires soon!")
-            else:
+            if time_remaining.total_seconds() > 0:
                 print("✅ Token is valid")
+                return exp_timestamp
 
-            return exp_timestamp
-
-        except (IndexError, json.JSONDecodeError, binascii.Error) as e:
+            print("❌ Token has already expired")
+            return None
+        except Exception as e:
             print(f"❌ Error decoding token: {e}")
             return None
 
-    def test_token_storage(self, token, exp_timestamp):
-        """Test saving token to files."""
+    def test_token_storage(self, token: str, exp_timestamp: float):
+        """Test saving token to temporary storage."""
         print("\n🔍 Testing token storage...")
-
         try:
-            token_file_path = Path(self.test_token_save_dir) / "token"
-            with token_file_path.open("w") as token_file:
-                token_file.write(token)
+            changed, saved_exp = save_token_files(token, token_save_dir=self.test_token_save_dir)
+            token_file = self.test_token_save_dir / "token"
+            exp_file = self.test_token_save_dir / "token_exp"
 
-            exp_file_path = Path(self.test_token_save_dir) / "token_exp"
-            with exp_file_path.open("w") as exp_time_file:
-                exp_time_file.write(str(exp_timestamp))
+            if not token_file.is_file() or not exp_file.is_file():
+                print("❌ Token files were not created")
+                return False
 
-            print(f"✅ Token saved to: {token_file_path}")
-            print(f"✅ Expiry saved to: {exp_file_path}")
+            if int(saved_exp) != int(exp_timestamp):
+                print("❌ Token expiry mismatch")
+                return False
 
-            # Verify files can be read back
-            with token_file_path.open("r") as f:
-                saved_token = f.read().strip()
-            with exp_file_path.open("r") as f:
-                saved_exp = f.read().strip()
-
-            if saved_token == token and saved_exp == str(exp_timestamp):
-                print("✅ Token files verified successfully")
-                return True
-            print("❌ Token file verification failed")
-            return False
-
+            print(f"✅ Token saved to: {token_file}")
+            print(f"✅ Expiry saved to: {exp_file}")
+            return True
         except Exception as e:
             print(f"❌ Error saving token: {e}")
             return False
@@ -216,62 +139,57 @@ class TokenTester:
         print("🧪 Starting Token Sender Plugin Test")
         print("=" * 50)
 
-        # Test 1: Check browser profile
-        profile_ok = await self.test_browser_profile()
+        creds_ok = await self.test_credentials_source()
 
-        # Test 2: Extract token
-        token = await self.test_token_extraction()
+        token, method = await self.test_token_extraction()
         if not token:
-            print("\n❌ Token extraction failed. Cannot continue with remaining tests.")
+            print("\n❌ Token acquisition failed. Cannot continue with remaining tests.")
             return False
 
-        # Test 3: Decode token
         exp_timestamp = self.test_token_decoding(token)
         if not exp_timestamp:
             print("\n❌ Token decoding failed. Cannot continue with remaining tests.")
             return False
 
-        # Test 4: Save token
         storage_ok = self.test_token_storage(token, exp_timestamp)
 
-        # Optional: Compare with live token
         try:
             live_token_path = Path(self.actual_token_save_dir) / "token"
-            if live_token_path.exists():
-                with live_token_path.open("r") as f:
-                    live_token = f.read().strip()
-
+            if live_token_path.is_file():
+                live_token = live_token_path.read_text(encoding="utf-8").strip()
                 print("\n🔍 Comparing with live bot token...")
                 if live_token == token:
                     print("✅ Live token matches the newly fetched token.")
                 else:
                     print("⚠️  Live token differs from the newly fetched token.")
-                    print("   (This is normal if the live token is older but still valid,")
-                    print("    or if the live token has expired and needs a refresh.)")
+                    print("   (This is normal if the live token is older but still valid.)")
             else:
-                print("\n  No live token found to compare with.")
+                print("\n- No live token found to compare with.")
         except Exception as e:
             print(f"\n⚠️  Could not compare with live token: {e}")
 
         print("\n" + "=" * 50)
-        if profile_ok and token and exp_timestamp and storage_ok:
-            print("🎉 All tests passed! Token sender plugin is working correctly.")
+        if creds_ok and token and exp_timestamp and storage_ok:
+            print(f"🎉 All tests passed! Token sender ({method}) is working correctly.")
             print("\nNext steps:")
-            print("1. Start the FamilyBot: uv run familybot")
+            print("1. Start FamilyBot: uv run familybot")
             print("2. Test admin commands in Discord DMs:")
             print("   - !token_status (check current token)")
             print("   - !force_token (force token update)")
             return True
+
         print("❌ Some tests failed. Please check the errors above.")
         return False
 
 
 async def main():
     tester = TokenTester()
-    success = await tester.run_full_test()
-
-    if not success:
-        sys.exit(1)
+    try:
+        success = await tester.run_full_test()
+        if not success:
+            sys.exit(1)
+    finally:
+        tester.cleanup()
 
 
 if __name__ == "__main__":
