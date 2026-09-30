@@ -117,7 +117,7 @@ async def setup_browser_profile():
             save_token_files,
         )
 
-        refresh_token = extract_refresh_token(profile_path=PROFILE_PATH)
+        refresh_token = extract_refresh_token(profile_path=PROFILE_PATH, prefer_profile=True)
         if refresh_token:
             save_refresh_token_file(refresh_token)
             print("✅ Durable refresh token saved for headless renewals.")

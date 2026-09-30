@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import json
 import re
 import sqlite3
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -114,27 +116,8 @@ def _extract_from_storage_state(storage_json: Path) -> str | None:
     return None
 
 
-def extract_refresh_token(
-    profile_path: Path | str | None = None,
-    token_dir: Path | str | None = None,
-) -> str | None:
-    """Extract the durable steamRefresh_steam value from files or browser profile.
-
-    Checks sources in order:
-    1. tokens/refresh_token file.
-    2. cookies.sqlite in the browser profile.
-    3. storage_state.json in the browser profile.
-
-    Args:
-        profile_path: Optional browser profile path.
-        token_dir: Optional token directory path.
-
-    Returns:
-        The refresh token string if found, else None.
-
-    """
-    save_dir = resolve_token_save_dir(token_dir)
-    refresh_file = save_dir / "refresh_token"
+def _extract_from_file(refresh_file: Path) -> str | None:
+    """Read refresh token from a file on disk."""
     if refresh_file.is_file():
         try:
             val = refresh_file.read_text(encoding="utf-8").strip()
@@ -143,8 +126,11 @@ def extract_refresh_token(
                 return val
         except OSError as e:
             logger.warning("Could not read %s: %s", refresh_file, e)
+    return None
 
-    resolved_profile = resolve_browser_profile_path(profile_path)
+
+def _extract_from_profile(resolved_profile: Path | None) -> str | None:
+    """Read refresh token from browser profile SQLite or storage state."""
     if not resolved_profile or not resolved_profile.is_dir():
         logger.debug("No browser profile directory found at %s", resolved_profile)
         return None
@@ -156,12 +142,46 @@ def extract_refresh_token(
     return _extract_from_storage_state(resolved_profile / "storage_state.json")
 
 
+def extract_refresh_token(
+    profile_path: Path | str | None = None,
+    token_dir: Path | str | None = None,
+    *,
+    prefer_profile: bool = False,
+) -> str | None:
+    """Extract the durable steamRefresh_steam value from files or browser profile.
+
+    By default, checks sources in order:
+    1. tokens/refresh_token file.
+    2. cookies.sqlite in the browser profile.
+    3. storage_state.json in the browser profile.
+
+    When prefer_profile=True, checks browser profile first before falling
+    back to tokens/refresh_token.
+
+    Args:
+        profile_path: Optional browser profile path.
+        token_dir: Optional token directory path.
+        prefer_profile: Check browser profile before disk file if True.
+
+    Returns:
+        The refresh token string if found, else None.
+
+    """
+    save_dir = resolve_token_save_dir(token_dir)
+    refresh_file = save_dir / "refresh_token"
+    resolved_profile = resolve_browser_profile_path(profile_path)
+
+    if prefer_profile:
+        return _extract_from_profile(resolved_profile) or _extract_from_file(refresh_file)
+    return _extract_from_file(refresh_file) or _extract_from_profile(resolved_profile)
+
+
 async def refresh_webapi_token_http(
     refresh_token: str,
     *,
     session: aiohttp.ClientSession | None = None,
     timeout_seconds: float = 15.0,
-) -> str:
+) -> tuple[str, str]:
     """Exchange a steamRefresh_steam cookie for a fresh webapi_token via HTTP.
 
     Args:
@@ -170,7 +190,7 @@ async def refresh_webapi_token_http(
         timeout_seconds: Timeout for the HTTP request.
 
     Returns:
-        The extracted webapi_token string.
+        Tuple of (extracted_webapi_token, effective_refresh_token).
 
     Raises:
         ValueError: If token was not found or Steam session is expired.
@@ -190,7 +210,7 @@ async def refresh_webapi_token_http(
         response_url=URL("https://login.steampowered.com"),
     )
 
-    async def _perform_request(sess: aiohttp.ClientSession) -> str:
+    async def _perform_request(sess: aiohttp.ClientSession) -> tuple[str, str]:
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with sess.get(
             STEAM_REFRESH_ENDPOINT,
@@ -215,7 +235,12 @@ async def refresh_webapi_token_http(
             msg = "Extracted webapi_token is empty."
             raise ValueError(msg)
 
-        return extracted
+        effective_refresh = refresh_token
+        for cookie in sess.cookie_jar:
+            if cookie.key == "steamRefresh_steam" and cookie.value:
+                effective_refresh = cookie.value
+
+        return extracted, effective_refresh
 
     if session:
         session.cookie_jar.update_cookies(
@@ -296,6 +321,38 @@ async def refresh_webapi_token_browser(
             await page.close()
 
 
+async def _try_http_refresh(
+    refresh_token: str,
+    token_dir: Path | str | None = None,
+) -> str | None:
+    """Attempt HTTP refresh and persist any rotated refresh token."""
+    try:
+        logger.info("Attempting fast HTTP token refresh...")
+        token, effective_refresh = await refresh_webapi_token_http(refresh_token)
+        if effective_refresh and effective_refresh != refresh_token:
+            logger.info("Steam rotated refresh token; updating saved refresh token")
+            save_refresh_token_file(effective_refresh, token_save_dir=token_dir)
+        logger.info("Successfully refreshed Steam token via HTTP")
+        return token
+    except Exception as e:
+        logger.warning("HTTP token refresh failed: %s", e)
+        return None
+
+
+async def _try_browser_refresh(profile_path: Path | str | None = None) -> str | None:
+    """Attempt browser token extraction via Camoufox."""
+    if not CAMOUFOX_AVAILABLE:
+        return None
+    try:
+        logger.info("Attempting token extraction via Camoufox...")
+        token = await refresh_webapi_token_browser(profile_path=profile_path)
+        logger.info("Successfully extracted Steam token via Camoufox")
+        return token
+    except Exception as e:
+        logger.warning("Browser token extraction failed: %s", e)
+        return None
+
+
 async def acquire_fresh_token(
     profile_path: Path | str | None = None,
     token_dir: Path | str | None = None,
@@ -319,36 +376,26 @@ async def acquire_fresh_token(
     if prefer_http:
         refresh_token = extract_refresh_token(profile_path=profile_path, token_dir=token_dir)
         if refresh_token:
-            try:
-                logger.info("Attempting fast HTTP token refresh...")
-                token = await refresh_webapi_token_http(refresh_token)
-                logger.info("Successfully refreshed Steam token via HTTP")
+            token = await _try_http_refresh(refresh_token, token_dir=token_dir)
+            if token:
                 return token, "http"
-            except Exception as e:
-                logger.warning("HTTP token refresh failed: %s. Falling back to browser...", e)
+            logger.info("HTTP refresh unsuccessful. Falling back to browser...")
         else:
             logger.info("No refresh token found. Falling back to browser...")
 
-        if CAMOUFOX_AVAILABLE:
-            try:
-                logger.info("Attempting token extraction via Camoufox...")
-                token = await refresh_webapi_token_browser(profile_path=profile_path)
-                logger.info("Successfully extracted Steam token via Camoufox")
-                return token, "camoufox"
-            except Exception as e:
-                logger.error("Browser token extraction failed: %s", e)
+        token = await _try_browser_refresh(profile_path=profile_path)
+        if token:
+            return token, "camoufox"
     else:
-        if CAMOUFOX_AVAILABLE:
-            try:
-                token = await refresh_webapi_token_browser(profile_path=profile_path)
-                return token, "camoufox"
-            except Exception as e:
-                logger.warning("Browser token extraction failed: %s. Trying HTTP...", e)
+        token = await _try_browser_refresh(profile_path=profile_path)
+        if token:
+            return token, "camoufox"
 
         refresh_token = extract_refresh_token(profile_path=profile_path, token_dir=token_dir)
         if refresh_token:
-            token = await refresh_webapi_token_http(refresh_token)
-            return token, "http"
+            token = await _try_http_refresh(refresh_token, token_dir=token_dir)
+            if token:
+                return token, "http"
 
     msg = (
         "Failed to acquire Steam token. Please log into Steam using "
@@ -389,11 +436,24 @@ def decode_token_expiry(token: str) -> float:
         raise ValueError(msg) from e
 
 
+def _atomic_write_text(target_path: Path, content: str, encoding: str = "utf-8") -> None:
+    """Write text to target_path atomically using a temporary file in the same directory."""
+    parent_dir = target_path.parent
+    parent_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = parent_dir / f".{target_path.name}.{uuid.uuid4().hex}.tmp"
+    try:
+        temp_file.write_text(content, encoding=encoding)
+        temp_file.replace(target_path)
+    finally:
+        with contextlib.suppress(OSError):
+            temp_file.unlink(missing_ok=True)
+
+
 def save_token_files(
     token: str,
     token_save_dir: Path | str | None = None,
 ) -> tuple[bool, float]:
-    """Save webapi_token and token_exp files to disk.
+    """Save webapi_token and token_exp files to disk atomically.
 
     Args:
         token: The raw webapi_token string.
@@ -409,6 +469,9 @@ def save_token_files(
     token_path = save_dir / "token"
     exp_path = save_dir / "token_exp"
 
+    exp_timestamp = decode_token_expiry(token)
+    expected_exp_str = str(int(exp_timestamp))
+
     existing_token = ""
     if token_path.is_file():
         try:
@@ -416,14 +479,19 @@ def save_token_files(
         except OSError as e:
             logger.warning("Could not read existing token from %s: %s", token_path, e)
 
-    exp_timestamp = decode_token_expiry(token)
+    existing_exp = ""
+    if exp_path.is_file():
+        try:
+            existing_exp = exp_path.read_text(encoding="utf-8").strip()
+        except OSError as e:
+            logger.warning("Could not read existing expiry from %s: %s", exp_path, e)
 
-    if existing_token == token:
-        logger.debug("Token unchanged. No disk write required.")
+    if existing_token == token and existing_exp == expected_exp_str:
+        logger.debug("Token and expiry unchanged. No disk write required.")
         return False, exp_timestamp
 
-    token_path.write_text(token, encoding="utf-8")
-    exp_path.write_text(str(int(exp_timestamp)), encoding="utf-8")
+    _atomic_write_text(token_path, token)
+    _atomic_write_text(exp_path, expected_exp_str)
     exp_dt = datetime.fromtimestamp(exp_timestamp, tz=UTC)
     logger.info("Saved new Steam token (expires: %s)", exp_dt)
     return True, exp_timestamp
@@ -433,7 +501,7 @@ def save_refresh_token_file(
     refresh_token: str,
     token_save_dir: Path | str | None = None,
 ) -> Path:
-    """Save the durable steamRefresh_steam value to disk for headless renewals.
+    """Save the durable steamRefresh_steam value to disk atomically for headless renewals.
 
     Args:
         refresh_token: The raw steamRefresh_steam cookie string.
@@ -447,6 +515,6 @@ def save_refresh_token_file(
     save_dir.mkdir(parents=True, exist_ok=True)
 
     refresh_file = save_dir / "refresh_token"
-    refresh_file.write_text(refresh_token.strip(), encoding="utf-8")
+    _atomic_write_text(refresh_file, refresh_token.strip())
     logger.info("Saved durable refresh token to %s", refresh_file)
     return refresh_file
