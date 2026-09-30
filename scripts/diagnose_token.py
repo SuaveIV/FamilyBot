@@ -19,6 +19,12 @@ PROJECT_ROOT = SCRIPT_DIR
 if SCRIPT_DIR.name == "scripts":
     PROJECT_ROOT = SCRIPT_DIR.parent
 
+if sys.platform == "win32":
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if callable(reconf):
+            reconf(encoding="utf-8", errors="replace")
+
 print(f"🏠 Project root: {PROJECT_ROOT}")
 
 # Try to find browser profile in common locations

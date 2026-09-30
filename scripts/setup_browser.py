@@ -1,9 +1,19 @@
 # File: scripts/setup_browser.py
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 from camoufox.async_api import AsyncCamoufox
+
+# Add the src directory to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+if sys.platform == "win32":
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if callable(reconf):
+            reconf(encoding="utf-8", errors="replace")
 
 # Configuration constants
 MAX_RETRIES = 5  # Maximum consecutive errors before giving up
@@ -11,6 +21,36 @@ MAX_RETRIES = 5  # Maximum consecutive errors before giving up
 # Define the path for your dedicated browser profile
 # This will be created inside your FamilyBot project directory (one level up from scripts/)
 PROFILE_PATH = Path(__file__).parent.parent / "FamilyBotBrowserProfile"
+
+
+async def _wait_for_user_login(page) -> bool:
+    """Monitor browser page until user closes it or error limit is reached."""
+    consecutive_errors = 0
+    while True:
+        try:
+            await page.title()
+            await asyncio.sleep(1)
+            consecutive_errors = 0
+        except RuntimeError as e:
+            if "Target closed" in str(e) or "closed" in str(e).lower():
+                print("Browser window was closed by user.")
+                return True
+            consecutive_errors += 1
+            print(f"⚠️  Unexpected browser error: {e}")
+            if consecutive_errors >= MAX_RETRIES:
+                print(f"❌ Browser check failed {consecutive_errors} times. Giving up.")
+                return False
+            await asyncio.sleep(3)
+        except asyncio.CancelledError:
+            print("Browser check task was cancelled.")
+            return True
+        except Exception as e:
+            consecutive_errors += 1
+            print(f"⚠️  Unexpected error during browser check: {e}")
+            if consecutive_errors >= MAX_RETRIES:
+                print(f"❌ Browser check failed {consecutive_errors} times. Giving up.")
+                return False
+            await asyncio.sleep(3)
 
 
 async def setup_browser_profile():
@@ -22,6 +62,7 @@ async def setup_browser_profile():
     print("Camoufox will save your session automatically.")
     print("\nStarting browser...")
 
+    setup_success = True
     async with AsyncCamoufox(
         persistent_context=True,
         user_data_dir=str(PROFILE_PATH),
@@ -40,50 +81,12 @@ async def setup_browser_profile():
             "Press Ctrl+C when you're done logging in to close the browser gracefully."
         )
 
-        consecutive_errors = 0
-        setup_failed = False
         try:
-            while True:
-                try:
-                    await page.title()  # Throws if browser is closed
-                    await asyncio.sleep(1)
-                    consecutive_errors = 0  # Reset counter on successful iteration
-                except RuntimeError as e:
-                    # Browser-closed events typically raise RuntimeError with specific messages
-                    if "Target closed" in str(e) or "closed" in str(e).lower():
-                        print("Browser window was closed by user.")
-                        break
-                    # Unexpected RuntimeError, track and check retry limit
-                    consecutive_errors += 1
-                    print(f"⚠️  Unexpected browser error: {e}")
-                    if consecutive_errors >= MAX_RETRIES:
-                        print(
-                            f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
-                        )
-                        setup_failed = True
-                        break
-                    await asyncio.sleep(3)  # Brief delay before retry
-
-                except asyncio.CancelledError:
-                    # Task was cancelled, break the loop immediately
-                    print("Browser check task was cancelled.")
-                    break  # Replace raise with break
-                except Exception as e:
-                    # Catch other unexpected errors, track and check retry limit
-                    consecutive_errors += 1
-                    print(f"⚠️  Unexpected error during browser check: {e}")
-                    if consecutive_errors >= MAX_RETRIES:
-                        print(
-                            f"❌ Browser check failed {consecutive_errors} consecutive times. Giving up."
-                        )
-                        setup_failed = True
-                        break
-                    await asyncio.sleep(3)  # Brief delay before retry
-
+            setup_success = await _wait_for_user_login(page)
         except KeyboardInterrupt:
             print("\nCtrl+C detected. Closing browser gracefully...")
 
-    if not setup_failed:
+    if setup_success:
         print("✅ Browser closed successfully!")
 
     # Verify PROFILE_PATH was created and is writable
@@ -104,8 +107,31 @@ async def setup_browser_profile():
 
     print("✅ Profile saved successfully!")
     print(f"\n📁 Browser profile location: {PROFILE_PATH.resolve()}")
+
+    print("\n🔍 Extracting and verifying Steam tokens...")
+    try:
+        from familybot.lib.token_service import (
+            acquire_fresh_token,
+            extract_refresh_token,
+            save_refresh_token_file,
+            save_token_files,
+        )
+
+        refresh_token = extract_refresh_token(profile_path=PROFILE_PATH, prefer_profile=True)
+        if refresh_token:
+            save_refresh_token_file(refresh_token)
+            print("✅ Durable refresh token saved for headless renewals.")
+            token, method = await acquire_fresh_token(profile_path=PROFILE_PATH)
+            save_token_files(token)
+            print(f"✅ Initial access token verified and saved via {method}!")
+        else:
+            print("⚠️ Could not find steamRefresh_steam in browser cookies.")
+            print("   Make sure you logged into Steam completely before closing the browser.")
+    except Exception as e:
+        print(f"⚠️ Token post-processing note: {e}")
+
     print(
-        "\n🎉 Setup complete! You can now run the FamilyBot and the token_sender plugin will work."
+        "\n🎉 Setup complete! You can now run FamilyBot and the token_sender plugin will work."
     )
 
 
