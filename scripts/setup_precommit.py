@@ -6,6 +6,7 @@ This script replaces the old bash-based git hooks with pre-commit,
 which provides better VS Code integration and cross-platform support.
 """
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,20 +14,32 @@ from pathlib import Path
 
 def install_precommit():
     """Install pre-commit hooks"""
+    git = shutil.which("git")
+    if git is None:
+        print("Error: git command not found")
+        return False
+
     try:
         # Check if we're in a git repository
-        subprocess.run(
-            ["git", "rev-parse", "--git-dir"], check=True, capture_output=True
+        # S603: Safe because args are hardcoded (not from user input) and shell=False
+        subprocess.run(  # noqa: S603
+            [git, "rev-parse", "--git-dir"], check=True, capture_output=True
         )
     except subprocess.CalledProcessError:
         print("Error: Not in a git repository")
         return False
 
     try:
-        # Install pre-commit hooks
+        # Install pre-commit hooks. Run through the current interpreter rather
+        # than the bare name: pre-commit is a venv-only console script and is not
+        # on PATH, and sys.executable is an absolute path.
+        # S603: Safe because args are hardcoded (not from user input) and shell=False
         print("Installing pre-commit hooks...")
-        subprocess.run(
-            ["pre-commit", "install"], check=True, capture_output=True, text=True
+        subprocess.run(  # noqa: RUF100, S603
+            [sys.executable, "-m", "pre_commit", "install"],
+            check=True,
+            capture_output=True,
+            text=True,
         )
         print("Pre-commit hooks installed successfully!")
 
@@ -84,9 +97,7 @@ def main():
         print("\nUsage:")
         print("   - Normal commits: Version bumps automatically")
         print("   - Skip version bump: git commit --no-verify")
-        print(
-            "   - Manual version bump: python scripts/bump_version.py [major|minor|patch]"
-        )
+        print("   - Manual version bump: python scripts/bump_version.py [major|minor|patch]")
         print("   - Test hooks: pre-commit run --all-files")
 
         return 0
