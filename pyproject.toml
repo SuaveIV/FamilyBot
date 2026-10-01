@@ -121,5 +121,9 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["familybot"]
 
+[tool.setuptools]
+py-modules = ["inspect_db"]
+
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["familybot*", "scripts*"]
