@@ -1,0 +1,26 @@
+# Normalize line endings so a Windows-side edit can't rewrite the whole tree.
+#
+# With no .gitattributes and core.autocrlf unset, editing on Windows used to
+# write CRLF into every tracked text file, turning small changes into a
+# whole-repo diff. Pin the index to LF and check out LF everywhere by default.
+
+* text=auto eol=lf
+
+# Windows scripts must keep CRLF: cmd.exe and Windows PowerShell misparse LF
+# (notably in labels and multi-line blocks). Index stays LF, worktree gets CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets: never normalize, never diff.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
