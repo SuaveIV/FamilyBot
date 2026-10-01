@@ -49,7 +49,7 @@ try:
 except ImportError:
     print("❌ Camoufox not available. Please install with:")
     print("   uv add camoufox")
-    print("   uv run camoufox install")
+    print("   uv run camoufox fetch")
     sys.exit(1)
 
 
@@ -86,9 +86,7 @@ async def _navigate_and_get_content(page):
     content = await page.content()
     print(f"\n📝 Page content length: {len(content):,} characters")
 
-    if '{"success":1,"data":[]}' in content or (
-        len(content) < 200 and '"success":1' in content
-    ):
+    if '{"success":1,"data":[]}' in content or (len(content) < 200 and '"success":1' in content):
         print("\n   ⚠️  CRITICAL: Steam returned an empty data response.")
         print(f"   Response content: {content.strip()}")
         print("   This indicates the session is invalid or not logged in.")
@@ -179,8 +177,7 @@ def _search_webapi_general(content):
 
     if webapi_count > 0:
         webapi_contexts_list = [
-            m.group()
-            for m in re.finditer(r".{0,50}webapi.{0,50}", content, re.IGNORECASE)
+            m.group() for m in re.finditer(r".{0,50}webapi.{0,50}", content, re.IGNORECASE)
         ]
         if webapi_contexts_list:
             print("   Showing first 3 contexts:")
@@ -249,9 +246,7 @@ async def diagnose_token_extraction():
 
     print("\n📁 Configuration:")
     print(f"   Project root: {PROJECT_ROOT}")
-    print(
-        f"   Browser profile: {BROWSER_PROFILE_PATH if BROWSER_PROFILE_PATH else 'Not found'}"
-    )
+    print(f"   Browser profile: {BROWSER_PROFILE_PATH or 'Not found'}")
     print(f"   Output directory: {OUTPUT_DIR}")
 
     if not BROWSER_PROFILE_PATH:

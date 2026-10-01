@@ -269,7 +269,7 @@ async def refresh_webapi_token_browser(
 
     """
     if not CAMOUFOX_AVAILABLE or AsyncCamoufox is None:
-        msg = "Camoufox is not installed. Run 'uv add camoufox && uv run camoufox install'."
+        msg = "Camoufox is not installed. Run 'uv add camoufox && uv run camoufox fetch'."
         raise RuntimeError(msg)
 
     resolved_profile = resolve_browser_profile_path(profile_path)
