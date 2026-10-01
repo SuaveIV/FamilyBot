@@ -17,6 +17,7 @@ from pathlib import Path
 
 # --- Configuration ---
 PYPROJECT_PATH = Path(__file__).parent.parent / "pyproject.toml"
+LOCK_PATH = Path(__file__).parent.parent / "uv.lock"
 MAIN_BRANCH = "main"
 
 
@@ -24,7 +25,7 @@ def run_command(command, check=True, capture=False):
     """Helper to run a shell command and handle errors."""
     print(f"--> Running: {' '.join(command)}")
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             command,
             check=check,
             text=True,
@@ -141,9 +142,14 @@ def main():
 
     update_pyproject_file(old_version, new_version)
 
-    # Commit the version bump
+    # Refresh the lockfile so it records the new project version. The pre-commit
+    # hook re-resolves dependencies, and a lock that still carries the old version
+    # gets rewritten mid-commit, which aborts the release.
+    run_command(["uv", "lock"])
+
+    # Commit the version bump (both pyproject.toml and the refreshed lock).
     commit_message = f"chore(release): version {tag_name}"
-    run_command(["git", "add", str(PYPROJECT_PATH)])
+    run_command(["git", "add", str(PYPROJECT_PATH), str(LOCK_PATH)])
     run_command(["git", "commit", "-m", commit_message])
 
     # Create the git tag
