@@ -8,14 +8,19 @@ dependencies = [
   "PyYAML~=6.0.2",
   "aiohttp>=3.12.14",
   "audioop-lts~=0.2.1",
-  "camoufox~=0.4.0",
+  # 0.5.7b4 is the first release whose shipped mapping (fpgen.yml) matches the
+  # beta.30+ browser schema. 0.5.6 still ships browserforge.yml with 8 stale
+  # keys (navigator.appCodeName, navigator.appName, navigator.product,
+  # screen.pageXOffset/YOffset, 3 battery keys), so it fails validate_config()
+  # against a current browser. Prerelease is deliberate; 0.5.6 is not usable.
+  "camoufox>=0.5.7b4",
   "coloredlogs~=15.0.1",
   "discord-py-interactions~=5.15.0",
   "fastapi~=0.141.1",
   "filelock>=3.20.1",
   "httpx~=0.28.1",
   "jinja2~=3.1.6",
-  "playwright<1.61",  # camoufox 0.4.11 bundled Juggler is incompatible with playwright>=1.61 (viewport.isMobile schema error); see daijro/camoufox#653
+  "playwright<1.63",  # camoufox 0.5.x declares this ceiling; its bundled browser (beta.30+) needs playwright>=1.61, enforced by PLAYWRIGHT_BROWSER_FLOORS in camoufox/__version__.py
   "pre-commit~=4.0.1",
   "pydantic~=2.10.3",
   "pylint~=3.3.1",
