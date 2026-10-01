@@ -20,7 +20,13 @@ dependencies = [
   "filelock>=3.20.1",
   "httpx~=0.28.1",
   "jinja2~=3.1.6",
-  "playwright<1.63",  # camoufox 0.5.x declares this ceiling; its bundled browser (beta.30+) needs playwright>=1.61, enforced by PLAYWRIGHT_BROWSER_FLOORS in camoufox/__version__.py
+  # camoufox declares this ceiling itself; pinned explicitly so a future camoufox
+  # release cannot pull a newer playwright under us (it imports playwright's
+  # private driver, and each playwright minor may change Juggler). Note the
+  # browser pairing is NOT negotiated from this: 0.5.7b4 ships browser-pin.json
+  # naming the exact build it was released with, and PLAYWRIGHT_BROWSER_FLOORS
+  # only raises a *browser* floor for playwright >= 1.61 (see __version__.py).
+  "playwright<1.63",
   "pre-commit~=4.0.1",
   "pydantic~=2.10.3",
   "pylint~=3.3.1",
