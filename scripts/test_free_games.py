@@ -304,16 +304,17 @@ async def run_live_test():
     mock_channel = MagicMock()
 
     async def print_to_channel(*args, **kwargs):
-        embeds = kwargs.get("embeds")
-        content = kwargs.get("content")
-        if embeds is None and args and isinstance(args[0], list):
-            embeds = args[0]
-        if content is None and args and isinstance(args[0], str):
-            content = args[0]
-        if embeds:
-            logger.info(f"[LIVE TEST-CHANNEL SEND] Embed Title: {embeds[0].title}")
-        if content:
-            logger.info(f"[LIVE TEST-CHANNEL SEND] Message: {content}")
+        payload = kwargs.get("embeds")
+        if payload is None and args:
+            payload = args[0]
+        if isinstance(payload, list):
+            payload = payload[0] if payload else None
+        if isinstance(payload, str):
+            logger.info(f"[LIVE TEST-CHANNEL SEND] Message: {payload.splitlines()[0]}")
+            return
+        title = getattr(payload, "title", None)
+        if title:
+            logger.info(f"[LIVE TEST-CHANNEL SEND] Embed Title: {title}")
 
     mock_channel.send = AsyncMock(side_effect=print_to_channel)
     mock_bot.fetch_channel = AsyncMock(return_value=mock_channel)
