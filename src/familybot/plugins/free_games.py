@@ -1,9 +1,12 @@
-"""Free games plugin monitoring freegamefindings.bsky.social."""
+"""Free games plugin: aggregate free-game listings from multiple sources.
+
+Listings are collected from independent sources (see
+:mod:`familybot.lib.free_game_sources`) and normalized into ``FreeGame`` objects,
+so a single source going away does not silence the alerts.
+"""
 
 import asyncio
-import re
 from datetime import UTC, datetime
-from urllib.parse import urlparse
 
 import aiohttp
 from interactions import (
@@ -17,6 +20,23 @@ from interactions import (
 from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
 from familybot.config import ADMIN_DISCORD_ID, EPIC_CHANNEL_ID
+from familybot.lib.free_game_sources import (
+    CONTENT_BETA,
+    CONTENT_DLC,
+    CONTENT_GAME,
+    CONTENT_ITEM,
+    PLATFORM_AMAZON,
+    PLATFORM_EPIC,
+    PLATFORM_GOG,
+    PLATFORM_ITCH,
+    PLATFORM_STEAM,
+    BlueskySource,
+    FreeGame,
+    FreeGameSource,
+    build_default_sources,
+    extract_steam_id,
+    url_domain,
+)
 from familybot.lib.logging_config import get_logger
 from familybot.lib.steam_api_manager import SteamAPIManager
 from familybot.lib.steam_helpers import fetch_game_details
@@ -25,19 +45,96 @@ from familybot.lib.types import FamilyBotClient
 # Setup enhanced logging
 logger = get_logger(__name__)
 
+# --- Filtering configuration ---
+_EXCLUSION_KEYWORDS = (
+    "expired",
+    "raffle",
+    "sweepstake",
+)
+_EXCLUDED_DOMAINS = ("gleam.io", "givee.club", "woovit", "keymailer")
+_PLATFORMS_IN_PRIORITY = (
+    PLATFORM_STEAM,
+    PLATFORM_EPIC,
+    PLATFORM_AMAZON,
+    PLATFORM_GOG,
+    PLATFORM_ITCH,
+)
+# Unstructured Bluesky posts must point at one of these before we trust a Steam tag.
+_ALLOWED_STEAM_HOSTS = ("store.steampowered.com", "redd.it", "reddit.com")
+
+# --- Display metadata ---
+_SOURCE_LABELS = {
+    "bluesky": "FreeGameFindings (Bluesky)",
+    "gamerpower": "GamerPower (gamerpower.com)",
+    "epic": "Epic Games Store",
+}
+
+# DLC and in-game items are announced rather than dropped, but clearly labelled
+# so users know they are not a full game.
+_CONTENT_LABELS = {
+    CONTENT_GAME: None,
+    CONTENT_DLC: "DLC",
+    CONTENT_ITEM: "In-game item",
+    CONTENT_BETA: "Beta / playtest",
+}
+_CONTENT_TITLE_PREFIX = {
+    CONTENT_GAME: "FREE: ",
+    CONTENT_DLC: "FREE DLC: ",
+    CONTENT_ITEM: "FREE ITEM: ",
+    CONTENT_BETA: "FREE BETA: ",
+}
+_CONTENT_ALERTS = {
+    CONTENT_GAME: "New Free Game Alert!",
+    CONTENT_DLC: "New Free DLC Alert!",
+    CONTENT_ITEM: "New Free Item Alert!",
+    CONTENT_BETA: "New Free Beta Alert!",
+}
+_BASE_GAME_MARKERS = (
+    "requires paid base game",
+    "requires the base game",
+    "requires base game",
+    "base game required",
+)
+_PLATFORM_EMBEDS = {
+    PLATFORM_EPIC: {
+        "store": "Epic Games Store",
+        "color": "0078F2",
+        "thumbnail": "https://cdn.icon-icons.com/icons2/2699/PNG/128/epic_games_logo_icon_169084.png",
+        "description": "Claim this game for free on the Epic Games Store!",
+    },
+    PLATFORM_AMAZON: {
+        "store": "Amazon Prime Gaming",
+        "color": "00A8E1",
+        "thumbnail": "https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png",
+        "description": "Claim this game for free with Amazon Prime Gaming!",
+    },
+    PLATFORM_GOG: {
+        "store": "GOG.com",
+        "color": "8A4399",
+        "thumbnail": "https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png",
+        "description": "Claim this game for free on GOG.com!",
+    },
+    PLATFORM_ITCH: {
+        "store": "Itch.io",
+        "color": "FA5C5C",
+        "thumbnail": "https://cdn.icon-icons.com/icons2/2428/PNG/512/itch_io_logo_icon_147227.png",
+        "description": "Claim this game for free on Itch.io!",
+    },
+}
+
 
 class FreeGames(Extension):
-    """Extension to track and announce free games from Bluesky."""
+    """Extension to track and announce free games from multiple sources."""
 
     def __init__(self, bot: FamilyBotClient):
         """Initialize the FreeGames extension."""
         self.bot: FamilyBotClient = bot
         self.steam_api_manager = SteamAPIManager()
+        self._sources: list[FreeGameSource] = build_default_sources()
+        self._seen_keys: set[str] = set()
+        self._seen_titles: set[str] = set()
+        self._first_run = True
         logger.info("Free Games Plugin loaded")
-
-        # Bluesky state
-        self._seen_bsky_posts: set[str] = set()
-        self._first_bsky_run = True
 
     async def _send_admin_dm(self, message: str) -> None:
         """Send error/warning messages to the bot admin via DM."""
@@ -49,427 +146,267 @@ class FreeGames(Extension):
         except Exception as e:
             logger.error(f"Failed to send DM to admin {ADMIN_DISCORD_ID}: {e}")
 
-    def _extract_steam_id(self, url: str) -> str | None:
-        """Extract the Steam App ID from a store URL."""
-        match = re.search(r"store\.steampowered\.com/app/(\d+)", url)
-        if match:
-            return match.group(1)
-        return None
-
-    # -------------------------
-    # Bluesky Free Games Logic
-    # -------------------------
-
     @Task.create(IntervalTrigger(minutes=30))
-    async def scheduled_bsky_free_games_check(self) -> None:
-        """Check freegamefindings.bsky.social for new free games via Bluesky API."""
+    async def scheduled_free_games_check(self) -> None:
+        """Periodically check every free-game source for new listings."""
         await self._process_feed(manual=False, ctx=None)
 
-    # [help]|force_free|Manually triggers a check for new free games. For Steam games, provides rich embeds.|!force_free|Admin-only. Responds in the invoked channel.  # noqa: E501
+    # [help]|force_free|Manually triggers a check for new free games across all sources. For Steam games, provides rich embeds.|!force_free|Admin-only. Responds in the invoked channel.  # noqa: E501
     @prefixed_command(name="force_free")
     async def force_free_command(self, ctx: PrefixedContext):
-        """Manually triggers the Free Games check."""
-        # Allow admin to trigger in any channel; responses will go to that channel.
+        """Manually trigger the free games check."""
         if str(ctx.author_id) == str(ADMIN_DISCORD_ID):
             await ctx.send("Checking for free games...")
-            # For a manual check, we want to see results immediately,
-            # so we bypass the _first_bsky_run check by temporarily setting it to False.
-            original_first_run_state = self._first_bsky_run
-            self._first_bsky_run = False
+            original_first_run_state = self._first_run
+            self._first_run = False
             await self._process_feed(manual=True, ctx=ctx, force_check=True)
-            self._first_bsky_run = original_first_run_state  # Restore state
+            self._first_run = original_first_run_state
             logger.info("Force Free Games update initiated by admin.")
         else:
             await ctx.send("Unauthorized. This command can only be used by the admin.")
 
-    # [help]|show_last_free_games|Displays the last 10 free games found on freegamefindings.bsky.social, with minimal filtering.|!show_last_free_games|Publicly available. Does not affect tracking.  # noqa: E501
+    # [help]|show_last_free_games|Displays the last 10 free games found across all sources, with minimal filtering.|!show_last_free_games|Publicly available. Does not affect tracking.  # noqa: E501
     @prefixed_command(name="show_last_free_games")
     async def show_last_free_games_command(self, ctx: PrefixedContext):
-        """Display the last 10 free games found on freegamefindings.bsky.social."""
+        """Display the last 10 free games found across every source."""
         await ctx.send("Fetching last 10 free games...")
         async with aiohttp.ClientSession() as session:
-            posts = await self._fetch_bluesky_posts(session)
+            games = await self._gather_free_games(session)
 
-        if not posts:
+        if not games:
             await ctx.send("Could not fetch free games at this time.")
             return
-        game_messages = []
-        for post_item in posts:
-            game_details = self._extract_game_details_from_post(post_item)
-            if game_details:
-                # Apply minimal filtering for display: no expired, no gleam.io, no raffles
-                title_lower = game_details["full_text"].lower()
-                parsed_url = urlparse(game_details["url"])
-                domain = parsed_url.netloc.lower()
 
-                excluded_domains = ["gleam.io", "givee.club"]
-                if (
-                    "expired" in title_lower
-                    or "(dlc)" in title_lower
-                    or any(excluded_domain in domain for excluded_domain in excluded_domains)
-                    or "raffle" in title_lower
-                    or "sweepstake" in title_lower
-                ):
-                    continue  # Skip these for cleaner display
-
-                msg = (
-                    f"**Platform:** {game_details['platform']}\n"
-                    f"**Game:** {game_details['title']}\n"
-                    f"**Link:** {game_details['url']}\n"
-                    f"----------"
-                )
-                game_messages.append(msg)
-
-            if len(game_messages) >= 10:  # Only show up to 10
+        messages = []
+        seen_titles: set[str] = set()
+        for game in games:
+            if not self._passes_filters(game) or game.title_key in seen_titles:
+                continue
+            seen_titles.add(game.title_key)
+            label = _CONTENT_LABELS.get(game.content_type)
+            type_line = f"**Type:** {label}\n" if label else ""
+            messages.append(
+                f"**Platform:** {self._platform_label(game)}\n"
+                f"{type_line}"
+                f"**Title:** {game.title}\n"
+                f"**Link:** {game.url}\n"
+                f"**Source:** {_SOURCE_LABELS.get(game.source, game.source)}\n"
+                f"----------"
+            )
+            if len(messages) >= 10:
                 break
 
-        if game_messages:
-            full_message = (
-                "\ud83c\udfae \ud83c\udf0c **Last Free Games Found (Bluesky):**\n"
-                + "\n".join(game_messages)
-            )
-            await ctx.send(full_message)
+        if messages:
+            await ctx.send("🎮 🌌 **Last Free Games Found:**\n" + "\n".join(messages))
         else:
             await ctx.send("No recent free games found that meet display criteria.")
 
-    async def _fetch_bluesky_posts(self, session: aiohttp.ClientSession) -> list:
-        """Fetch posts from freegamefindings.bsky.social."""
-        bsky_url = "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=freegamefindings.bsky.social&limit=10"
-        # Use a common browser user-agent to avoid looking like a bot
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
+    async def _gather_free_games(self, session: aiohttp.ClientSession) -> list[FreeGame]:
+        """Fetch every source concurrently, tolerating individual failures."""
+        results = await asyncio.gather(
+            *(source.fetch(session) for source in self._sources),
+            return_exceptions=True,
+        )
+        games: list[FreeGame] = []
+        for source, result in zip(self._sources, results, strict=True):
+            if isinstance(result, BaseException):
+                logger.error("Free-game source %s failed: %s", source.name, result)
+                continue
+            games.extend(result)
+        return games
+
+    @staticmethod
+    def _passes_filters(game: FreeGame) -> bool:
+        """Apply exclusion keywords, blocked domains, and the platform whitelist."""
+        text = game.text.lower()
+        if any(keyword in text for keyword in _EXCLUSION_KEYWORDS):
+            return False
+        # Skip giveaways that require tasks (newsletter/follow/survey/points...),
+        # except GOG / Fanatical newsletter sign-ups, which still yield a free game.
+        if game.requires_tasks and not game.is_allowed_task_giveaway:
+            return False
+        domain = url_domain(game.url)
+        if any(excluded in domain for excluded in _EXCLUDED_DOMAINS):
+            return False
+        if not game.platforms.intersection(_PLATFORMS_IN_PRIORITY):
+            return False
+        # Bluesky posts are unstructured: only trust a Steam tag when it links to
+        # an authoritative Steam page or the FGF Reddit thread. Structured sources
+        # already carry clean provider links.
+        return not (
+            game.source == BlueskySource.name
+            and PLATFORM_STEAM in game.platforms
+            and not any(host in domain for host in _ALLOWED_STEAM_HOSTS)
+        )
+
+    @staticmethod
+    def _primary_platform(game: FreeGame) -> str | None:
+        """Return the highest-priority supported platform for a game, if any."""
+        for platform in _PLATFORMS_IN_PRIORITY:
+            if platform in game.platforms:
+                return platform
+        return None
+
+    @staticmethod
+    def _platform_label(game: FreeGame) -> str:
+        """Human-readable platform list for messages."""
+        if not game.platforms:
+            return "Game"
+        return ", ".join(sorted(game.platforms))
+
+    @staticmethod
+    def _source_footer(game: FreeGame) -> str:
+        """Footer text naming where a listing came from."""
+        return f"Source: {_SOURCE_LABELS.get(game.source, game.source)}"
+
+    @staticmethod
+    def _title_prefix(game: FreeGame) -> str:
+        """Title prefix that flags DLC / items / betas."""
+        return _CONTENT_TITLE_PREFIX.get(game.content_type, _CONTENT_TITLE_PREFIX[CONTENT_GAME])
+
+    @staticmethod
+    def _content_note(game: FreeGame) -> str | None:
+        """Extra note for DLC / items, e.g. a base-game requirement."""
+        if game.content_type not in (CONTENT_DLC, CONTENT_ITEM):
+            return None
+        text = game.text.lower()
+        if any(marker in text for marker in _BASE_GAME_MARKERS):
+            return "Requires the base game"
+        return None
+
+    def _add_content_fields(self, embed: Embed, game: FreeGame) -> None:
+        """Add Type/Note fields so DLC and items are clearly labelled."""
+        label = _CONTENT_LABELS.get(game.content_type)
+        if label:
+            embed.add_field(name="Type", value=label, inline=True)
+        note = self._content_note(game)
+        if note:
+            embed.add_field(name="Note", value=note, inline=True)
+
+    def _steam_embed(self, game: FreeGame, steam_data: dict) -> Embed:
+        """Build a rich embed for a Steam giveaway."""
+        embed = Embed()
+        embed.title = f"{self._title_prefix(game)}{steam_data.get('name', game.title)}"
+        embed.url = game.url
+        embed.description = steam_data.get("short_description", "No description available.")
+        embed.color = Color.from_hex("00FF00")  # Green
+
+        if steam_data.get("header_image"):
+            embed.set_image(url=steam_data["header_image"])
+
+        price_overview = steam_data.get("price_overview", {})
+        if price_overview:
+            original_price = price_overview.get("initial_formatted", "N/A")
+            discount = price_overview.get("discount_percent", 0)
+            embed.add_field(
+                name="Price",
+                value=f"~~{original_price}~~ -> FREE ({discount}% off)",
+                inline=True,
             )
-        }
 
-        max_retries = 3
-        retry_delay = 5
-        timeout_seconds = 30
+        if steam_data.get("review_summary"):
+            embed.add_field(name="Reviews", value=steam_data["review_summary"], inline=True)
 
-        for attempt in range(max_retries):
-            try:
-                async with session.get(
-                    bsky_url,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=timeout_seconds),
-                ) as response:
-                    if response.status != 200:
-                        logger.warning("Bluesky API returned status %s", response.status)
-                        # If it's a 5xx error, maybe retry. If 4xx, probably don't.
-                        if 500 <= response.status < 600:
-                            if attempt < max_retries - 1:
-                                await asyncio.sleep(retry_delay)
-                            continue
-                        return []
-                    data = await response.json()
-                    return data.get("feed", [])
-            except (TimeoutError, aiohttp.ClientError) as e:
-                logger.warning(
-                    "Attempt %s/%s failed to fetch Bluesky posts: %s",
-                    attempt + 1,
-                    max_retries,
-                    e,
-                )
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay)
-                else:
-                    logger.error(
-                        "Error fetching Bluesky posts after %s attempts: %s",
-                        max_retries,
-                        e,
-                        exc_info=True,
-                    )
-            except Exception as e:
-                logger.error("Unexpected error fetching Bluesky posts: %s", e, exc_info=True)
-                return []
+        release_date_data = steam_data.get("release_date")
+        if release_date_data and release_date_data.get("date"):
+            embed.add_field(name="Release Date", value=release_date_data["date"], inline=True)
 
-        return []
+        developers = steam_data.get("developers", [])
+        publishers = steam_data.get("publishers", [])
+        if developers or publishers:
+            dev_str = ", ".join(developers) if developers else "N/A"
+            pub_str = ", ".join(publishers) if publishers else "N/A"
+            embed.add_field(
+                name="Creator(s)",
+                value=f"**Dev:** {dev_str}\n**Pub:** {pub_str}",
+                inline=True,
+            )
 
+        self._add_content_fields(embed, game)
+        embed.set_footer(text=self._source_footer(game))
+        return embed
 
-    def _extract_game_details_from_post(self, post_item: dict) -> dict | None:  # noqa: C901
-        """Extract game details (platform, title, URL) from a raw Bluesky post item."""
-        post_record = post_item.get("post", {}).get("record", {})
-        full_text = post_record.get("text", "")
-        post_uri = post_item.get("post", {}).get("uri")
+    def _platform_embed(self, game: FreeGame, platform: str) -> Embed:
+        """Build the store-branded embed for a non-Steam platform."""
+        meta = _PLATFORM_EMBEDS[platform]
+        embed = Embed()
+        embed.title = f"{self._title_prefix(game)}{game.title}"
+        embed.url = game.url
+        embed.color = Color.from_hex(meta["color"])
+        embed.description = meta["description"]
+        embed.set_thumbnail(url=meta["thumbnail"])
+        embed.add_field(name="Platform", value=meta["store"], inline=True)
+        self._add_content_fields(embed, game)
+        embed.set_footer(text=self._source_footer(game))
+        return embed
 
-        if not post_uri:
-            return None
+    def _fallback_message(self, game: FreeGame) -> str:
+        """Plain message used when no store-specific embed applies."""
+        alert = _CONTENT_ALERTS.get(game.content_type, _CONTENT_ALERTS[CONTENT_GAME])
+        details = [f"**Platform:** {self._platform_label(game)}"]
+        label = _CONTENT_LABELS.get(game.content_type)
+        if label:
+            details.append(f"**Type:** {label}")
+        note = self._content_note(game)
+        if note:
+            details.append(f"**Note:** {note}")
+        details.extend(
+            [
+                f"**Title:** {game.title}",
+                f"**Link:** {game.url}",
+                f"*{self._source_footer(game)}*",
+            ]
+        )
+        return "\n".join([f"🎮 🌌 **{alert}**", *details])
 
-        # Skip reply posts
-        if post_record.get("reply"):
-            return None
-
-        platform = "Game"
-        game_title = full_text.split("\n")[0].strip()  # Default to first line
-
-        title_match = re.search(r"\[(.*?)\]\s*(.*?)is free", full_text, re.IGNORECASE)
-        if title_match:
-            platform = title_match.group(1).strip()
-            game_title = title_match.group(2).strip()
-        else:
-            platform_match = re.search(r"\[(.*?)\]", full_text)
-            if platform_match:
-                platform = platform_match.group(1).strip()
-                game_title = full_text.replace(f"[{platform}]", "").strip().split("\n")[0]
-
-        extracted_url = None
-        for facet in post_record.get("facets", []):
-            for feature in facet.get("features", []):
-                if feature.get("$type") == "app.bsky.richtext.facet#link":
-                    extracted_url = feature.get("uri")
-                    break
-            if extracted_url:
-                break
-
-        if not extracted_url:
-            url_pattern = r"(https?://[^\s]+)"
-            urls_in_text = re.findall(url_pattern, full_text)
-            if urls_in_text:
-                extracted_url = urls_in_text[0]
-
-        if not extracted_url:
-            return None
-
-        # Clean URL for deduplication (remove query params)
-        if "?" in extracted_url:
-            extracted_url = extracted_url.split("?")[0]
-
-        return {
-            "platform": platform,
-            "title": game_title,
-            "url": extracted_url,
-            "full_text": full_text,  # Include full text for filtering later if needed
-        }
-
-    async def _process_single_post(  # noqa: C901
+    async def _send_notification(
         self,
-        post_item: dict,
-        manual: bool,
-        ctx: PrefixedContext | None,
+        channel,
+        game: FreeGame,
+        platform: str | None,
         session: aiohttp.ClientSession,
     ) -> bool:
-        """Process a single Bluesky post: filter, extract details, and send notification.
-
-        Returns True if a notification was sent, False otherwise.
-        """
-        post_record = post_item.get("post", {}).get("record", {})
-        post_uri = post_item.get("post", {}).get("uri")
-
-        if not post_uri or post_uri in self._seen_bsky_posts:
-            return False
-
-        game_details = self._extract_game_details_from_post(post_item)
-        if not game_details:
-            logger.debug(
-                "Could not extract details for post: %s",
-                post_record.get("text", "")[:50],
-            )
-            return False
-
-        # --- Filtering Logic (re-applied to Bluesky content) ---
-        title_lower = game_details["full_text"].lower()
-        parsed_url = urlparse(game_details["url"])
-        domain = parsed_url.netloc.lower()
-
-        # --- Exclusion Filters ---
-        exclusion_keywords = [
-            "expired",
-            "(dlc)",
-            "requires paid base game",
-            "raffle",
-            "sweepstake",
-        ]
-        if any(keyword in title_lower for keyword in exclusion_keywords):
-            return False
-
-        # Check for domains we want to exclude (e.g., giveaway sites)
-        excluded_domains = ["gleam.io", "givee.club"]
-        if any(excluded_domain in domain for excluded_domain in excluded_domains):
-            return False
-
-        # --- Inclusions (Platform Whitelist) ---
-        is_steam = "[steam]" in title_lower
-        is_epic = "[epic" in title_lower or "[egs]" in title_lower
-        is_amazon = (
-            "[amazon]" in title_lower or "[luna]" in title_lower or "[prime gaming]" in title_lower
-        )
-        is_gog = "[gog]" in title_lower
-        is_itch = "[itch" in title_lower
-
-        if not (is_steam or is_epic or is_amazon or is_gog or is_itch):
-            return False
-
-        # --- Specific Logic for "Directly Free" Steam Games ---
-        if is_steam:
-            is_reddit_link = any(d in domain for d in ["redd.it", "reddit.com", "www.reddit.com"])
-            is_steam_store_link = "store.steampowered.com" in domain
-
-            if not is_steam_store_link and not is_reddit_link:
-                return False
-
-        self._seen_bsky_posts.add(post_uri)  # Use post_uri for deduplication
-
-        logger.info(
-            "Found new free game on Bluesky: %s",
-            game_details["full_text"].splitlines()[0],
-        )
-
-        # If manual, post to context channel, otherwise post to default channel
-        channel = ctx.channel if manual and ctx else await self.bot.fetch_channel(EPIC_CHANNEL_ID)
-
-        if not channel:
-            return False
-
-        embed_sent = False
-        # Try to fetch rich details for Steam games
-        if is_steam:
-            steam_id = self._extract_steam_id(game_details["url"])
+        """Send the best-fitting embed/message for a game. Returns True if sent."""
+        if platform == PLATFORM_STEAM:
+            steam_id = extract_steam_id(game.url)
             if steam_id:
                 steam_data = await fetch_game_details(
                     steam_id, self.steam_api_manager, session=session
                 )
-
                 if steam_data:
-                    # Steam Embed
-                    embed = Embed()
-                    embed.title = f"FREE: {steam_data.get('name', game_details['title'])}"
-                    embed.url = game_details["url"]
-                    embed.description = steam_data.get(
-                        "short_description", "No description available."
-                    )
-                    embed.color = Color.from_hex("00FF00")  # Green
+                    await channel.send(embeds=self._steam_embed(game, steam_data))
+                    return True
+        elif platform in _PLATFORM_EMBEDS:
+            await channel.send(embeds=self._platform_embed(game, platform))
+            return True
 
-                    if steam_data.get("header_image"):
-                        embed.set_image(url=steam_data["header_image"])
-
-                    price_overview = steam_data.get("price_overview", {})
-                    if price_overview:
-                        original_price = price_overview.get("initial_formatted", "N/A")
-                        discount = price_overview.get("discount_percent", 0)
-                        embed.add_field(
-                            name="Price",
-                            value=f"~~{original_price}~~ -> FREE ({discount}% off)",
-                            inline=True,
-                        )
-
-                    # --- Add more details inspired by RedditSteamGameInfo ---
-                    # Add Reviews
-                    if steam_data.get("review_summary"):
-                        embed.add_field(
-                            name="Reviews",
-                            value=steam_data["review_summary"],
-                            inline=True,
-                        )
-
-                    # Add Release Date
-                    release_date_data = steam_data.get("release_date")
-                    if release_date_data and release_date_data.get("date"):
-                        embed.add_field(
-                            name="Release Date",
-                            value=release_date_data["date"],
-                            inline=True,
-                        )
-
-                    # Add Developer/Publisher
-                    developers = steam_data.get("developers", [])
-                    publishers = steam_data.get("publishers", [])
-                    if developers or publishers:
-                        dev_str = ", ".join(developers) if developers else "N/A"
-                        pub_str = ", ".join(publishers) if publishers else "N/A"
-                        dev_pub = f"**Dev:** {dev_str}\n**Pub:** {pub_str}"
-                        embed.add_field(name="Creator(s)", value=dev_pub, inline=True)
-
-                    embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
-
-                    await channel.send(embeds=embed)  # type: ignore
-                    embed_sent = True
-        elif is_epic:
-            # Epic Games Store Embed
-            embed = Embed()
-            embed.title = f"FREE: {game_details['title']}"
-            embed.url = game_details["url"]
-            embed.color = Color.from_hex("0078F2")  # Epic Games blue
-
-            embed.description = "Claim this game for free on the Epic Games Store!"
-            # Using a generic Epic Games logo thumbnail
-            embed.set_thumbnail(
-                url="https://cdn.icon-icons.com/icons2/2699/PNG/128/epic_games_logo_icon_169084.png"
-            )
-
-            embed.add_field(name="Platform", value="Epic Games Store", inline=True)
-            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
-
-            await channel.send(embeds=embed)  # type: ignore
-            embed_sent = True
-        elif is_amazon:
-            # Amazon Prime Gaming Embed
-            embed = Embed()
-            embed.title = f"FREE: {game_details['title']}"
-            embed.url = game_details["url"]
-            embed.color = Color.from_hex("00A8E1")  # Amazon Prime blue
-
-            embed.description = "Claim this game for free with Amazon Prime Gaming!"
-            # Using a generic Amazon Prime Gaming logo thumbnail
-            embed.set_thumbnail(
-                url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png"
-            )
-
-            embed.add_field(name="Platform", value="Amazon Prime Gaming", inline=True)
-            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
-
-            await channel.send(embeds=embed)  # type: ignore
-            embed_sent = True
-        elif is_gog:
-            # GOG.com Embed
-            embed = Embed()
-            embed.title = f"FREE: {game_details['title']}"
-            embed.url = game_details["url"]
-            embed.color = Color.from_hex("8A4399")  # GOG purple
-
-            embed.description = "Claim this game for free on GOG.com!"
-            # Using a generic GOG logo thumbnail
-            embed.set_thumbnail(
-                url="https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png"
-            )
-
-            embed.add_field(name="Platform", value="GOG.com", inline=True)
-            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
-
-            await channel.send(embeds=embed)  # type: ignore
-            embed_sent = True
-        elif is_itch:
-            # Itch.io Embed
-            embed = Embed()
-            embed.title = f"FREE: {game_details['title']}"
-            embed.url = game_details["url"]
-            embed.color = Color.from_hex("FA5C5C")  # Itch.io pink
-
-            embed.description = "Claim this game for free on Itch.io!"
-            # Using a generic Itch.io logo thumbnail
-            embed.set_thumbnail(
-                url="https://cdn.icon-icons.com/icons2/2428/PNG/512/itch_io_logo_icon_147227.png"
-            )
-
-            embed.add_field(name="Platform", value="Itch.io", inline=True)
-            embed.set_footer(text="Source: bsky.app/profile/freegamefindings.bsky.social")
-
-            await channel.send(embeds=embed)  # type: ignore
-            embed_sent = True
-
-        # Fallback for non-Steam or failed Steam fetch
-        if not embed_sent:
-            msg = (
-                f"🎮 🌌 **New Free Game Alert (Bluesky)!**\n"
-                f"**Platform:** {game_details['platform']}\n"
-                f"**Game:** {game_details['title']}\n"
-                f"**Link:** {game_details['url']}\n"
-                f"*Source: <https://bsky.app/profile/freegamefindings.bsky.social>*"
-            )
-            await channel.send(msg)  # type: ignore
-
+        # Fallback for non-Steam platforms or a failed Steam detail fetch.
+        await channel.send(self._fallback_message(game))
         return True
+
+    async def _process_free_game(
+        self,
+        game: FreeGame,
+        manual: bool,
+        ctx: PrefixedContext | None,
+        session: aiohttp.ClientSession,
+    ) -> bool:
+        """Filter, dedupe, and announce a single free game."""
+        if game.dedupe_key in self._seen_keys or game.title_key in self._seen_titles:
+            return False
+        if not self._passes_filters(game):
+            return False
+
+        self._seen_keys.add(game.dedupe_key)
+        self._seen_titles.add(game.title_key)
+
+        logger.info("Found new free game via %s: %s", game.source, game.title)
+        channel = ctx.channel if manual and ctx else await self.bot.fetch_channel(EPIC_CHANNEL_ID)
+        if not channel:
+            return False
+        return await self._send_notification(
+            channel, game, self._primary_platform(game), session
+        )
 
     async def _process_feed(  # noqa: C901
         self,
@@ -477,63 +414,54 @@ class FreeGames(Extension):
         ctx: PrefixedContext | None = None,
         force_check: bool = False,
     ) -> None:
-        """Check freegamefindings.bsky.social for new free games via Bluesky API."""
-        logger.info("Checking freegamefindings.bsky.social...")
-
+        """Gather listings from all sources and announce the new ones."""
+        logger.info("Checking free-game sources...")
         try:
             async with aiohttp.ClientSession() as session:
-                posts = await self._fetch_bluesky_posts(session)
-
-                if not posts:
+                games = await self._gather_free_games(session)
+                if not games:
                     if manual and ctx:
-                        await ctx.send("No posts found in feed or error fetching feed.")
+                        await ctx.send("No free games found or error fetching sources.")
                     return
 
-                # On first run, just mark everything as seen to prevent spamming old news
-                if self._first_bsky_run and not force_check:
-                    for post_item in posts:
-                        post_uri = post_item.get("post", {}).get("uri")
-                        if post_uri:
-                            self._seen_bsky_posts.add(post_uri)
-                    self._first_bsky_run = False
+                # On first run, mark everything as seen to avoid spamming old news.
+                if self._first_run and not force_check:
+                    for game in games:
+                        self._seen_keys.add(game.dedupe_key)
+                        self._seen_titles.add(game.title_key)
+                    self._first_run = False
                     logger.info(
-                        "Initialized Bluesky tracker with %d posts.",
-                        len(self._seen_bsky_posts),
+                        "Initialized free-game tracker with %d listings.",
+                        len(self._seen_keys),
                     )
                     if manual and ctx:
-                        msg = (
-                            f"Initialized tracker with {len(self._seen_bsky_posts)} "
-                            "existing posts. No new notifications sent."
+                        await ctx.send(
+                            f"Initialized tracker with {len(self._seen_keys)} existing "
+                            "listings. No new notifications sent."
                         )
-                        await ctx.send(msg)
                     return
 
-                games_found = 0
-                # Process posts (newest first in API response, so process in reverse to
-                # get oldest new ones first).
-                # If it's a forced check, process all posts. Otherwise, only process new ones.
-                posts_to_process = reversed(posts) if force_check else posts
-
-                for post_item in posts_to_process:
-                    if await self._process_single_post(post_item, manual, ctx, session):
-                        games_found += 1
+                found = 0
+                for game in games:
+                    if await self._process_free_game(game, manual, ctx, session):
+                        found += 1
                         await asyncio.sleep(2)
 
-                if manual and ctx and games_found == 0:
+                if manual and ctx and found == 0:
                     await ctx.send("Check complete. No new free games found.")
-
         except Exception as e:
-            logger.error("Error checking Bluesky: %s", e, exc_info=True)
+            logger.error("Error checking free-game sources: %s", e, exc_info=True)
             if manual and ctx:
                 await ctx.send(f"Error occurred during check: {e!s}")
 
     @listen()
     async def on_startup(self):
         """Start the scheduled free games check task on bot startup."""
-        self.scheduled_bsky_free_games_check.start()
+        self.scheduled_free_games_check.start()
         logger.info("Free Games tasks started.")
 
 
 def setup(bot):
     """Set up the FreeGames extension."""
     FreeGames(bot)
+
