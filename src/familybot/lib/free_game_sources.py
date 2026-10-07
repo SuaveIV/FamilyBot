@@ -120,6 +120,11 @@ _TASK_KEYWORDS = (
     "wishlist the",
 )
 
+# Newsletter-only sign-ups. GOG / Fanatical giveaways that ask for nothing more
+# than these are allowed through (see ``FreeGame.is_allowed_task_giveaway``).
+_NEWSLETTER_KEYWORDS = {"newsletter", "subscribe", "subscription"}
+_NEWSLETTER_EXEMPT_MARKERS = ("fanatical",)
+
 
 
 @dataclass(slots=True)
@@ -151,14 +156,38 @@ class FreeGame:
         return "".join(word for word in words if word not in _TITLE_NOISE)
 
     @property
-    def requires_tasks(self) -> bool:
-        """True when a giveaway demands actions beyond a plain claim.
-
-        Detects newsletter sign-ups, social follows, surveys, point thresholds
-        and similar "do this to get the key" mechanics across the listing text.
-        """
+    def task_keywords(self) -> set[str]:
+        """Task-requiring phrases found in the listing text (newsletter, follow, ...)."""
         text = self.text.lower()
-        return any(keyword in text for keyword in _TASK_KEYWORDS)
+        return {keyword for keyword in _TASK_KEYWORDS if keyword in text}
+
+    @property
+    def requires_tasks(self) -> bool:
+        """True when a giveaway demands actions beyond a plain claim."""
+        return bool(self.task_keywords)
+
+    @property
+    def only_newsletter_tasks(self) -> bool:
+        """True when the only thing asked for is a newsletter/subscribe action."""
+        tasks = self.task_keywords
+        return bool(tasks) and tasks <= _NEWSLETTER_KEYWORDS
+
+    @property
+    def is_newsletter_exempt_provider(self) -> bool:
+        """True for GOG / Fanatical, whose newsletter giveaways we allow through.
+
+        These still hand out a fully free game; the only cost is opting into a
+        mailing list, which we consider acceptable.
+        """
+        if PLATFORM_GOG in self.platforms or "gog.com" in self.url.lower():
+            return True
+        haystack = f"{self.title} {self.text} {self.url}".lower()
+        return any(marker in haystack for marker in _NEWSLETTER_EXEMPT_MARKERS)
+
+    @property
+    def is_allowed_task_giveaway(self) -> bool:
+        """True for newsletter giveaways from GOG / Fanatical (the exception)."""
+        return self.is_newsletter_exempt_provider and self.only_newsletter_tasks
 
 
 def _parse_iso(value: str | None) -> datetime | None:

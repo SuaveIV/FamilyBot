@@ -190,8 +190,9 @@ class FreeGames(Extension):
         text = game.text.lower()
         if any(keyword in text for keyword in _EXCLUSION_KEYWORDS):
             return False
-        # Skip giveaways that require tasks (newsletter/follow/survey/points...).
-        if game.requires_tasks:
+        # Skip giveaways that require tasks (newsletter/follow/survey/points...),
+        # except GOG / Fanatical newsletter sign-ups, which still yield a free game.
+        if game.requires_tasks and not game.is_allowed_task_giveaway:
             return False
         domain = url_domain(game.url)
         if any(excluded in domain for excluded in _EXCLUDED_DOMAINS):
