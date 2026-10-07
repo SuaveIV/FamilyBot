@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 
+from familybot.lib.api_utils import handle_api_response
 from familybot.lib.logging_config import get_logger
 from familybot.lib.utils import TokenBucket
 
@@ -312,7 +313,7 @@ async def _fetch_json(
                 timeout=aiohttp.ClientTimeout(total=timeout_seconds),
             ) as response:
                 if response.status == 200:
-                    return await response.json()
+                    return await handle_api_response(url, response)
                 if response.status in _RETRYABLE_STATUSES and attempt < max_retries:
                     retry_after = _retry_after_seconds(response)
                     delay = retry_after if retry_after is not None else _backoff_delay(attempt)

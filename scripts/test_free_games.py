@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import json
 import logging
 import sys
 from pathlib import Path
@@ -214,6 +215,12 @@ class FakeResponse:
         self.status = status
         self.headers = headers or {}
         self._payload = payload
+
+    def raise_for_status(self) -> None:
+        """No-op: retry tests only parse the 200 path."""
+
+    async def text(self) -> str:
+        return json.dumps(self._payload)
 
     async def json(self) -> Any:
         return self._payload
