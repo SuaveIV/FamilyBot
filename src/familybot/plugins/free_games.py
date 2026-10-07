@@ -21,6 +21,10 @@ from interactions.ext.prefixed_commands import PrefixedContext, prefixed_command
 
 from familybot.config import ADMIN_DISCORD_ID, EPIC_CHANNEL_ID
 from familybot.lib.free_game_sources import (
+    CONTENT_BETA,
+    CONTENT_DLC,
+    CONTENT_GAME,
+    CONTENT_ITEM,
     PLATFORM_AMAZON,
     PLATFORM_EPIC,
     PLATFORM_GOG,
@@ -44,11 +48,8 @@ logger = get_logger(__name__)
 # --- Filtering configuration ---
 _EXCLUSION_KEYWORDS = (
     "expired",
-    "(dlc)",
-    "requires paid base game",
     "raffle",
     "sweepstake",
-    "(other)",
 )
 _EXCLUDED_DOMAINS = ("gleam.io", "givee.club", "woovit", "keymailer")
 _PLATFORMS_IN_PRIORITY = (
@@ -67,6 +68,33 @@ _SOURCE_LABELS = {
     "gamerpower": "GamerPower (gamerpower.com)",
     "epic": "Epic Games Store",
 }
+
+# DLC and in-game items are announced rather than dropped, but clearly labelled
+# so users know they are not a full game.
+_CONTENT_LABELS = {
+    CONTENT_GAME: None,
+    CONTENT_DLC: "DLC",
+    CONTENT_ITEM: "In-game item",
+    CONTENT_BETA: "Beta / playtest",
+}
+_CONTENT_TITLE_PREFIX = {
+    CONTENT_GAME: "FREE: ",
+    CONTENT_DLC: "FREE DLC: ",
+    CONTENT_ITEM: "FREE ITEM: ",
+    CONTENT_BETA: "FREE BETA: ",
+}
+_CONTENT_ALERTS = {
+    CONTENT_GAME: "New Free Game Alert!",
+    CONTENT_DLC: "New Free DLC Alert!",
+    CONTENT_ITEM: "New Free Item Alert!",
+    CONTENT_BETA: "New Free Beta Alert!",
+}
+_BASE_GAME_MARKERS = (
+    "requires paid base game",
+    "requires the base game",
+    "requires base game",
+    "base game required",
+)
 _PLATFORM_EMBEDS = {
     PLATFORM_EPIC: {
         "store": "Epic Games Store",
@@ -155,9 +183,12 @@ class FreeGames(Extension):
             if not self._passes_filters(game) or game.title_key in seen_titles:
                 continue
             seen_titles.add(game.title_key)
+            label = _CONTENT_LABELS.get(game.content_type)
+            type_line = f"**Type:** {label}\n" if label else ""
             messages.append(
                 f"**Platform:** {self._platform_label(game)}\n"
-                f"**Game:** {game.title}\n"
+                f"{type_line}"
+                f"**Title:** {game.title}\n"
                 f"**Link:** {game.url}\n"
                 f"**Source:** {_SOURCE_LABELS.get(game.source, game.source)}\n"
                 f"----------"
@@ -228,10 +259,34 @@ class FreeGames(Extension):
         """Footer text naming where a listing came from."""
         return f"Source: {_SOURCE_LABELS.get(game.source, game.source)}"
 
+    @staticmethod
+    def _title_prefix(game: FreeGame) -> str:
+        """Title prefix that flags DLC / items / betas."""
+        return _CONTENT_TITLE_PREFIX.get(game.content_type, _CONTENT_TITLE_PREFIX[CONTENT_GAME])
+
+    @staticmethod
+    def _content_note(game: FreeGame) -> str | None:
+        """Extra note for DLC / items, e.g. a base-game requirement."""
+        if game.content_type not in (CONTENT_DLC, CONTENT_ITEM):
+            return None
+        text = game.text.lower()
+        if any(marker in text for marker in _BASE_GAME_MARKERS):
+            return "Requires the base game"
+        return None
+
+    def _add_content_fields(self, embed: Embed, game: FreeGame) -> None:
+        """Add Type/Note fields so DLC and items are clearly labelled."""
+        label = _CONTENT_LABELS.get(game.content_type)
+        if label:
+            embed.add_field(name="Type", value=label, inline=True)
+        note = self._content_note(game)
+        if note:
+            embed.add_field(name="Note", value=note, inline=True)
+
     def _steam_embed(self, game: FreeGame, steam_data: dict) -> Embed:
         """Build a rich embed for a Steam giveaway."""
         embed = Embed()
-        embed.title = f"FREE: {steam_data.get('name', game.title)}"
+        embed.title = f"{self._title_prefix(game)}{steam_data.get('name', game.title)}"
         embed.url = game.url
         embed.description = steam_data.get("short_description", "No description available.")
         embed.color = Color.from_hex("00FF00")  # Green
@@ -267,6 +322,7 @@ class FreeGames(Extension):
                 inline=True,
             )
 
+        self._add_content_fields(embed, game)
         embed.set_footer(text=self._source_footer(game))
         return embed
 
@@ -274,24 +330,34 @@ class FreeGames(Extension):
         """Build the store-branded embed for a non-Steam platform."""
         meta = _PLATFORM_EMBEDS[platform]
         embed = Embed()
-        embed.title = f"FREE: {game.title}"
+        embed.title = f"{self._title_prefix(game)}{game.title}"
         embed.url = game.url
         embed.color = Color.from_hex(meta["color"])
         embed.description = meta["description"]
         embed.set_thumbnail(url=meta["thumbnail"])
         embed.add_field(name="Platform", value=meta["store"], inline=True)
+        self._add_content_fields(embed, game)
         embed.set_footer(text=self._source_footer(game))
         return embed
 
     def _fallback_message(self, game: FreeGame) -> str:
         """Plain message used when no store-specific embed applies."""
-        return (
-            f"🎮 🌌 **New Free Game Alert!**\n"
-            f"**Platform:** {self._platform_label(game)}\n"
-            f"**Game:** {game.title}\n"
-            f"**Link:** {game.url}\n"
-            f"*{self._source_footer(game)}*"
+        alert = _CONTENT_ALERTS.get(game.content_type, _CONTENT_ALERTS[CONTENT_GAME])
+        details = [f"**Platform:** {self._platform_label(game)}"]
+        label = _CONTENT_LABELS.get(game.content_type)
+        if label:
+            details.append(f"**Type:** {label}")
+        note = self._content_note(game)
+        if note:
+            details.append(f"**Note:** {note}")
+        details.extend(
+            [
+                f"**Title:** {game.title}",
+                f"**Link:** {game.url}",
+                f"*{self._source_footer(game)}*",
+            ]
         )
+        return "\n".join([f"🎮 🌌 **{alert}**", *details])
 
     async def _send_notification(
         self,

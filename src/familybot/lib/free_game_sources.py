@@ -31,6 +31,12 @@ PLATFORM_AMAZON = "amazon"
 PLATFORM_GOG = "gog"
 PLATFORM_ITCH = "itch"
 
+# --- Content types: a listing may be a full game, DLC, in-game item, or beta ---
+CONTENT_GAME = "game"
+CONTENT_DLC = "dlc"
+CONTENT_ITEM = "item"
+CONTENT_BETA = "beta"
+
 _PLATFORM_ALIASES = {
     "steam": PLATFORM_STEAM,
     "epic": PLATFORM_EPIC,
@@ -53,7 +59,11 @@ BLUESKY_FEED_URL = (
     "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed"
     "?actor=freegamefindings.bsky.social&limit=20"
 )
-GAMERPOWER_GIVEAWAYS_URL = "https://www.gamerpower.com/api/giveaways?type=game"
+GAMERPOWER_GIVEAWAYS_URL = "https://www.gamerpower.com/api/giveaways?type={type}"
+# ``loot`` returns the DLC/item entries (typed ``DLC`` in the response); ``dlc``
+# and ``beta`` are accepted labels but are not queryable endpoint values.
+_GAMERPOWER_QUERY_TYPES = ("game", "loot")
+_GAMERPOWER_ACCEPTED_TYPES = ("game", "loot", "dlc", "beta")
 EPIC_FREE_GAMES_URL = (
     "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
     "?locale=en-US&country=US&allowCountries=US"
@@ -139,6 +149,7 @@ class FreeGame:
     platforms: set[str] = field(default_factory=set)
     text: str = ""
     expires_at: str | None = None
+    content_type: str = CONTENT_GAME
 
     @property
     def dedupe_key(self) -> str:
@@ -213,6 +224,36 @@ def _normalize_platform(value: str) -> str | None:
 def _normalize_platforms(values: list[str]) -> set[str]:
     """Map a list of platform labels to the set of recognized tokens."""
     return {token for value in values if (token := _normalize_platform(value))}
+
+
+def _classify_content(value: str) -> str:
+    """Classify a free-form content label (e.g. ``(DLC)`` or ``(Other)``)."""
+    text = value.strip().lower()
+    if any(keyword in text for keyword in ("dlc", "addon", "add-on", "expansion", "season pass")):
+        return CONTENT_DLC
+    if any(keyword in text for keyword in ("beta", "playtest", "play test")):
+        return CONTENT_BETA
+    if any(
+        keyword in text
+        for keyword in ("loot", "item", "other", "in-game", "ingame", "avatar", "skin")
+    ):
+        return CONTENT_ITEM
+    return CONTENT_GAME
+
+
+def _classify_gamerpower_type(giveaway_type: str, title: str) -> str:
+    """Map a GamerPower ``type`` to a content type.
+
+    GamerPower labels most loot entries as ``DLC``; other values fall back to a
+    title check so a plain item is not reported as an expansion.
+    """
+    if giveaway_type in ("dlc", "expansion", "addon", "add-on", "season pass"):
+        return CONTENT_DLC
+    if giveaway_type == "beta":
+        return CONTENT_BETA
+    if giveaway_type in ("loot", "item"):
+        return CONTENT_DLC if "dlc" in title.lower() else CONTENT_ITEM
+    return CONTENT_GAME
 
 
 async def _fetch_json(
@@ -305,7 +346,9 @@ class BlueskySource(FreeGameSource):
         elif label_match:
             title = full_text.replace(f"[{label_match.group(1)}]", "").strip()
             title = title.split("\n", 1)[0].strip()
-        # Drop the leading type marker, e.g. "(Game) Blair Witch" -> "Blair Witch".
+        # Split off the leading type marker: "(Game) Blair Witch", "(DLC) Pack", ...
+        marker_match = re.match(r"^\(([^)]*)\)\s*", title)
+        content_type = _classify_content(marker_match.group(1)) if marker_match else CONTENT_GAME
         title = re.sub(r"^\([^)]*\)\s*", "", title).strip()
 
         url = None
@@ -333,6 +376,7 @@ class BlueskySource(FreeGameSource):
             url=url,
             platforms=platforms,
             text=full_text,
+            content_type=content_type,
         )
 
 
@@ -342,41 +386,54 @@ class GamerPowerSource(FreeGameSource):
     name = "gamerpower"
 
     async def fetch(self, session: aiohttp.ClientSession) -> list[FreeGame]:
-        """Fetch active game giveaways from GamerPower."""
-        data = await _fetch_json(session, GAMERPOWER_GIVEAWAYS_URL)
-        if not isinstance(data, list):
-            return []
-
-        games = []
-        for giveaway in data:
-            if not isinstance(giveaway, dict):
-                continue
-            if str(giveaway.get("status", "")).lower() != "active":
-                continue
-            if str(giveaway.get("type", "")).lower() != "game":
-                continue
-            url = giveaway.get("open_giveaway_url") or giveaway.get("open_giveaway")
-            title = giveaway.get("title")
-            if not url or not title:
-                continue
-            platforms = _normalize_platforms(
-                str(giveaway.get("platforms", "")).split(",")
+        """Fetch active game and loot giveaways from GamerPower."""
+        games: list[FreeGame] = []
+        seen_ids: set[str] = set()
+        # GamerPower doesn't accept multiple types in one request, so query each.
+        for giveaway_type in _GAMERPOWER_QUERY_TYPES:
+            data = await _fetch_json(
+                session, GAMERPOWER_GIVEAWAYS_URL.format(type=giveaway_type)
             )
-            games.append(
-                FreeGame(
-                    source=GamerPowerSource.name,
-                    source_id=str(giveaway.get("id")),
-                    title=title,
-                    url=url,
-                    platforms=platforms,
-                    text=(
-                        f"{title}\n{giveaway.get('description', '')}\n"
-                        f"{giveaway.get('instructions', '')}"
-                    ),
-                    expires_at=giveaway.get("end_date"),
-                )
-            )
+            if not isinstance(data, list):
+                continue
+            for giveaway in data:
+                game = self._parse_giveaway(giveaway, seen_ids)
+                if game is not None:
+                    games.append(game)
         return games
+
+    @staticmethod
+    def _parse_giveaway(giveaway: object, seen_ids: set[str]) -> FreeGame | None:
+        """Parse one GamerPower giveaway into a FreeGame, or None if unusable."""
+        if not isinstance(giveaway, dict):
+            return None
+        if str(giveaway.get("status", "")).lower() != "active":
+            return None
+        giveaway_type = str(giveaway.get("type", "")).lower()
+        if giveaway_type not in _GAMERPOWER_ACCEPTED_TYPES:
+            return None
+        source_id = str(giveaway.get("id"))
+        if source_id in seen_ids:
+            return None
+        url = giveaway.get("open_giveaway_url") or giveaway.get("open_giveaway")
+        title = giveaway.get("title")
+        if not url or not title:
+            return None
+        seen_ids.add(source_id)
+        platforms = _normalize_platforms(str(giveaway.get("platforms", "")).split(","))
+        return FreeGame(
+            source=GamerPowerSource.name,
+            source_id=source_id,
+            title=title,
+            url=url,
+            platforms=platforms,
+            text=(
+                f"{title}\n{giveaway.get('description', '')}\n"
+                f"{giveaway.get('instructions', '')}"
+            ),
+            expires_at=giveaway.get("end_date"),
+            content_type=_classify_gamerpower_type(giveaway_type, title),
+        )
 
 
 class EpicStoreSource(FreeGameSource):

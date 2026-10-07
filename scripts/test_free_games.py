@@ -125,7 +125,23 @@ MOCK_GAMES = [
         "Fanatical Mega Key Giveaway\nFanatical is giving away keys! "
         "Subscribe to the newsletter and follow us on X.",
     ),
-    # --- Expected to be filtered out (6) ---
+    make_game(
+        "bluesky",
+        "bsky-6",
+        "Some Skin Pack",
+        "https://store.steampowered.com/app/888",
+        [PLATFORM_STEAM],
+        "[Steam] (DLC) Some Skin Pack is free!\nRequires the base game.",
+    ),
+    make_game(
+        "bluesky",
+        "bsky-9",
+        "Cool Avatar Pack",
+        "https://store.steampowered.com/app/777",
+        [PLATFORM_STEAM],
+        "[Steam] (Other) Cool Avatar Pack is free!",
+    ),
+    # --- Expected to be filtered out (5) ---
     make_game(
         "gamerpower",
         "gp-2",
@@ -141,14 +157,6 @@ MOCK_GAMES = [
         "https://store.steampowered.com/app/999",
         [PLATFORM_STEAM],
         "[Steam] (Game) Expired Game is free!\nThis offer has expired.",
-    ),
-    make_game(
-        "bluesky",
-        "bsky-6",
-        "Some Skin Pack",
-        "https://store.steampowered.com/app/888",
-        [PLATFORM_STEAM],
-        "[Steam] (DLC) Some Skin Pack is free!",
     ),
     make_game(
         "bluesky",
@@ -256,9 +264,12 @@ async def main():
         mock_ctx.send.assert_any_call("Checking for free games...")
         call_count = mock_channel.send.call_count
         logger.info(f"Found {call_count} channel send calls.")
-        assert call_count == 9, f"Expected 9 announcements, but got {call_count}"  # noqa: S101
+        assert call_count == 11, f"Expected 11 announcements, but got {call_count}"  # noqa: S101
 
-        logger.info("OK: 9 valid games announced, 6 filtered out.")
+        logger.info("OK: 11 valid games announced, 5 filtered out.")
+        logger.info("Announced with a DLC/item label:")
+        logger.info(" - 'Some Skin Pack' (DLC, notes the base-game requirement)")
+        logger.info(" - 'Cool Avatar Pack' (In-game item)")
         logger.info("Allowed by the GOG/Fanatical newsletter exception:")
         logger.info(" - 'Fanatical Spooky Cats Key Giveaway' (Fanatical newsletter only)")
         logger.info(" - 'GOG Newsletter Giveaway' (GOG newsletter only)")
@@ -267,7 +278,6 @@ async def main():
         logger.info(" - 'Tasky Steam Key Giveaway' (newsletter + follow tasks)")
         logger.info(" - 'Alienware Key Drop' (newsletter, but non-exempt provider)")
         logger.info(" - 'Expired Game' (text filter on 'expired')")
-        logger.info(" - 'Some Skin Pack' (text filter on '(dlc)')")
         logger.info(" - 'Sketchy Steam Game' (Steam tag without an allowed host)")
         logger.info(" - 'Gleam Game' (excluded domain gleam.io)")
 
