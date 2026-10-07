@@ -207,6 +207,61 @@ async def mock_fetch_game_details(
     return MOCK_STEAM_DETAILS.get(steam_id)
 
 
+class FakeResponse:
+    """Minimal async-context-manager HTTP response for retry tests."""
+
+    def __init__(self, status: int, headers: dict[str, str] | None = None, payload: Any = None):
+        self.status = status
+        self.headers = headers or {}
+        self._payload = payload
+
+    async def json(self) -> Any:
+        return self._payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class FakeSession:
+    """Returns a queued sequence of responses from ``get``."""
+
+    def __init__(self, responses: list[FakeResponse]):
+        self._responses = list(responses)
+        self.calls = 0
+
+    def get(self, *args, **kwargs):  # noqa: ARG002
+        self.calls += 1
+        return self._responses.pop(0)
+
+
+async def test_rate_limit_handling():
+    """Verify 429/Retry-After retries, non-retryable failure, and retry exhaustion."""
+    from familybot.lib.free_game_sources import _fetch_json
+
+    with patch("asyncio.sleep", new=AsyncMock()):
+        # 429 with Retry-After, then success.
+        session = FakeSession(
+            [FakeResponse(429, {"Retry-After": "2"}), FakeResponse(200, {}, {"feed": []})]
+        )
+        assert await _fetch_json(session, "https://example.test") == {"feed": []}  # noqa: S101
+        assert session.calls == 2  # noqa: S101
+
+        # Non-retryable status gives up immediately.
+        session = FakeSession([FakeResponse(404)])
+        assert await _fetch_json(session, "https://example.test") is None  # noqa: S101
+        assert session.calls == 1  # noqa: S101
+
+        # Repeated 5xx exhausts the retry budget (1 attempt + 3 retries).
+        session = FakeSession([FakeResponse(503) for _ in range(6)])
+        assert await _fetch_json(session, "https://example.test") is None  # noqa: S101
+        assert session.calls == 4  # noqa: S101
+
+    logger.info("OK: 429/Retry-After, non-retryable, and retry-exhaustion handled.")
+
+
 def _build_plugin() -> tuple[FreeGames, MagicMock, MagicMock]:
     """Create a FreeGames plugin wired to a stub source and mock bot."""
     mock_bot = MagicMock(spec=FamilyBotClient)
@@ -228,6 +283,7 @@ def _build_plugin() -> tuple[FreeGames, MagicMock, MagicMock]:
 
 async def main():
     logger.info("Starting Free Games Plugin Test...")
+    await test_rate_limit_handling()
     plugin, _mock_bot, mock_channel = _build_plugin()
 
     with patch(

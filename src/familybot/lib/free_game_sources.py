@@ -13,14 +13,17 @@ Sources:
 """
 
 import asyncio
+import random
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 import aiohttp
 
 from familybot.lib.logging_config import get_logger
+from familybot.lib.utils import TokenBucket
 
 logger = get_logger(__name__)
 
@@ -78,9 +81,16 @@ _BROWSER_UA = (
 _HEADERS = {"User-Agent": _BROWSER_UA}
 
 _DEFAULT_MAX_RETRIES = 3
-_DEFAULT_RETRY_DELAY = 5
 _DEFAULT_TIMEOUT = 30
-
+# Backoff for retryable failures (rate limits and transient server errors).
+_RETRY_BASE_DELAY = 1.0
+_RETRY_MAX_DELAY = 30.0
+_RETRY_JITTER = 1.0
+# HTTP statuses worth retrying: 429 rate limit + common transient 5xx.
+_RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+# Minimum spacing between requests to a single source, to stay polite.
+# A TokenBucket is used to enforce this (see ``FreeGameSource``).
+_MIN_REQUEST_INTERVAL = 1.0
 # Noise words stripped when building a cross-source title key, so that
 # "BURIED STARS (Epic Games) Giveaway" collapses onto "BURIED STARS".
 _TITLE_NOISE = {
@@ -256,17 +266,45 @@ def _classify_gamerpower_type(giveaway_type: str, title: str) -> str:
     return CONTENT_GAME
 
 
+def _retry_after_seconds(response: aiohttp.ClientResponse) -> float | None:
+    """Parse a ``Retry-After`` header (seconds or HTTP-date), if present."""
+    header = response.headers.get("Retry-After")
+    if not header:
+        return None
+    try:
+        return max(0.0, float(header))
+    except ValueError:
+        pass
+    try:
+        retry_at = parsedate_to_datetime(header)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
+
+
+def _backoff_delay(attempt: int) -> float:
+    """Exponential backoff (with jitter) for retry ``attempt`` (0-based)."""
+    delay = min(_RETRY_MAX_DELAY, _RETRY_BASE_DELAY * (2**attempt))
+    return delay + random.uniform(0, _RETRY_JITTER)  # noqa: S311 - jitter, not crypto
+
+
 async def _fetch_json(
     session: aiohttp.ClientSession,
     url: str,
     *,
     headers: dict[str, str] | None = None,
+    bucket: TokenBucket | None = None,
     max_retries: int = _DEFAULT_MAX_RETRIES,
-    retry_delay: int = _DEFAULT_RETRY_DELAY,
     timeout_seconds: int = _DEFAULT_TIMEOUT,
 ) -> object | None:
-    """GET ``url`` and return parsed JSON, retrying on transient failures."""
-    for attempt in range(max_retries):
+    """GET ``url`` and return parsed JSON.
+
+    Honours a per-source ``TokenBucket``, ``429``/``Retry-After`` rate limits, and
+    retries transient server errors with exponential backoff.
+    """
+    for attempt in range(max_retries + 1):
+        if bucket is not None:
+            await bucket.acquire()
         try:
             async with session.get(
                 url,
@@ -275,23 +313,39 @@ async def _fetch_json(
             ) as response:
                 if response.status == 200:
                     return await response.json()
+                if response.status in _RETRYABLE_STATUSES and attempt < max_retries:
+                    retry_after = _retry_after_seconds(response)
+                    delay = retry_after if retry_after is not None else _backoff_delay(attempt)
+                    logger.warning(
+                        "Request to %s returned %s, retrying in %.1fs (attempt %d/%d)",
+                        url,
+                        response.status,
+                        delay,
+                        attempt + 1,
+                        max_retries + 1,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
                 logger.warning("Request to %s returned status %s", url, response.status)
-                # Only transient server errors are worth retrying.
-                if not 500 <= response.status < 600:
-                    return None
+                return None
         except (TimeoutError, aiohttp.ClientError) as e:
-            logger.warning(
-                "Attempt %s/%s failed to fetch %s: %s",
-                attempt + 1,
-                max_retries,
-                url,
-                e,
-            )
+            if attempt < max_retries:
+                delay = _backoff_delay(attempt)
+                logger.warning(
+                    "Attempt %d/%d failed to fetch %s: %s (retrying in %.1fs)",
+                    attempt + 1,
+                    max_retries + 1,
+                    url,
+                    e,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+            logger.error("Error fetching %s after %d attempts: %s", url, max_retries + 1, e)
+            return None
         except Exception as e:
             logger.error("Unexpected error fetching %s: %s", url, e, exc_info=True)
             return None
-        if attempt < max_retries - 1:
-            await asyncio.sleep(retry_delay)
     return None
 
 
@@ -299,6 +353,11 @@ class FreeGameSource:
     """Base class for a free-game source."""
 
     name: str = "unknown"
+    min_request_interval: float = _MIN_REQUEST_INTERVAL
+
+    def __init__(self) -> None:
+        """Create a per-source rate limiter (capacity 1 -> steady spacing)."""
+        self._bucket = TokenBucket(1.0 / self.min_request_interval, capacity=1)
 
     async def fetch(self, session: aiohttp.ClientSession) -> list[FreeGame]:
         """Return the current free games from this source."""
@@ -312,7 +371,7 @@ class BlueskySource(FreeGameSource):
 
     async def fetch(self, session: aiohttp.ClientSession) -> list[FreeGame]:
         """Fetch and parse the FreeGameFindings Bluesky feed."""
-        data = await _fetch_json(session, BLUESKY_FEED_URL)
+        data = await _fetch_json(session, BLUESKY_FEED_URL, bucket=self._bucket)
         if not isinstance(data, dict):
             return []
         games = []
@@ -392,7 +451,9 @@ class GamerPowerSource(FreeGameSource):
         # GamerPower doesn't accept multiple types in one request, so query each.
         for giveaway_type in _GAMERPOWER_QUERY_TYPES:
             data = await _fetch_json(
-                session, GAMERPOWER_GIVEAWAYS_URL.format(type=giveaway_type)
+                session,
+                GAMERPOWER_GIVEAWAYS_URL.format(type=giveaway_type),
+                bucket=self._bucket,
             )
             if not isinstance(data, list):
                 continue
@@ -443,7 +504,7 @@ class EpicStoreSource(FreeGameSource):
 
     async def fetch(self, session: aiohttp.ClientSession) -> list[FreeGame]:
         """Fetch currently-free Epic Games Store promotions."""
-        data = await _fetch_json(session, EPIC_FREE_GAMES_URL)
+        data = await _fetch_json(session, EPIC_FREE_GAMES_URL, bucket=self._bucket)
         if not isinstance(data, dict):
             return []
         elements = (
