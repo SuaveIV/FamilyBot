@@ -9,6 +9,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Add src to path so we can import familybot
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from familybot.lib.free_game_sources import (
+    PLATFORM_AMAZON,
+    PLATFORM_EPIC,
+    PLATFORM_GOG,
+    PLATFORM_ITCH,
+    PLATFORM_STEAM,
+    FreeGame,
+    FreeGameSource,
+)
 from familybot.lib.types import FamilyBotClient
 from familybot.plugins.free_games import FreeGames
 
@@ -21,94 +30,132 @@ logger = logging.getLogger("TestFreeGames")
 # --- Mock Data ---
 
 
-def create_bsky_post(uri: str, text: str, url: str) -> dict[str, Any]:
-    """Helper to create a mock Bluesky post."""
-    return {
-        "post": {
-            "uri": uri,
-            "record": {
-                "text": text,
-                "facets": [{"features": [{"$type": "app.bsky.richtext.facet#link", "uri": url}]}],
-            },
-        }
-    }
+def make_game(
+    source: str,
+    source_id: str,
+    title: str,
+    url: str,
+    platforms: list[str],
+    text: str | None = None,
+) -> FreeGame:
+    """Build a normalized FreeGame for tests."""
+    return FreeGame(
+        source=source,
+        source_id=source_id,
+        title=title,
+        url=url,
+        platforms=set(platforms),
+        text=title if text is None else text,
+    )
 
 
-MOCK_BLUESKY_POSTS = [
-    create_bsky_post(
-        "bsky_post_1",
-        "[Steam] Great Free Game is free on Steam",
+MOCK_GAMES = [
+    # --- Expected to be announced (6) ---
+    make_game(
+        "epic",
+        "epic-1",
+        "BURIED STARS",
+        "https://store.epicgames.com/en-US/p/buried-stars-d7c88c",
+        [PLATFORM_EPIC],
+        "BURIED STARS\nA mystery game.",
+    ),
+    make_game(
+        "gamerpower",
+        "gp-1",
+        "Some Steam Game",
+        "https://www.gamerpower.com/open/some-steam-game",
+        [PLATFORM_STEAM],
+        "Some Steam Game\nGrab it while it lasts.",
+    ),
+    make_game(
+        "bluesky",
+        "bsky-1",
+        "Great Free Game",
         "https://store.steampowered.com/app/12345",
+        [PLATFORM_STEAM],
+        "[Steam] (Game) Great Free Game is free!",
     ),
-    create_bsky_post(
-        "bsky_post_2",
-        "[Epic Games] Awesome Free Game is free on EGS",
-        "https://www.epicgames.com/store/p/awesome-game",
-    ),
-    create_bsky_post(
-        "bsky_post_3",
-        "[Amazon] Prime Free Game is free on Prime Gaming",
+    make_game(
+        "bluesky",
+        "bsky-2",
+        "Prime Free Game",
         "https://gaming.amazon.com/prime-game",
+        [PLATFORM_AMAZON],
+        "[Amazon] (Game) Prime Free Game is free!",
     ),
-    create_bsky_post(
-        "bsky_post_4",
-        "[Steam] Expired Game is free on Steam",
-        "https://store.steampowered.com/app/expired",
-    ),
-    create_bsky_post(
-        "bsky_post_5",
-        "[Steam] DLC that requires paid base game",
-        "https://store.steampowered.com/app/dlc",
-    ),
-    create_bsky_post(
-        "bsky_post_6",
-        "[Steam] Game from Reddit is free",
-        "https://www.reddit.com/r/GameDeals/comments/valid_post",
-    ),
-    create_bsky_post(
-        "bsky_post_7",
-        "[Steam] Expired game from Reddit",
-        "https://www.reddit.com/r/GameDeals/comments/expired_post",
-    ),
-    create_bsky_post(
-        "bsky_post_8",
-        "[Steam] Reddit post linking to excluded domain",
-        "https://www.reddit.com/r/GameDeals/comments/excluded_domain_post",
-    ),
-    create_bsky_post(
-        "bsky_post_9",
-        "[GOG] A great game from GOG",
+    make_game(
+        "bluesky",
+        "bsky-3",
+        "A GOG Game",
         "https://www.gog.com/game/some_game",
+        [PLATFORM_GOG],
+        "[GOG] (Game) A GOG Game is free!",
     ),
-    create_bsky_post(
-        "bsky_post_10",
-        "[Itch.io] A cool indie game is free",
+    make_game(
+        "bluesky",
+        "bsky-4",
+        "Cool Indie Game",
         "https://some-dev.itch.io/cool-indie-game",
+        [PLATFORM_ITCH],
+        "[Itch.io] (Game) Cool Indie Game is free!",
     ),
-    create_bsky_post(
-        "bsky_post_11",
-        "[Steam] (DLC) Some Cool Skin Pack",
-        "https://store.steampowered.com/app/dlc_pack",
+    # --- Expected to be filtered out (5) ---
+    make_game(
+        "gamerpower",
+        "gp-2",
+        "Tasky Steam Key Giveaway",
+        "https://www.gamerpower.com/open/tasky-steam-key-giveaway",
+        [PLATFORM_STEAM],
+        "Tasky Steam Key Giveaway\n1. Subscribe to our newsletter and follow us on X.",
+    ),
+    make_game(
+        "bluesky",
+        "bsky-5",
+        "Expired Game",
+        "https://store.steampowered.com/app/999",
+        [PLATFORM_STEAM],
+        "[Steam] (Game) Expired Game is free!\nThis offer has expired.",
+    ),
+    make_game(
+        "bluesky",
+        "bsky-6",
+        "Some Skin Pack",
+        "https://store.steampowered.com/app/888",
+        [PLATFORM_STEAM],
+        "[Steam] (DLC) Some Skin Pack is free!",
+    ),
+    make_game(
+        "bluesky",
+        "bsky-7",
+        "Sketchy Steam Game",
+        "https://example.com/claim",
+        [PLATFORM_STEAM],
+        "[Steam] (Game) Sketchy Steam Game is free!",
+    ),
+    make_game(
+        "bluesky",
+        "bsky-8",
+        "Gleam Game",
+        "https://gleam.io/xyz/gleam-game",
+        [PLATFORM_STEAM],
+        "[Steam] (Game) Gleam Game is free!",
     ),
 ]
 
-
 MOCK_STEAM_DETAILS = {
     "12345": {"name": "Great Free Game", "short_description": "A truly great game."},
-    "reddit_game": {
-        "name": "Game from Reddit",
-        "short_description": "A game linked from Reddit.",
-    },
 }
 
-# --- Mocks for Network Calls ---
 
+class StubSource(FreeGameSource):
+    """A source that returns a fixed list of games, for offline testing."""
 
-async def mock_fetch_bluesky_posts(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
-    logger.info("[MOCK] _fetch_bluesky_posts called, returning mock data.")
-    return MOCK_BLUESKY_POSTS
+    def __init__(self, name: str, games: list[FreeGame]):
+        self.name = name
+        self._games = games
 
-
+    async def fetch(self, session) -> list[FreeGame]:  # noqa: ARG002
+        return list(self._games)
 
 
 async def mock_fetch_game_details(
@@ -118,60 +165,9 @@ async def mock_fetch_game_details(
     return MOCK_STEAM_DETAILS.get(steam_id)
 
 
-async def run_live_test():
-    """Runs a live test against the actual Bluesky, Reddit, and Steam APIs."""
-    logger.info("--- Starting LIVE Free Games Plugin Test ---")
-    logger.warning("This test makes REAL network requests to Bluesky, Reddit, and Steam.")
-    logger.warning("Output will be printed to the console.")
-
-    # Mock the bot
+def _build_plugin() -> tuple[FreeGames, MagicMock, MagicMock]:
+    """Create a FreeGames plugin wired to a stub source and mock bot."""
     mock_bot = MagicMock(spec=FamilyBotClient)
-
-    # Mock the channel to print output instead of sending to Discord
-    mock_channel = MagicMock()
-
-    async def print_to_channel(embeds=None, content=None):
-        # The 'embeds' parameter is a list of Embed objects
-        if embeds and isinstance(embeds, list) and len(embeds) > 0:
-            # Log the title of the first embed in the list
-            first_embed = embeds[0]
-            logger.info(f"[LIVE TEST-CHANNEL SEND] Embed Title: {first_embed.title}")
-        if content:
-            logger.info(f"[LIVE TEST-CHANNEL SEND] Message: {content}")
-
-    mock_channel.send = AsyncMock(side_effect=print_to_channel)
-
-    mock_bot.fetch_channel = AsyncMock(return_value=mock_channel)
-    mock_bot.fetch_user = AsyncMock(return_value=True)
-    mock_bot.ext = {}
-    mock_bot.add_command = MagicMock()
-    mock_bot.add_listener = MagicMock()
-    mock_bot.dispatch = MagicMock()
-
-    # Initialize the real plugin
-    plugin = cast(FreeGames, FreeGames(mock_bot))
-
-    # Mock context for the manual command
-    mock_ctx = MagicMock()
-    mock_ctx.channel = mock_channel
-    mock_ctx.author_id = "12345"  # Needs to be a string for comparison
-
-    async def print_to_ctx(message):
-        logger.info(f"[LIVE TEST-CTX SEND] {message}")
-
-    mock_ctx.send = AsyncMock(side_effect=print_to_ctx)
-
-    # Use patch to temporarily set the admin ID for the command to run
-    with patch("familybot.plugins.free_games.ADMIN_DISCORD_ID", "12345"):
-        await plugin.force_free_command(mock_ctx)
-
-
-async def main():
-    logger.info("Starting Free Games Plugin Test...")
-
-    # Mock the bot
-    mock_bot = MagicMock(spec=FamilyBotClient)
-    # Make the mock channel have a send method
     mock_channel = MagicMock()
     mock_channel.send = AsyncMock()
     mock_bot.fetch_channel = AsyncMock(return_value=mock_channel)
@@ -181,100 +177,118 @@ async def main():
     mock_bot.add_listener = MagicMock()
     mock_bot.dispatch = MagicMock()
 
-    # Initialize plugin
-    plugin = cast(FreeGames, FreeGames(mock_bot))
+    # SteamAPIManager() performs a network call on construction; stub it out.
+    with patch("familybot.plugins.free_games.SteamAPIManager", MagicMock()):
+        plugin = cast(FreeGames, FreeGames(mock_bot))
+    plugin._sources = [StubSource("stub", MOCK_GAMES)]
+    return plugin, mock_bot, mock_channel
 
-    # Patch the network-calling methods
-    with (
-        patch(
-            "familybot.plugins.free_games.FreeGames._fetch_bluesky_posts",
-            new=mock_fetch_bluesky_posts,
-        ),
-        patch(
-            "familybot.plugins.free_games.fetch_game_details",
-            new=mock_fetch_game_details,
-        ),
+
+async def main():
+    logger.info("Starting Free Games Plugin Test...")
+    plugin, _mock_bot, mock_channel = _build_plugin()
+
+    with patch(
+        "familybot.plugins.free_games.fetch_game_details",
+        new=mock_fetch_game_details,
     ):
-        # --- Test 1: Initial run to populate seen posts ---
-        logger.info("--- Test 1: Initialization (Marking existing posts as seen) ---")
-        await plugin.scheduled_bsky_free_games_check()
-        # On the first run, it should see all posts but not send notifications
-        assert len(plugin._seen_bsky_posts) == len(MOCK_BLUESKY_POSTS), (  # noqa: S101
-            f"Expected {len(MOCK_BLUESKY_POSTS)} seen posts, got {len(plugin._seen_bsky_posts)}"
-        )
+        # --- Test 1: initialization marks everything as seen ---
+        logger.info("--- Test 1: Initialization (mark existing listings as seen) ---")
+        await plugin.scheduled_free_games_check()
         mock_channel.send.assert_not_called()
-        logger.info(
-            f"OK: Initialized with {len(plugin._seen_bsky_posts)} posts. No notifications sent."
-        )
+        logger.info("OK: No notifications on first run.")
 
-        # --- Test 2: Second run, no new posts ---
-        logger.info("\n--- Test 2: No new posts ---")
+        # --- Test 2: nothing new ---
+        logger.info("--- Test 2: Scheduled run with no new games ---")
         mock_channel.send.reset_mock()
-        await plugin.scheduled_bsky_free_games_check()
+        await plugin.scheduled_free_games_check()
         mock_channel.send.assert_not_called()
-        logger.info("OK: No new posts found, no notifications sent.")
+        logger.info("OK: No new games, no notifications.")
 
-        # --- Test 3: Manual trigger with filtering ---
-        logger.info("\n--- Test 3: Manual trigger with filtering logic ---")
+        # --- Test 3: manual trigger, seen state cleared ---
+        logger.info("--- Test 3: Manual trigger with filtering ---")
         mock_channel.send.reset_mock()
-        # Clear seen posts to simulate a fresh manual check where we expect to see all valid items
-        plugin._seen_bsky_posts.clear()
-        logger.info("Cleared seen posts for manual trigger test.")
+        plugin._seen_keys.clear()
+        plugin._seen_titles.clear()
 
-        # Mock context for the manual command
         mock_ctx = MagicMock()
         mock_ctx.channel = mock_channel
-        mock_ctx.author_id = "12345"  # Needs to be a string for comparison
+        mock_ctx.author_id = "12345"
         mock_ctx.send = AsyncMock()
 
-        # We need to set the ADMIN_DISCORD_ID for the check to pass
         with patch("familybot.plugins.free_games.ADMIN_DISCORD_ID", "12345"):
             await plugin.force_free_command(mock_ctx)
 
-        # Expected calls:
-        # 1. "Checking for free games..." from the command itself.
-        # 2. Four game announcements (Steam, Epic, Amazon, valid Reddit link).
-        # 3. "Check complete..." message is NOT sent because games were found.
-
-        # Check the initial "Checking..." message
         mock_ctx.send.assert_any_call("Checking for free games...")
-
-        # We expect 7 valid games to be posted:
-        # - Great Free Game (Steam)
-        # - Awesome Free Game (Epic)
-        # - Prime Free Game (Amazon)
-        # - Game from Reddit (Reddit link)
-        # - Reddit post linking to excluded domain (Reddit link)
-        # - A great game from GOG (GOG)
-        # - A cool indie game from Itch.io (Itch.io)
-        # The other 4 posts should be filtered out.
         call_count = mock_channel.send.call_count
         logger.info(f"Found {call_count} channel send calls.")
-        assert call_count == 7, f"Expected 7 game announcements, but got {call_count}"  # noqa: S101
+        assert call_count == 6, f"Expected 6 announcements, but got {call_count}"  # noqa: S101
 
-        logger.info("OK: Correct number of games (7) were announced.")
+        logger.info("OK: 6 valid games announced, 5 filtered out.")
         logger.info("Filtered out:")
-        logger.info(" - 'Expired Game' (text filter)")
-        logger.info(" - 'DLC that requires paid base game' (text filter)")
-        logger.info(" - '(DLC) Some Cool Skin Pack' (text filter)")
-        logger.info(" - 'Expired game from Reddit' (text filter on title containing 'expired')")
+        logger.info(" - 'Tasky Steam Key Giveaway' (requires newsletter/follow tasks)")
+        logger.info(" - 'Expired Game' (text filter on 'expired')")
+        logger.info(" - 'Some Skin Pack' (text filter on '(dlc)')")
+        logger.info(" - 'Sketchy Steam Game' (Steam tag without an allowed host)")
+        logger.info(" - 'Gleam Game' (excluded domain gleam.io)")
 
-        # --- Test 4: Manual trigger with no new games ---
-        logger.info("\n--- Test 4: Manual trigger with no new games ---")
+        # --- Test 4: manual trigger, nothing new ---
+        logger.info("--- Test 4: Manual trigger with no new games ---")
         mock_channel.send.reset_mock()
         mock_ctx.send.reset_mock()
-
-        # Run the check again. Since the posts are now "seen", it should find nothing.
         with patch("familybot.plugins.free_games.ADMIN_DISCORD_ID", "12345"):
             await plugin.force_free_command(mock_ctx)
 
-        # It should not send any game announcements
         mock_channel.send.assert_not_called()
-        # It should send the "Check complete" message
         mock_ctx.send.assert_any_call("Check complete. No new free games found.")
         logger.info("OK: Correctly reported no new games found.")
 
     logger.info("Test Complete.")
+
+
+async def run_live_test():
+    """Runs a live test against the real free-game sources."""
+    logger.info("--- Starting LIVE Free Games Plugin Test ---")
+    logger.warning("This test makes REAL network requests to all free-game sources.")
+
+    mock_bot = MagicMock(spec=FamilyBotClient)
+    mock_channel = MagicMock()
+
+    async def print_to_channel(*args, **kwargs):
+        embeds = kwargs.get("embeds")
+        content = kwargs.get("content")
+        if embeds is None and args and isinstance(args[0], list):
+            embeds = args[0]
+        if content is None and args and isinstance(args[0], str):
+            content = args[0]
+        if embeds:
+            logger.info(f"[LIVE TEST-CHANNEL SEND] Embed Title: {embeds[0].title}")
+        if content:
+            logger.info(f"[LIVE TEST-CHANNEL SEND] Message: {content}")
+
+    mock_channel.send = AsyncMock(side_effect=print_to_channel)
+    mock_bot.fetch_channel = AsyncMock(return_value=mock_channel)
+    mock_bot.fetch_user = AsyncMock(return_value=True)
+    mock_bot.ext = {}
+    mock_bot.add_command = MagicMock()
+    mock_bot.add_listener = MagicMock()
+    mock_bot.dispatch = MagicMock()
+
+    # SteamAPIManager() performs a network call on construction; stub it out.
+    with patch("familybot.plugins.free_games.SteamAPIManager", MagicMock()):
+        plugin = cast(FreeGames, FreeGames(mock_bot))
+
+    mock_ctx = MagicMock()
+    mock_ctx.channel = mock_channel
+    mock_ctx.author_id = "12345"
+
+    async def print_to_ctx(message):
+        logger.info(f"[LIVE TEST-CTX SEND] {message}")
+
+    mock_ctx.send = AsyncMock(side_effect=print_to_ctx)
+
+    with patch("familybot.plugins.free_games.ADMIN_DISCORD_ID", "12345"):
+        await plugin.force_free_command(mock_ctx)
 
 
 if __name__ == "__main__":

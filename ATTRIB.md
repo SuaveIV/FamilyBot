@@ -192,9 +192,15 @@ FamilyBot exists because of the incredible work done by the open-source communit
 - **Description**: Source for free game announcements across Steam, Epic, Amazon Prime, GOG, and Itch.io.
 - **Usage**: Polled through the public Bluesky API (`public.api.bsky.app`) for new free game posts.
 
+**[GamerPower](https://www.gamerpower.com/)**
+
+- **Description**: Aggregated free games and giveaways across many storefronts.
+- **Usage**: Polled through the free GamerPower API (`https://www.gamerpower.com/api/giveaways`). Attribution to GamerPower.com is required by their terms.
+
 **[Epic Games Store](https://www.epicgames.com/)**
 
 - **Description**: Store links and details for Epic Games Store giveaways.
+- **Usage**: Polled through the store's free-games promotions feed.
 
 ## Original Project Attribution
 
