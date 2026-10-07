@@ -5,9 +5,11 @@ discord:
   api_key: ""  # REQUIRED: Your Discord Bot Token. Get this from discord.com/developers/applications -> Bot -> Reset Token.
   admin_id: 00000000000000000  # REQUIRED: Your Discord User ID (SteamID64) to receive admin DMs for errors/notifications.
 
-# --- Free Games Plugin Configuration (Epic, Steam, GOG, Reddit, etc.) ---
+# --- Free Games Plugin Configuration ---
+# Free game alerts are sourced from the FreeGameFindings Bluesky feed
+# (https://bsky.app/profile/freegamefindings.bsky.social) via the public Bluesky API.
 free_epicgames:
-  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where free game announcements will be sent. This channel will now also include free game announcements from Reddit (e.g., Steam, GOG, Itch.io).
+  channel_id: 00000000000000000  # REQUIRED: Discord Channel ID where free game announcements will be sent. Alerts cover Steam, Epic, Amazon Prime, GOG, and Itch.io games posted to the FreeGameFindings Bluesky feed.
 
 # --- Steam Family Plugin Configuration ---
 steam_family:

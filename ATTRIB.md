@@ -185,11 +185,16 @@ FamilyBot exists because of the incredible work done by the open-source communit
 - **Description**: Price tracking and deal aggregation.
 - **Usage**: Finding historical lows and current sales.
 
-### Game Information
+### Free Game Data
+
+**[FreeGameFindings (Bluesky)](https://bsky.app/profile/freegamefindings.bsky.social)**
+
+- **Description**: Source for free game announcements across Steam, Epic, Amazon Prime, GOG, and Itch.io.
+- **Usage**: Polled through the public Bluesky API (`public.api.bsky.app`) for new free game posts.
 
 **[Epic Games Store](https://www.epicgames.com/)**
 
-- **Description**: Source for free game data.
+- **Description**: Store links and details for Epic Games Store giveaways.
 
 ## Original Project Attribution
 
