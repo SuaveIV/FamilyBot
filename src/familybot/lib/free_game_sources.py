@@ -120,8 +120,9 @@ _TASK_KEYWORDS = (
     "wishlist the",
 )
 
-# Newsletter-only sign-ups. GOG / Fanatical giveaways that ask for nothing more
-# than these are allowed through (see ``FreeGame.is_allowed_task_giveaway``).
+# Newsletter sign-ups. GOG / Fanatical giveaways that involve one of these are
+# allowed through even if they also ask for other actions (see
+# ``FreeGame.is_allowed_task_giveaway``).
 _NEWSLETTER_KEYWORDS = {"newsletter", "subscribe", "subscription"}
 _NEWSLETTER_EXEMPT_MARKERS = ("fanatical",)
 
@@ -167,10 +168,9 @@ class FreeGame:
         return bool(self.task_keywords)
 
     @property
-    def only_newsletter_tasks(self) -> bool:
-        """True when the only thing asked for is a newsletter/subscribe action."""
-        tasks = self.task_keywords
-        return bool(tasks) and tasks <= _NEWSLETTER_KEYWORDS
+    def has_newsletter_task(self) -> bool:
+        """True when the giveaway involves subscribing to a newsletter."""
+        return bool(self.task_keywords & _NEWSLETTER_KEYWORDS)
 
     @property
     def is_newsletter_exempt_provider(self) -> bool:
@@ -186,8 +186,13 @@ class FreeGame:
 
     @property
     def is_allowed_task_giveaway(self) -> bool:
-        """True for newsletter giveaways from GOG / Fanatical (the exception)."""
-        return self.is_newsletter_exempt_provider and self.only_newsletter_tasks
+        """True for GOG / Fanatical giveaways that involve a newsletter sign-up.
+
+        The giveaway may ask for other actions too (follow, share, ...); as long
+        as a newsletter opt-in is part of it and the provider is GOG / Fanatical,
+        we allow it through.
+        """
+        return self.is_newsletter_exempt_provider and self.has_newsletter_task
 
 
 def _parse_iso(value: str | None) -> datetime | None:

@@ -116,6 +116,15 @@ MOCK_GAMES = [
         [PLATFORM_GOG],
         "GOG Newsletter Giveaway\nSubscribe to the GOG.com newsletter to claim it.",
     ),
+    make_game(
+        "gamerpower",
+        "gp-6",
+        "Fanatical Mega Key Giveaway",
+        "https://www.gamerpower.com/open/fanatical-mega-key",
+        [PLATFORM_STEAM],
+        "Fanatical Mega Key Giveaway\nFanatical is giving away keys! "
+        "Subscribe to the newsletter and follow us on X.",
+    ),
     # --- Expected to be filtered out (6) ---
     make_game(
         "gamerpower",
@@ -247,12 +256,13 @@ async def main():
         mock_ctx.send.assert_any_call("Checking for free games...")
         call_count = mock_channel.send.call_count
         logger.info(f"Found {call_count} channel send calls.")
-        assert call_count == 8, f"Expected 8 announcements, but got {call_count}"  # noqa: S101
+        assert call_count == 9, f"Expected 9 announcements, but got {call_count}"  # noqa: S101
 
-        logger.info("OK: 8 valid games announced, 6 filtered out.")
+        logger.info("OK: 9 valid games announced, 6 filtered out.")
         logger.info("Allowed by the GOG/Fanatical newsletter exception:")
-        logger.info(" - 'Fanatical Spooky Cats Key Giveaway' (Fanatical newsletter)")
-        logger.info(" - 'GOG Newsletter Giveaway' (GOG newsletter)")
+        logger.info(" - 'Fanatical Spooky Cats Key Giveaway' (Fanatical newsletter only)")
+        logger.info(" - 'GOG Newsletter Giveaway' (GOG newsletter only)")
+        logger.info(" - 'Fanatical Mega Key Giveaway' (Fanatical newsletter + follow)")
         logger.info("Filtered out:")
         logger.info(" - 'Tasky Steam Key Giveaway' (newsletter + follow tasks)")
         logger.info(" - 'Alienware Key Drop' (newsletter, but non-exempt provider)")
