@@ -63,6 +63,16 @@ BLUESKY_FEED_URL = (
     "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed"
     "?actor=freegamefindings.bsky.social&limit=20"
 )
+# The FreeGameFindings Bluesky bot links every post to a "redd.it" short-link, which
+# hides the real destination (a store page, or a giveaway host such as gleam.io).
+# This public Telegram mirror of the subreddit reposts each submission with the
+# destination link intact, letting us resolve ``redd.it`` -> real URL.
+_TELEGRAM_FGF_FEED_URL = "https://t.me/s/r_freegamefindings"
+_TG_MESSAGE_TEXT_RE = re.compile(
+    r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', re.DOTALL
+)
+_TG_HREF_RE = re.compile(r'href="(https?://[^"]+)"')
+_REDDIT_SHORTLINK_RE = re.compile(r"redd\.it/([A-Za-z0-9]+)")
 GAMERPOWER_GIVEAWAYS_URL = "https://www.gamerpower.com/api/giveaways?type={type}"
 # ``loot`` returns the DLC/item entries (typed ``DLC`` in the response); ``dlc``
 # and ``beta`` are accepted labels but are not queryable endpoint values.
@@ -375,15 +385,67 @@ class BlueskySource(FreeGameSource):
         data = await _fetch_json(session, BLUESKY_FEED_URL, bucket=self._bucket)
         if not isinstance(data, dict):
             return []
+        destinations = await self._fetch_destinations(session)
         games = []
         for post_item in data.get("feed", []):
-            game = self._parse_post(post_item)
+            game = self._parse_post(post_item, destinations)
             if game is not None:
                 games.append(game)
         return games
 
+    async def _fetch_destinations(self, session: aiohttp.ClientSession) -> dict[str, str]:
+        """Map ``redd.it`` short-link ids to their real destination URLs.
+
+        The Bluesky feed only exposes redd.it links, so the destination host (a
+        store page versus a ``gleam.io``/``givee.club`` task giveaway) is hidden
+        from the domain filter. The FGF Telegram mirror reposts each submission
+        with the real link, so we scrape it to learn where a post actually leads.
+
+        Returns an empty mapping on failure, in which case callers keep the
+        original redd.it link.
+        """
+        await self._bucket.acquire()
+        try:
+            async with session.get(
+                _TELEGRAM_FGF_FEED_URL,
+                headers=_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT),
+            ) as response:
+                if response.status != 200:
+                    logger.warning(
+                        "FGF mirror returned status %s; skipping redd.it resolution",
+                        response.status,
+                    )
+                    return {}
+                html = await response.text()
+        except (TimeoutError, aiohttp.ClientError) as e:
+            logger.warning("Failed to fetch FGF mirror: %s", e)
+            return {}
+
+        destinations: dict[str, str] = {}
+        for block in _TG_MESSAGE_TEXT_RE.findall(html):
+            id_match = _REDDIT_SHORTLINK_RE.search(block)
+            if not id_match:
+                continue
+            # Links appear in order: [destination], [redd.it], [t.me]. The first
+            # that is not Reddit/Telegram is where the post really points.
+            for link in _TG_HREF_RE.findall(block):
+                host = urlparse(link).netloc.lower()
+                if "redd.it" in host or "t.me" in host or "telegram" in host:
+                    continue
+                destinations[id_match.group(1)] = link.replace("&amp;", "&")
+                break
+        if destinations:
+            logger.info(
+                "Resolved %d FGF redd.it link(s) to real destinations.",
+                len(destinations),
+            )
+        return destinations
+
     @staticmethod
-    def _parse_post(post_item: dict) -> FreeGame | None:  # noqa: C901
+    def _parse_post(  # noqa: C901
+        post_item: dict, destinations: dict[str, str] | None = None
+    ) -> FreeGame | None:
         """Parse a single Bluesky feed item, skipping replies and link-less posts."""
         post = post_item.get("post", {})
         record = post.get("record", {})
@@ -428,6 +490,13 @@ class BlueskySource(FreeGameSource):
 
         # Strip query params so tracking params don't defeat dedupe.
         url = url.split("?", 1)[0]
+
+        # Swap the redd.it short-link for its real destination so domain-based
+        # filters can see giveaway hosts (gleam.io, givee.club, ...) hidden behind it.
+        if destinations:
+            reddit_id = _REDDIT_SHORTLINK_RE.search(url)
+            if reddit_id and (resolved := destinations.get(reddit_id.group(1))):
+                url = resolved
 
         return FreeGame(
             source=BlueskySource.name,

@@ -51,7 +51,20 @@ _EXCLUSION_KEYWORDS = (
     "raffle",
     "sweepstake",
 )
-_EXCLUDED_DOMAINS = ("gleam.io", "givee.club", "woovit", "keymailer")
+_EXCLUDED_DOMAINS = (
+    "gleam.io",
+    "givee.club",
+    "woovit",
+    "keymailer",
+    # Additional "complete tasks to claim" hosts, surfaced now that Bluesky
+    # redd.it links are resolved to their real destination (see
+    # BlueskySource._fetch_destinations).
+    "alienwarearena.com",
+    "key-hub.eu",
+    "igames.gg",
+    "steelseries.com",
+    "crucial.com",
+)
 _PLATFORMS_IN_PRIORITY = (
     PLATFORM_STEAM,
     PLATFORM_EPIC,

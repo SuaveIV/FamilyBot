@@ -211,16 +211,23 @@ async def mock_fetch_game_details(
 class FakeResponse:
     """Minimal async-context-manager HTTP response for retry tests."""
 
-    def __init__(self, status: int, headers: dict[str, str] | None = None, payload: Any = None):
+    def __init__(
+        self,
+        status: int,
+        headers: dict[str, str] | None = None,
+        payload: Any = None,
+        text: str | None = None,
+    ):
         self.status = status
         self.headers = headers or {}
         self._payload = payload
+        self._text = text
 
     def raise_for_status(self) -> None:
         """No-op: retry tests only parse the 200 path."""
 
     async def text(self) -> str:
-        return json.dumps(self._payload)
+        return self._text if self._text is not None else json.dumps(self._payload)
 
     async def json(self) -> Any:
         return self._payload
@@ -269,6 +276,67 @@ async def test_rate_limit_handling():
     logger.info("OK: 429/Retry-After, non-retryable, and retry-exhaustion handled.")
 
 
+async def test_bluesky_reddit_resolution():
+    """Bluesky redd.it links are resolved to the real destination before filtering."""
+    from familybot.lib.free_game_sources import BlueskySource
+
+    post = {
+        "post": {
+            "uri": "at://did:plc:test/app.bsky.feed.post/1",
+            "record": {
+                "text": (
+                    "[Steam] (Game) Fishermurs is free! See the /r/FreeGameFindings "
+                    "thread below."
+                ),
+                "facets": [
+                    {
+                        "features": [
+                            {
+                                "$type": "app.bsky.richtext.facet#link",
+                                "uri": "https://redd.it/1x1kar2",
+                            }
+                        ]
+                    }
+                ],
+            },
+        }
+    }
+
+    # Without a destination map the redd.it link is kept as-is.
+    game = BlueskySource._parse_post(post)
+    assert game is not None  # noqa: S101
+    assert game.url == "https://redd.it/1x1kar2"  # noqa: S101
+
+    # With a resolution the real giveaway host is used, so the domain filter sees it.
+    game = BlueskySource._parse_post(
+        post, {"1x1kar2": "https://gleam.io/kOJHT/free-steam-keys"}
+    )
+    assert game is not None  # noqa: S101
+    assert game.url == "https://gleam.io/kOJHT/free-steam-keys"  # noqa: S101
+    assert not FreeGames._passes_filters(game)  # noqa: S101 - gleam.io is excluded
+
+    logger.info("OK: redd.it resolved to gleam.io and filtered out.")
+
+
+async def test_fgf_destination_parsing():
+    """The Telegram FGF mirror HTML yields a redd.it -> destination map."""
+    from familybot.lib.free_game_sources import BlueskySource
+
+    html = (
+        '<div class="tgme_widget_message_text js-message_text" dir="auto">'
+        "[Steam] (Game) Fishermurs<br/>"
+        '<a href="https://gleam.io/kOJHT/free-steam-keys">x</a><br/><br/>'
+        '<a href="https://redd.it/1x1kar2">https://redd.it/1x1kar2</a><br/>'
+        '<a href="https://t.me/r_freegamefindings">@r_freegamefindings</a></div>'
+    )
+    session = FakeSession([FakeResponse(200, text=html)])
+    destinations = await BlueskySource()._fetch_destinations(session)
+    assert destinations == {  # noqa: S101
+        "1x1kar2": "https://gleam.io/kOJHT/free-steam-keys"
+    }
+    logger.info("OK: parsed the FGF mirror into a redd.it -> destination map.")
+
+
 def _build_plugin() -> tuple[FreeGames, MagicMock, MagicMock]:
     """Create a FreeGames plugin wired to a stub source and mock bot."""
     mock_bot = MagicMock(spec=FamilyBotClient)
@@ -291,6 +359,8 @@ def _build_plugin() -> tuple[FreeGames, MagicMock, MagicMock]:
 async def main():
     logger.info("Starting Free Games Plugin Test...")
     await test_rate_limit_handling()
+    await test_bluesky_reddit_resolution()
+    await test_fgf_destination_parsing()
     plugin, _mock_bot, mock_channel = _build_plugin()
 
     with patch(
