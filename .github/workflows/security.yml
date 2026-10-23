@@ -95,11 +95,14 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
-          # "Apache 2.0" (with a space) is not SPDX, but it is the literal string
-          # ua-parser-builtins >= 202610 publishes in its package metadata. Without
-          # it the action reports that dependency as having an undetectable license
-          # even though it is the same Apache-2.0 license listed below.
-          allow-licenses: Apache-2.0,Apache 2.0,Apache-2.0 WITH LLVM-exception,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MIT AND BSD-2-Clause,MPL-2.0,Python-2.0,Unlicense,0BSD,CC0-1.0,CC-BY-4.0,CC-BY-SA-4.0,PSF-2.0,Zlib,LGPL-2.1-only,GPL-1.0-or-later,GPL-2.0-only,LicenseRef-scancode-public-domain
+          # ua-parser-builtins (pulled in transitively via ua-parser/camoufox)
+          # publishes `License: Apache 2.0` in its metadata. That string is not the
+          # SPDX identifier `Apache-2.0`, so the license policy below reports it as
+          # undetectable and blocks the PR even though it is the same Apache-2.0
+          # license. Exempt just this package from the license check; vulnerability
+          # checks still apply to it.
+          allow-dependencies-licenses: pkg:pypi/ua-parser-builtins
+          allow-licenses: Apache-2.0,Apache-2.0 WITH LLVM-exception,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MIT AND BSD-2-Clause,MPL-2.0,Python-2.0,Unlicense,0BSD,CC0-1.0,CC-BY-4.0,CC-BY-SA-4.0,PSF-2.0,Zlib,LGPL-2.1-only,GPL-1.0-or-later,GPL-2.0-only,LicenseRef-scancode-public-domain
 
   comment-on-pr:
     if: always() && github.event_name == 'pull_request'
