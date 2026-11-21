@@ -1,4 +1,4 @@
-# In src/familybot/lib/family_utils.py
+"""Wishlist message formatting and the Steam Family game list URL."""
 
 import asyncio
 import json
@@ -18,14 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 def get_family_game_list_url() -> str:
-    """Generates the URL for the Steamworks GetSharedLibraryApps API using webapi_token."""
+    """Generate the URL for the Steamworks GetSharedLibraryApps API using webapi_token."""
     token = get_token()  # Retrieve the webapi_token
     if not token:
         logger.error(
             "webapi_token is empty or not available. Cannot fetch family game list."
         )
         # Consider raising an error to be caught by the calling function
-        raise ValueError("webapi_token is missing or invalid.")
+        msg = "webapi_token is missing or invalid."
+        raise ValueError(msg)
 
     # Use 'access_token' parameter with the webapi_token for this specific endpoint
     url_family_list = (
@@ -60,7 +61,7 @@ async def _fetch_app_details(
     Returns ``(data, None)`` on success, or ``(None, reason)`` where ``reason`` is the
     parenthetical shown on the "Unknown Game" line.
     """
-    game_info_json: dict | None = None
+    payload: dict = {}
     async with limiter:
         try:
             url = _STEAM_APPDETAILS_URL.format(app_id=app_id)
@@ -68,14 +69,14 @@ async def _fetch_app_details(
                 url, timeout=aiohttp.ClientTimeout(total=10)
             ) as game_info_response:
                 game_info_response.raise_for_status()
-                game_info_json = json.loads(await game_info_response.text())
+                payload = json.loads(await game_info_response.text())
 
-            if game_info_json.get(app_id, {}).get("success"):
-                return game_info_json[app_id]["data"], None
+            if payload.get(app_id, {}).get("success"):
+                return payload[app_id]["data"], None
 
             logger.warning(
                 f"App details success false for AppID {app_id} in format_message."
-                f" Response: {game_info_json}"
+                f" Response: {payload}"
             )
             return None, "Details Unavailable"
         except aiohttp.ClientError as e:
@@ -91,7 +92,7 @@ async def _fetch_app_details(
         except KeyError as e:
             logger.error(
                 f"Missing key in app details for {app_id} in format_message: {e}."
-                f" Response: {game_info_json}"
+                f" Response: {payload}"
             )
             return None, "Format Error"
         except Exception as e:
@@ -113,63 +114,144 @@ async def _fetch_lowest_price(app_id: str, limiter: asyncio.Semaphore) -> tuple[
             return app_id, "   Lowest price info unavailable. \n"
 
 
+def _dedupe_app_ids(wishlist: list) -> list[str]:
+    """Return every app id once, in wishlist order."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in wishlist:
+        app_id = str(item[0])
+        if app_id not in seen:
+            seen.add(app_id)
+            ordered.append(app_id)
+    return ordered
+
+
+async def _prefetch_details(
+    session: aiohttp.ClientSession, app_ids: list[str], cache: dict
+) -> dict[str, str]:
+    """Fetch store details into ``cache``; return app id -> failure reason."""
+    if not app_ids:
+        return {}
+
+    limiter = asyncio.Semaphore(_DETAILS_CONCURRENCY)
+    results = await asyncio.gather(
+        *(_fetch_app_details(session, app_id, limiter) for app_id in app_ids)
+    )
+
+    failures: dict[str, str] = {}
+    for app_id, (data, reason) in zip(app_ids, results, strict=True):
+        if data is None:
+            failures[app_id] = reason or "Unexpected Error"
+        else:
+            cache[app_id] = data
+    return failures
+
+
+async def _prefetch_lowest_prices(app_ids: list[str]) -> dict[str, str]:
+    """Fetch historical lows; return app id -> rendered message line."""
+    if not app_ids:
+        return {}
+
+    limiter = asyncio.Semaphore(_ITAD_CONCURRENCY)
+    fetched = await asyncio.gather(
+        *(_fetch_lowest_price(app_id, limiter) for app_id in app_ids)
+    )
+    return dict(fetched)
+
+
+def _render_game_block(
+    item: tuple, game_info_data: dict, lowest_price_line: str, short: bool
+) -> list[str]:
+    """Render one game's link, price, per-person split and historical low."""
+    app_id = str(item[0])
+    parts: list[str] = []
+
+    game_name = game_info_data.get("name", f"Unknown Game ({app_id})")
+    parts.append(f"[{game_name}](<https://store.steampowered.com/app/{app_id}>) \n")
+
+    price_overview = game_info_data.get("price_overview")
+    if price_overview and price_overview.get("discount_percent") != 0:
+        final_formatted = price_overview.get("final_formatted", "N/A")
+        discount_percent = price_overview.get("discount_percent", 0)
+        parts.append(
+            f"  **__The game is on sale at {final_formatted} (-{discount_percent}%)__** \n"
+        )
+    else:
+        final_formatted = (
+            price_overview.get("final_formatted", "N/A") if price_overview else "N/A"
+        )
+        parts.append(f"  The game is at {final_formatted} \n")
+
+    if short:
+        return parts
+
+    final_price = price_overview.get("final") if price_overview else None
+    if final_price is not None and item[1]:
+        price_per_person = round(final_price / 100 / len(item[1]), 2)
+        parts.append(f" which is {price_per_person}$ per person \n")
+
+    parts.append(lowest_price_line)
+    return parts
+
+
+async def _apply_length_limits(
+    message_parts: list[str], wishlist: list, cached_data: dict, short: bool
+) -> str:
+    """Join the parts and apply Discord's 1900-character limit rules."""
+    final_message = "".join(message_parts)
+
+    if len(final_message) > 1900 and not short:
+        logger.warning(
+            f"Formatted message too long ({len(final_message)} chars)."
+            " Retrying with short format."
+        )
+        return await format_message(wishlist, short=True, cached_data=cached_data)
+    if len(final_message) > 1900:
+        logger.warning("Shortened message still too long. Sending generic message.")
+        return "# 📝 Family Wishlist \n Can't create a message or it will be too long"
+    if not final_message.strip().endswith("\n"):
+        final_message += "\n"
+
+    return final_message
+
+
 async def format_message(
     wishlist: list, *, short: bool = False, cached_data: dict | None = None
 ) -> str:
-    """Formats a list of wishlist items into a Discord message."""
+    """Format a list of wishlist items into a Discord message."""
     message_parts = ["# 📝 Family Wishlist \n"]
     if not wishlist:
         return "# 📝 Family Wishlist \nNo common wishlist items found to display."
 
     new_cached_data = cached_data or {}
 
-    # --- Wave 1: store details. One request per uncached game, all in flight together,
+    app_ids = _dedupe_app_ids(wishlist)
+
+    # Wave 1: store details, one request per uncached game, all in flight together
     # instead of one round trip per game inside the rendering loop.
-    seen: set[str] = set()
-    missing: list[str] = []
-    for item in wishlist:
-        app_id = str(item[0])
-        if app_id not in new_cached_data and app_id not in seen:
-            seen.add(app_id)
-            missing.append(app_id)
-
-    detail_failures: dict[str, str] = {}
     async with aiohttp.ClientSession() as session:
-        if missing:
-            limiter = asyncio.Semaphore(_DETAILS_CONCURRENCY)
-            details = await asyncio.gather(
-                *(_fetch_app_details(session, app_id, limiter) for app_id in missing)
-            )
-            for app_id, (data, reason) in zip(missing, details, strict=True):
-                if data is None:
-                    detail_failures[app_id] = reason or "Unexpected Error"
-                else:
-                    new_cached_data[app_id] = data
+        detail_failures = await _prefetch_details(
+            session,
+            [app_id for app_id in app_ids if app_id not in new_cached_data],
+            new_cached_data,
+        )
 
-    # --- Wave 2: historical lows. Two blocking HTTP calls per cache miss, so this was the
-    # second serial cost. The short pass never renders prices, so it never asks for them.
-    lowest_price_lines: dict[str, str] = {}
-    if not short:
-        priced: list[str] = []
-        for item in wishlist:
-            app_id = str(item[0])
-            if app_id in new_cached_data and app_id not in priced:
-                priced.append(app_id)
-        if priced:
-            itad_limiter = asyncio.Semaphore(_ITAD_CONCURRENCY)
-            for app_id, line in await asyncio.gather(
-                *(_fetch_lowest_price(app_id, itad_limiter) for app_id in priced)
-            ):
-                lowest_price_lines[app_id] = line
+    # Wave 2: historical lows, two blocking HTTP calls per cache miss. The short pass
+    # never renders prices, so it never asks for them.
+    lowest_price_lines = (
+        {}
+        if short
+        else await _prefetch_lowest_prices(
+            [app_id for app_id in app_ids if app_id in new_cached_data]
+        )
+    )
 
-    # --- Render in wishlist order, exactly as the sequential version did.
     for item in wishlist:
         app_id = str(item[0])
         users_wanting = ", ".join(
             FAMILY_USER_DICT.get(user_steam_id, f"Unknown User({user_steam_id})")
             for user_steam_id in item[1]
         )
-
         message_parts.append(f"- {users_wanting} want ")
 
         if app_id in detail_failures:
@@ -178,49 +260,13 @@ async def format_message(
             )
             continue
 
-        game_info_data = new_cached_data[app_id]
-
-        game_name = game_info_data.get("name", f"Unknown Game ({app_id})")
-        message_parts.append(
-            f"[{game_name}](<https://store.steampowered.com/app/{app_id}>) \n"
+        message_parts.extend(
+            _render_game_block(
+                item,
+                new_cached_data[app_id],
+                lowest_price_lines.get(app_id, ""),
+                short,
+            )
         )
 
-        price_overview = game_info_data.get("price_overview")
-        if price_overview and price_overview.get("discount_percent") != 0:
-            final_formatted = price_overview.get("final_formatted", "N/A")
-            discount_percent = price_overview.get("discount_percent", 0)
-            message_parts.append(
-                f"  **__The game is on sale at {final_formatted} (-{discount_percent}%)__** \n"
-            )
-        else:
-            final_formatted = (
-                price_overview.get("final_formatted", "N/A")
-                if price_overview
-                else "N/A"
-            )
-            message_parts.append(f"  The game is at {final_formatted} \n")
-
-        if short:
-            continue
-
-        final_price = price_overview.get("final") if price_overview else None
-        if final_price is not None and item[1]:
-            price_per_person = round(final_price / 100 / len(item[1]), 2)
-            message_parts.append(f" which is {price_per_person}$ per person \n")
-
-        message_parts.append(lowest_price_lines.get(app_id, ""))
-
-    final_message = "".join(message_parts)
-
-    if len(final_message) > 1900 and not short:
-        logger.warning(
-            f"Formatted message too long ({len(final_message)} chars). Retrying with short format."
-        )
-        return await format_message(wishlist, short=True, cached_data=new_cached_data)
-    if len(final_message) > 1900 and short:
-        logger.warning("Shortened message still too long. Sending generic message.")
-        return "# 📝 Family Wishlist \n Can't create a message or it will be too long"
-    if not final_message.strip().endswith("\n"):
-        final_message += "\n"
-
-    return final_message
+    return await _apply_length_limits(message_parts, wishlist, new_cached_data, short)
