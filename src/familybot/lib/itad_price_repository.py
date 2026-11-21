@@ -1,4 +1,4 @@
-# In src/familybot/lib/itad_price_repository.py
+"""SQLite cache for IsThereAnyDeal historical prices and Steam-to-ITAD mappings."""
 
 import logging
 import sqlite3
@@ -21,7 +21,8 @@ def get_cached_itad_price(appid: str):
                    current_price, current_price_formatted, discount_percent,
                    original_price, is_family_shared, steam_game_name, lookup_method
             FROM itad_price_cache
-            WHERE appid = ? AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+            WHERE appid = ?
+              AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         """,
             (appid,),
         )
@@ -30,7 +31,8 @@ def get_cached_itad_price(appid: str):
             # Null-handling policy:
             # - Numeric fields (discount_percent): default to 0
             # - Boolean fields (permanent, is_family_shared): default to False
-            # - Optional string fields (current_price, original_price, steam_game_name, lookup_method): preserve None
+            # - Optional string fields (current_price, original_price, steam_game_name,
+            #   lookup_method): preserve None
             return {
                 "lowest_price": row["lowest_price"],
                 "lowest_price_formatted": row["lowest_price_formatted"],
@@ -65,7 +67,7 @@ def _do_cache_itad_price(
     lookup_method: str,
     steam_game_name: str | None,
 ):
-    """Internal: cache ITAD price using an existing cursor."""
+    """Cache an ITAD price using an existing cursor."""
     now = datetime.now(UTC)
     if permanent:
         expires_at_str = None
@@ -172,7 +174,7 @@ def cache_itad_price_enhanced(
     cache_hours: int = 6,
     conn: sqlite3.Connection | None = None,
 ):
-    """Wrapper for cache_itad_price to maintain compatibility."""
+    """Wrap cache_itad_price to maintain compatibility."""
     cache_itad_price(
         appid,
         price_data,

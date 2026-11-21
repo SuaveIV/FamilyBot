@@ -1,4 +1,4 @@
-# In src/familybot/lib/game_details_repository.py
+"""SQLite cache for Steam Store game details."""
 
 import json
 import logging
@@ -54,7 +54,8 @@ def get_cached_game_details(appid: str):
             SELECT name, type, is_free, categories, price_data, permanent,
                    is_multiplayer, is_coop, is_family_shared
             FROM game_details_cache
-            WHERE appid = ? AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+            WHERE appid = ?
+              AND (permanent = 1 OR expires_at > STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
         """,
             (appid,),
         )
@@ -94,7 +95,7 @@ def _do_cache_game_details(
     cache_hours: int | None,
     price_source: str,
 ):
-    """Internal: cache game details using an existing cursor."""
+    """Cache game details using an existing cursor."""
     now = datetime.now(UTC)
     expires_at_str = None
     if not permanent and cache_hours:
@@ -107,7 +108,8 @@ def _do_cache_game_details(
     cursor.execute(
         """
         INSERT OR REPLACE INTO game_details_cache
-        (appid, name, type, is_free, categories, price_data, is_multiplayer, is_coop, is_family_shared, price_source, cached_at, expires_at, permanent)
+        (appid, name, type, is_free, categories, price_data, is_multiplayer, is_coop,
+         is_family_shared, price_source, cached_at, expires_at, permanent)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         (
@@ -130,7 +132,8 @@ def _do_cache_game_details(
     )
     cache_type = "permanently" if permanent else f"for {cache_hours} hours"
     logger.debug(
-        f"Cached game details for {appid} {cache_type} (MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})"
+        f"Cached game details for {appid} {cache_type} "
+        f"(MP:{is_multiplayer}, Coop:{is_coop}, FS:{is_family_shared})"
     )
 
 
@@ -210,7 +213,7 @@ def normalize_game_data(raw: dict) -> dict:
 def cache_game_details_with_source(
     app_id: str, game_data: dict, source: str, conn: sqlite3.Connection | None = None
 ):
-    """Wrapper for cache_game_details to maintain compatibility."""
+    """Wrap cache_game_details to maintain compatibility."""
     cache_game_details(
         app_id, game_data, permanent=False, price_source=source, conn=conn
     )
