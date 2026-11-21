@@ -21,6 +21,7 @@ from familybot.config import (  # pylint: disable=wrong-import-position
 )
 from familybot.lib.database import (
     get_db_connection,
+    get_write_connection,
     init_db,
 )
 from familybot.lib.family_library_repository import cache_family_library
@@ -194,24 +195,25 @@ class DatabasePopulator:
             return None
 
     def batch_write_games(self, games_data: dict[str, dict]) -> int:
-        """Write a batch of game details to the database in a single transaction."""
+        """Write a batch of game details to the database in a single transaction.
+
+        ``get_write_connection`` is what makes this atomic *and* safe: it holds the
+        process-wide write lock for the whole loop, so another thread cannot slip a
+        write in between these statements and hit "database is locked". The previous
+        version ran ``BEGIN TRANSACTION`` on the raw thread-local connection, which
+        left the lock unheld and made the batch contend with every other writer.
+        """
         if not games_data:
             return 0
 
-        conn = get_db_connection()
         written = 0
-        cursor = None
         try:
-            cursor = conn.cursor()
-            cursor.execute("BEGIN TRANSACTION")
-            batch_written = 0
-            for app_id, data in games_data.items():
-                cache_game_details(app_id, data, permanent=False, conn=conn)
-                batch_written += 1
-            conn.commit()
-            written += batch_written
+            with get_write_connection() as conn:
+                for app_id, data in games_data.items():
+                    cache_game_details(app_id, data, permanent=False, conn=conn)
+                conn.commit()
+            written = len(games_data)
         except Exception as e:
-            conn.rollback()
             logger.error("Batch write failed: %s", e)
             # Fallback to individual writes to save what we can
             for app_id, data in games_data.items():
@@ -219,11 +221,10 @@ class DatabasePopulator:
                     cache_game_details(app_id, data, permanent=False)
                     written += 1
                 except Exception as fallback_err:
-                    logger.debug("Failed to cache game details for %s: %s", app_id, fallback_err)
-        finally:
-            if cursor is not None:
-                cursor.close()
-            # Do not close the shared connection from get_db_connection()
+                    # WARNING, not DEBUG: this path means a row did not reach the cache.
+                    logger.warning(
+                        "Failed to cache game details for %s: %s", app_id, fallback_err
+                    )
         return written
 
     async def get_fallback_game_info(self, app_id: str) -> dict:
