@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import random
 
 import aiohttp
 
@@ -52,6 +53,43 @@ _STEAM_APPDETAILS_URL = (
 _DETAILS_CONCURRENCY = 8
 _ITAD_CONCURRENCY = 5
 
+# Steam answers 429 when a burst is wider than it likes. These mirror the retry policy in
+# SteamAPIManager.make_request_with_retry: exponential backoff with jitter, so a burst
+# degrades into a slow response instead of a wall of "Unknown Game" lines.
+_MAX_ATTEMPTS = 3
+_BASE_BACKOFF = 1.0
+
+# Jitter that desynchronises the retries of concurrent requests. SystemRandom keeps the
+# security linters quiet without a suppression; the cost is a few microseconds.
+_rng = random.SystemRandom()
+
+
+async def _get_appdetails_json(session: aiohttp.ClientSession, app_id: str) -> dict:
+    """GET appdetails for one app, retrying 429 with backoff and jitter.
+
+    Non-429 failures raise, so the caller maps them to the same "Unknown Game" suffixes it
+    always did.
+    """
+    url = _STEAM_APPDETAILS_URL.format(app_id=app_id)
+
+    for attempt in range(_MAX_ATTEMPTS):
+        retry_after: float | None = None
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            if response.status == 429 and attempt < _MAX_ATTEMPTS - 1:
+                retry_after = _BASE_BACKOFF * (2**attempt) + _rng.uniform(0, 1)
+                logger.warning(
+                    f"Rate limited (429) fetching app details for {app_id}, retrying in "
+                    f"{retry_after:.1f}s (attempt {attempt + 1}/{_MAX_ATTEMPTS})"
+                )
+            else:
+                response.raise_for_status()
+                return json.loads(await response.text())
+
+        if retry_after is not None:
+            await asyncio.sleep(retry_after)
+
+    return {}
+
 
 async def _fetch_app_details(
     session: aiohttp.ClientSession, app_id: str, limiter: asyncio.Semaphore
@@ -64,12 +102,7 @@ async def _fetch_app_details(
     payload: dict = {}
     async with limiter:
         try:
-            url = _STEAM_APPDETAILS_URL.format(app_id=app_id)
-            async with session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
-            ) as game_info_response:
-                game_info_response.raise_for_status()
-                payload = json.loads(await game_info_response.text())
+            payload = await _get_appdetails_json(session, app_id)
 
             if payload.get(app_id, {}).get("success"):
                 return payload[app_id]["data"], None

@@ -61,6 +61,7 @@ class StubResponse:
 
     def __init__(self, app_id: str) -> None:
         self._app_id = app_id
+        self.status = 200
 
     async def __aenter__(self):
         return self
@@ -239,4 +240,34 @@ def test_mapped_members_render_their_friendly_name(patched, monkeypatch):
     items, _, cached = SCENARIOS["single_ok"]()
 
     assert "Alice, Bob want" in _render(patched, items, True, cached)
+
+
+def test_retries_a_429_instead_of_reporting_an_api_error(patched, monkeypatch):
+    """A 429 must be retried; surfacing it as "Unknown Game (API Error)" is the bug."""
+    statuses = [429, 200]
+    calls: list[str] = []
+
+    class FlakySession(StubSession):
+        def get(self, url: str, **_kwargs) -> StubResponse:
+            app_id = url.split("appids=")[1].split("&")[0]
+            calls.append(app_id)
+            response = StubResponse(app_id)
+            response.status = statuses[min(len(calls) - 1, len(statuses) - 1)]
+            return response
+
+    class NoJitter:
+        @staticmethod
+        def uniform(_low, _high) -> float:
+            return 0.0
+
+    monkeypatch.setattr(aiohttp, "ClientSession", FlakySession)
+    monkeypatch.setattr(patched, "_rng", NoJitter())
+    monkeypatch.setattr(patched, "_BASE_BACKOFF", 0.0)
+
+    items, _, cached = SCENARIOS["single_ok"]()
+    message = _render(patched, items, True, cached)
+
+    assert len(calls) == 2, "the 429 should have triggered exactly one retry"
+    assert "Half-Life 3" in message
+    assert "API Error" not in message
 
