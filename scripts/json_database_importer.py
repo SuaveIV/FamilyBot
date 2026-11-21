@@ -32,7 +32,7 @@ from typing import Any
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from familybot.lib.database import get_db_connection, init_db
+from familybot.lib.database import get_db_connection, get_write_connection, init_db
 from familybot.lib.game_details_repository import cache_game_details
 
 # Configure logging
@@ -193,14 +193,14 @@ class JSONDatabaseImporter:
             self.log_action(f"[DRY RUN] Would add user: Discord {discord_id} -> Steam {steam_id}")
         else:
             try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO users (discord_id, steam_id) VALUES (?, ?)",
-                    (discord_id, steam_id),
-                )
-                conn.commit()
-                conn.close()
+                with get_write_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO users (discord_id, steam_id) VALUES (?, ?)",
+                        (discord_id, steam_id),
+                    )
+                    conn.commit()
+                    cursor.close()
                 self.log_action(f"Added user: Discord {discord_id} -> Steam {steam_id}")
 
                 # Update our tracking
@@ -241,15 +241,15 @@ class JSONDatabaseImporter:
             )
         else:
             try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO family_members "
-                    "(steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
-                    (steam_id, friendly_name, discord_id),
-                )
-                conn.commit()
-                conn.close()
+                with get_write_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO family_members "
+                        "(steam_id, friendly_name, discord_id) VALUES (?, ?, ?)",
+                        (steam_id, friendly_name, discord_id),
+                    )
+                    conn.commit()
+                    cursor.close()
                 self.log_action(f"Added family member: {friendly_name} (Steam {steam_id})")
 
                 # Update our tracking
@@ -278,14 +278,14 @@ class JSONDatabaseImporter:
             self.log_action(f"[DRY RUN] Would add saved game: {appid}")
         else:
             try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO saved_games (appid, detected_at) VALUES (?, ?)",
-                    (appid, detected_at),
-                )
-                conn.commit()
-                conn.close()
+                with get_write_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO saved_games (appid, detected_at) VALUES (?, ?)",
+                        (appid, detected_at),
+                    )
+                    conn.commit()
+                    cursor.close()
                 self.log_action(f"Added saved game: {appid}")
 
             except Exception as e:

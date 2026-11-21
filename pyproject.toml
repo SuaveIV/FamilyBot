@@ -29,7 +29,9 @@ dependencies = [
   "playwright<1.63",
   "pre-commit~=4.0.1",
   "pydantic~=2.10.3",
-  "pylint~=3.3.1",
+  # Floor is the fix for GHSA-22qq-2fwx-7p67 (arbitrary code execution via pickle
+  # deserialization of the stats cache in PYLINT_HOME), fixed in 4.0.9.
+  "pylint>=4.0.9,<5",
   "python-json-logger~=2.0.7",
   "python-multipart~=0.0.18",
   "requests~=2.33.0",
@@ -51,6 +53,8 @@ familybot-test = "scripts.test_token_plugin:main"
 
 [project.optional-dependencies]
 dev = [
+  # Floor is 9.0.3: pytest 8.x tmpdir handling carries CVE-2025-71176.
+  "pytest>=9.0.3,<10",
   "ruff~=0.12.5",
   "mypy",
   "types-PyYAML",
@@ -73,6 +77,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "coloredlogs"
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100

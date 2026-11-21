@@ -18,8 +18,9 @@ logger = get_logger("wishlist_service")
 
 
 def add_to_wishlist(global_wishlist: list, app_id: str, user_steam_id: str) -> None:
-    """Adds a game app ID to the global wishlist list of lists, tracking users interested.
-    Each item in global_wishlist is [app_id: str, [user_steam_ids: str]].
+    """Add a game app id to the global wishlist, recording the user who wants it.
+
+    Each item in ``global_wishlist`` is ``[app_id: str, [user_steam_ids: str]]``.
     """
     found = False
     for item in global_wishlist:
@@ -30,6 +31,65 @@ def add_to_wishlist(global_wishlist: list, app_id: str, user_steam_id: str) -> N
             break
     if not found:
         global_wishlist.append([app_id, [user_steam_id]])
+
+
+async def _load_user_wishlist(
+    steam_api_manager: SteamAPIManager,
+    session: aiohttp.ClientSession,
+    user_steam_id: str,
+    user_name_for_log: str,
+    global_wishlist: list[list],
+) -> None:
+    """Fetch one user's wishlist, merge it into ``global_wishlist``, and cache it.
+
+    Merging happens before caching, and any failure propagates, so the caller logs it and
+    moves to the next member exactly as before.
+    """
+    wishlist_url = "https://api.steampowered.com/IWishlistService/GetWishlist/v1/"
+    wishlist_params = {
+        "key": STEAMWORKS_API_KEY,
+        "steamid": user_steam_id,
+    }
+    logger.info(
+        f"Fetching wishlist from API for {user_name_for_log} (Steam ID: {user_steam_id})"
+    )
+
+    await steam_api_manager.rate_limit_steam_api()  # Apply rate limit here
+    async with session.get(
+        wishlist_url,
+        params=wishlist_params,
+        timeout=aiohttp.ClientTimeout(total=15),
+    ) as wishlist_response:
+        text = await wishlist_response.text()
+        if text == '{"success":2}':
+            log_private_profile_detection(
+                logger, user_name_for_log, user_steam_id, "wishlist"
+            )
+            return
+
+        wishlist_json = await handle_api_response(
+            f"GetWishlist ({user_name_for_log})", wishlist_response
+        )
+
+    if not wishlist_json:
+        return
+
+    wishlist_items = wishlist_json.get("response", {}).get("items", [])
+    if not wishlist_items:
+        logger.info(f"No items found in {user_name_for_log}'s wishlist.")
+        return
+
+    user_wishlist_appids = []
+    for game_item in wishlist_items:
+        app_id = str(game_item.get("appid"))
+        if not app_id:
+            logger.warning(f"Skipping wishlist item due to missing appid: {game_item}")
+            continue
+
+        user_wishlist_appids.append(app_id)
+        add_to_wishlist(global_wishlist, app_id, user_steam_id)
+
+    cache_wishlist(user_steam_id, user_wishlist_appids)
 
 
 async def collect_wishlists(
@@ -79,61 +139,18 @@ async def collect_wishlists(
                 continue
 
         # If not cached or force_fresh is True, fetch from API
-        wishlist_url = "https://api.steampowered.com/IWishlistService/GetWishlist/v1/"
-        wishlist_params = {
-            "key": STEAMWORKS_API_KEY,
-            "steamid": user_steam_id,
-        }
-        logger.info(
-            f"Fetching wishlist from API for {user_name_for_log} (Steam ID: {user_steam_id})"
-        )
-
-        wishlist_json = None
         try:
-            await steam_api_manager.rate_limit_steam_api()  # Apply rate limit here
-            async with session.get(
-                wishlist_url,
-                params=wishlist_params,
-                timeout=aiohttp.ClientTimeout(total=15),
-            ) as wishlist_response:
-                text = await wishlist_response.text()
-                if text == '{"success":2}':
-                    log_private_profile_detection(
-                        logger, user_name_for_log, user_steam_id, "wishlist"
-                    )
-                    continue
-
-                wishlist_json = await handle_api_response(
-                    f"GetWishlist ({user_name_for_log})", wishlist_response
-                )
-            if not wishlist_json:
-                continue
-
-            wishlist_items = wishlist_json.get("response", {}).get("items", [])
-
-            if not wishlist_items:
-                logger.info(f"No items found in {user_name_for_log}'s wishlist.")
-                continue
-
-            # Extract app IDs for caching
-            user_wishlist_appids = []
-            for game_item in wishlist_items:
-                app_id = str(game_item.get("appid"))
-                if not app_id:
-                    logger.warning(
-                        f"Skipping wishlist item due to missing appid: {game_item}"
-                    )
-                    continue
-
-                user_wishlist_appids.append(app_id)
-                add_to_wishlist(global_wishlist, app_id, user_steam_id)
-
-            # Cache the wishlist
-            cache_wishlist(user_steam_id, user_wishlist_appids)
-
+            await _load_user_wishlist(
+                steam_api_manager,
+                session,
+                user_steam_id,
+                user_name_for_log,
+                global_wishlist,
+            )
         except Exception as e:
             logger.critical(
-                f"An unexpected error occurred fetching/processing {user_name_for_log}'s wishlist: {e}",
+                f"An unexpected error occurred fetching/processing "
+                f"{user_name_for_log}'s wishlist: {e}",
                 exc_info=True,
             )
 
@@ -170,10 +187,15 @@ async def process_wishlist_duplicates(
 
     if len(sorted_duplicate_games) > MAX_WISHLIST_GAMES_TO_PROCESS:
         logger.warning(
-            f"Detected {len(sorted_duplicate_games)} common wishlist games. Processing only the latest {MAX_WISHLIST_GAMES_TO_PROCESS} to avoid rate limits."
+            f"Detected {len(sorted_duplicate_games)} common wishlist games. "
+            f"Processing only the latest {MAX_WISHLIST_GAMES_TO_PROCESS} to avoid rate limits."
         )
         games_to_process = sorted_duplicate_games[:MAX_WISHLIST_GAMES_TO_PROCESS]
-        message_prefix = f"Detected {len(sorted_duplicate_games)} common wishlist games. Processing only the latest {MAX_WISHLIST_GAMES_TO_PROCESS}. More may be announced in subsequent checks.\n"
+        message_prefix = (
+            f"Detected {len(sorted_duplicate_games)} common wishlist games. "
+            f"Processing only the latest {MAX_WISHLIST_GAMES_TO_PROCESS}. "
+            "More may be announced in subsequent checks.\n"
+        )
     else:
         games_to_process = sorted_duplicate_games
         message_prefix = ""
@@ -181,12 +203,17 @@ async def process_wishlist_duplicates(
     # Now process the selected games and fetch their details
     duplicate_games_for_display = []
     saved_game_appids = {item[0] for item in get_saved_games()}
+    # Details fetched here are handed to format_message so it does not request the same
+    # app ids a second time.
+    fetched_details: dict[str, dict] = {}
 
     for item in games_to_process:
         app_id = item[0]
 
+        # Same endpoint and locale as family_utils.format_message, so the details cached
+        # below can be reused there verbatim.
         game_url = (
-            f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+            f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=fr"
         )
         logger.info(f"Fetching app details for wishlist AppID: {app_id}")
 
@@ -211,6 +238,8 @@ async def process_wishlist_duplicates(
                 )
                 continue
 
+            fetched_details[str(app_id)] = game_data
+
             # Use cached boolean fields for faster performance
             is_family_shared = game_data.get("is_family_shared", False)
 
@@ -224,7 +253,8 @@ async def process_wishlist_duplicates(
                 duplicate_games_for_display.append(item)
             else:
                 logger.debug(
-                    f"Skipping wishlist game {app_id}: not a paid game, not family shared category, or no recommendations, or already owned."
+                    f"Skipping wishlist game {app_id}: not a paid game, "
+                    "not family shared category, or no recommendations, or already owned."
                 )
 
         except Exception as e:
@@ -235,7 +265,7 @@ async def process_wishlist_duplicates(
 
     if duplicate_games_for_display:
         wishlist_message_content = await format_message(
-            duplicate_games_for_display, short=False
+            duplicate_games_for_display, short=False, cached_data=fetched_details
         )
         full_message = message_prefix + wishlist_message_content
         return {

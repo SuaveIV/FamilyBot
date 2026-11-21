@@ -1,0 +1,1559 @@
+{"fn": "split_message", "args": ["﻿bom", 255], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["ns:key.path", 255], "ok": ["ns:key.path"]}
+{"fn": "split_message", "args": ["ns:key.path", 2147483647], "ok": ["ns:key.path"]}
+{"fn": "split_message", "args": ["İstanbul", 100], "ok": ["İstanbul"]}
+{"fn": "split_message", "args": ["emoji 👍🏽 mix", 2], "ok": ["emoj...", "👍...", "mi..."]}
+{"fn": "split_message", "args": ["HELLO", 2], "ok": ["HELL..."]}
+{"fn": "split_message", "args": ["a:b:c", 7], "ok": ["a:b:c"]}
+{"fn": "split_message", "args": ["日本語のテキスト", 2], "ok": ["日本語のテキス..."]}
+{"fn": "split_message", "args": ["trailing.", 9223372036854775807], "ok": ["trailing."]}
+{"fn": "split_message", "args": ["😀", 2], "ok": ["😀"]}
+{"fn": "split_message", "args": ["a.b.c", 255], "ok": ["a.b.c"]}
+{"fn": "split_message", "args": ["ns:key.pathhello", {"$undefined": true}], "ok": ["ns:key.pathhello"]}
+{"fn": "split_message", "args": ["aHello World", 7], "ok": ["aHello", "World"]}
+{"fn": "split_message", "args": ["straße", 7], "ok": ["straße"]}
+{"fn": "split_message", "args": ["😀", -1], "ok": ["..."]}
+{"fn": "split_message", "args": ["ns:key.path", -1], "ok": ["ns:key...."]}
+{"fn": "split_message", "args": ["abc", 1], "ok": ["a..."]}
+{"fn": "split_message", "args": ["hellohello world", {"$undefined": true}], "ok": ["hellohello world"]}
+{"fn": "split_message", "args": ["﻿bom", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["﻿bom", 42], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["😀a😀b😀c", 100], "ok": ["😀a😀b😀c"]}
+{"fn": "split_message", "args": ["hello world", {"$undefined": true}], "ok": ["hello world"]}
+{"fn": "split_message", "args": ["é"], "ok": ["é"]}
+{"fn": "split_message", "args": ["emoji 👍🏽 mix", -1], "ok": ["e...", "...", "..."]}
+{"fn": "split_message", "args": ["ab", 7], "ok": ["ab"]}
+{"fn": "split_message", "args": ["", 42], "ok": [""]}
+{"fn": "split_message", "args": ["😀"], "ok": ["😀"]}
+{"fn": "split_message", "args": ["Hello World", {"$undefined": true}], "ok": ["Hello World"]}
+{"fn": "split_message", "args": ["é", {"$undefined": true}], "ok": ["é"]}
+{"fn": "split_message", "args": ["abc", {"$undefined": true}], "ok": ["abc"]}
+{"fn": "split_message", "args": ["ab", -1], "ok": ["..."]}
+{"fn": "split_message", "args": ["  padded  ", 1], "ok": ["", "", "padded", "", ""]}
+{"fn": "split_message", "args": ["{name} has {count} items", {"$undefined": true}], "ok": ["{name} has {count} items"]}
+{"fn": "split_message", "args": ["HELLO", 7], "ok": ["HELLO"]}
+{"fn": "split_message", "args": ["  padded  "], "ok": ["  padded  "]}
+{"fn": "split_message", "args": ["emoji 👍🏽 mixa..b"], "ok": ["emoji 👍🏽 mixa..b"]}
+{"fn": "split_message", "args": ["ab"], "ok": ["ab"]}
+{"fn": "split_message", "args": ["a.b.c", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["a:b:c", 2147483647], "ok": ["a:b:c"]}
+{"fn": "split_message", "args": ["ab", 0], "ok": ["..."]}
+{"fn": "split_message", "args": ["a..b", 1], "ok": ["a...."]}
+{"fn": "split_message", "args": ["a..b", 0], "ok": ["a..."]}
+{"fn": "split_message", "args": ["😀a", 2147483647], "ok": ["😀a"]}
+{"fn": "split_message", "args": ["ΣΊΣΥΦΟΣ", 2], "ok": ["ΣΊΣΥΦΟ..."]}
+{"fn": "split_message", "args": ["{name} has {count} items", 42], "ok": ["{name} has {count} items"]}
+{"fn": "split_message", "args": ["key_name-1", 9223372036854775807], "ok": ["key_name-1"]}
+{"fn": "split_message", "args": ["{name} has {count} items", -1], "ok": ["{n...", "...", "{co...", "i..."]}
+{"fn": "split_message", "args": ["日本語のテキスト", 42], "ok": ["日本語のテキスト"]}
+{"fn": "split_message", "args": ["tab\tseparated"], "ok": ["tab\tseparated"]}
+{"fn": "split_message", "args": [":a:b:c"], "ok": [":a:b:c"]}
+{"fn": "split_message", "args": ["😀", 2147483647], "ok": ["😀"]}
+{"fn": "split_message", "args": ["hello world", 0], "ok": ["he...", "wo..."]}
+{"fn": "split_message", "args": ["straße", 0], "ok": ["str..."]}
+{"fn": "split_message", "args": ["日本語のテキストİstanbul", 2], "ok": ["日本語のテキストİstanbu..."]}
+{"fn": "split_message", "args": ["é", 1], "ok": ["..."]}
+{"fn": "split_message", "args": ["key_name-1a.b.c", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["a.b.c", 2147483647], "ok": ["a.b.c"]}
+{"fn": "split_message", "args": ["a.b.ctab\tseparated", 7], "ok": ["a.b...."]}
+{"fn": "split_message", "args": ["ns:key.path"], "ok": ["ns:key.path"]}
+{"fn": "split_message", "args": ["", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["hello worldemoji 👍🏽 mix"], "ok": ["hello worldemoji 👍🏽 mix"]}
+{"fn": "split_message", "args": ["😀trailing.", -1], "ok": ["😀trail..."]}
+{"fn": "split_message", "args": ["ünïcödéa"], "ok": ["ünïcödéa"]}
+{"fn": "split_message", "args": ["./x/**/*.jsonhello", 0], "ok": ["./x/**/*.jsonhe..."]}
+{"fn": "split_message", "args": ["tab\tseparated", 9223372036854775807], "ok": ["tab\tseparated"]}
+{"fn": "split_message", "args": ["İstanbul", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["a.b.c", 42], "ok": ["a.b.c"]}
+{"fn": "split_message", "args": ["hello", 42], "ok": ["hello"]}
+{"fn": "split_message", "args": ["İstanbul", 255], "ok": ["İstanbul"]}
+{"fn": "split_message", "args": ["", 2147483647], "ok": [""]}
+{"fn": "split_message", "args": ["a..ba😀b😀c", 0], "ok": ["a..ba😀..."]}
+{"fn": "split_message", "args": ["emoji 👍🏽 mixa", 2], "ok": ["emoj...", "👍...", "mix..."]}
+{"fn": "split_message", "args": ["hello world"], "ok": ["hello world"]}
+{"fn": "split_message", "args": ["line1\nline2", 42], "ok": ["line1\nline2"]}
+{"fn": "split_message", "args": ["ns:key.path", {"$undefined": true}], "ok": ["ns:key.path"]}
+{"fn": "split_message", "args": ["trailing.", 1], "ok": ["trailin..."]}
+{"fn": "split_message", "args": ["emoji 👍🏽 mix"], "ok": ["emoji 👍🏽 mix"]}
+{"fn": "split_message", "args": ["./x/**/*.jsona.b.c", 7], "ok": ["./x/..."]}
+{"fn": "split_message", "args": ["a😀b😀c", 2], "ok": ["a😀b😀..."]}
+{"fn": "split_message", "args": ["key_name-1", {"$undefined": true}], "ok": ["key_name-1"]}
+{"fn": "split_message", "args": [".leading", -1], "ok": [".lea..."]}
+{"fn": "split_message", "args": ["a", 7], "ok": ["a"]}
+{"fn": "split_message", "args": ["HELLO", 1], "ok": ["HEL..."]}
+{"fn": "split_message", "args": ["a..b", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["src/a/b.ts", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["ünïcödé"], "ok": ["ünïcödé"]}
+{"fn": "split_message", "args": ["HELLO", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": [".leading", 7], "ok": [".lea..."]}
+{"fn": "split_message", "args": ["  padded  ", {"$undefined": true}], "ok": ["  padded  "]}
+{"fn": "split_message", "args": [":"], "ok": [":"]}
+{"fn": "split_message", "args": ["hello world", -100], "ok": ["...", "..."]}
+{"fn": "split_message", "args": ["a..b  padded  ", 100], "ok": ["a..b  padded  "]}
+{"fn": "split_message", "args": ["﻿bom", 100], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["a:b:c", 100], "ok": ["a:b:c"]}
+{"fn": "split_message", "args": ["emoji 👍🏽 mixa.b.c", 2147483647], "ok": ["emoji 👍🏽 mixa.b.c"]}
+{"fn": "split_message", "args": ["日本語のテキスト"], "ok": ["日本語のテキスト"]}
+{"fn": "split_message", "args": ["./x/**/*.json", {"$undefined": true}], "ok": ["./x/**/*.json"]}
+{"fn": "split_message", "args": ["tab\tseparated", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["a..b😀", 2147483647], "ok": ["a..b😀"]}
+{"fn": "split_message", "args": [".leading", {"$undefined": true}], "ok": [".leading"]}
+{"fn": "split_message", "args": ["HELLOtab\tseparated", 7], "ok": ["HELL..."]}
+{"fn": "split_message", "args": ["line1\nline2ab", -2147483648], "ok": ["...", "..."]}
+{"fn": "split_message", "args": ["a.b.c"], "ok": ["a.b.c"]}
+{"fn": "split_message", "args": ["key_name-1hello", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["a", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["  padded  ", 2], "ok": ["", "padded", ""]}
+{"fn": "split_message", "args": ["HELLO", 42], "ok": ["HELLO"]}
+{"fn": "split_message", "args": ["tab\tseparated", 7], "ok": ["tab\t..."]}
+{"fn": "split_message", "args": [".leading", 100], "ok": [".leading"]}
+{"fn": "split_message", "args": ["line1\nline2", 2147483647], "ok": ["line1\nline2"]}
+{"fn": "split_message", "args": ["ns:key.path", 7], "ok": ["ns:k..."]}
+{"fn": "split_message", "args": ["a..bemoji 👍🏽 mix", 255], "ok": ["a..bemoji 👍🏽 mix"]}
+{"fn": "split_message", "args": ["﻿bom﻿bom", 2], "ok": ["﻿bom﻿bo..."]}
+{"fn": "split_message", "args": ["key_name-1", -1], "ok": ["key_na..."]}
+{"fn": "split_message", "args": ["trailing.日本語のテキスト", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["hello world", 42], "ok": ["hello world"]}
+{"fn": "split_message", "args": ["Hello World"], "ok": ["Hello World"]}
+{"fn": "split_message", "args": ["{name} has {count} items", 255], "ok": ["{name} has {count} items"]}
+{"fn": "split_message", "args": ["src/a/b.ts", 255], "ok": ["src/a/b.ts"]}
+{"fn": "split_message", "args": ["src/a/b.ts", 100], "ok": ["src/a/b.ts"]}
+{"fn": "split_message", "args": ["HELLO./x/**/*.json", 100], "ok": ["HELLO./x/**/*.json"]}
+{"fn": "split_message", "args": ["﻿bom"], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["İstanbul", 2], "ok": ["İstanbu..."]}
+{"fn": "split_message", "args": ["ab", {"$undefined": true}], "ok": ["ab"]}
+{"fn": "split_message", "args": ["emoji 👍🏽 mix", 100], "ok": ["emoji 👍🏽 mix"]}
+{"fn": "split_message", "args": [":😀", 42], "ok": [":😀"]}
+{"fn": "split_message", "args": ["a😀b😀c", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["İstanbul"], "ok": ["İstanbul"]}
+{"fn": "split_message", "args": ["hello world", 9223372036854775807], "ok": ["hello world"]}
+{"fn": "split_message", "args": ["é./x/**/*.json", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["./x/**/*.json", 2], "ok": ["./x/**/*.jso..."]}
+{"fn": "split_message", "args": ["ns:key.pathtab\tseparated", {"$undefined": true}], "ok": ["ns:key.pathtab\tseparated"]}
+{"fn": "split_message", "args": ["./x/**/*.jsonemoji 👍🏽 mix", {"$undefined": true}], "ok": ["./x/**/*.jsonemoji 👍🏽 mix"]}
+{"fn": "split_message", "args": ["a", 1], "ok": ["a"]}
+{"fn": "split_message", "args": ["ΣΊΣΥΦΟΣ", 255], "ok": ["ΣΊΣΥΦΟΣ"]}
+{"fn": "split_message", "args": ["hello", 255], "ok": ["hello"]}
+{"fn": "split_message", "args": ["src/a/b.ts", {"$undefined": true}], "ok": ["src/a/b.ts"]}
+{"fn": "split_message", "args": ["hello", {"$undefined": true}], "ok": ["hello"]}
+{"fn": "split_message", "args": [".leading", 42], "ok": [".leading"]}
+{"fn": "split_message", "args": ["src/a/b.ts", -1], "ok": ["src/a/..."]}
+{"fn": "split_message", "args": ["﻿bom", -1], "ok": ["..."]}
+{"fn": "split_message", "args": ["trailing.src/a/b.ts", {"$undefined": true}], "ok": ["trailing.src/a/b.ts"]}
+{"fn": "split_message", "args": ["hello.leading", 100], "ok": ["hello.leading"]}
+{"fn": "split_message", "args": ["./x/**/*.json", -1], "ok": ["./x/**/*...."]}
+{"fn": "split_message", "args": ["hello", 2147483647], "ok": ["hello"]}
+{"fn": "split_message", "args": ["straße", 9223372036854775807], "ok": ["straße"]}
+{"fn": "split_message", "args": ["line1\nline2", -1], "ok": ["l...", "l..."]}
+{"fn": "split_message", "args": ["HELLO", 100], "ok": ["HELLO"]}
+{"fn": "split_message", "args": ["line1\nline2tab\tseparated", -2147483648], "ok": ["...", "..."]}
+{"fn": "split_message", "args": ["ΣΊΣΥΦΟΣ"], "ok": ["ΣΊΣΥΦΟΣ"]}
+{"fn": "split_message", "args": ["a", 42], "ok": ["a"]}
+{"fn": "split_message", "args": ["HELLO", 255], "ok": ["HELLO"]}
+{"fn": "split_message", "args": ["ΣΊΣΥΦΟΣ", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["a", 2], "ok": ["a"]}
+{"fn": "split_message", "args": ["", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["ünïcödé", -1], "ok": ["ünï..."]}
+{"fn": "split_message", "args": ["a😀b😀c", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["ab{name} has {count} items", 42], "ok": ["ab{name} has {count} items"]}
+{"fn": "split_message", "args": ["é", 100], "ok": ["é"]}
+{"fn": "split_message", "args": ["tab\tseparateda😀b😀c", {"$undefined": true}], "ok": ["tab\tseparateda😀b😀c"]}
+{"fn": "split_message", "args": ["hello", -1], "ok": ["h..."]}
+{"fn": "split_message", "args": ["straße", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["  padded  ", 255], "ok": ["  padded  "]}
+{"fn": "split_message", "args": ["a.b.cemoji 👍🏽 mix", 100], "ok": ["a.b.cemoji 👍🏽 mix"]}
+{"fn": "split_message", "args": ["trailing.", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["é", 7], "ok": ["é"]}
+{"fn": "split_message", "args": ["ns:key.pathhello world", 42], "ok": ["ns:key.pathhello world"]}
+{"fn": "split_message", "args": ["😀", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["a..b", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["ab", 2147483647], "ok": ["ab"]}
+{"fn": "split_message", "args": ["日本語のテキスト", 7], "ok": ["日本語の..."]}
+{"fn": "split_message", "args": ["﻿bom", 7], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["a..b", -1], "ok": ["..."]}
+{"fn": "split_message", "args": ["a..b  padded  ", {"$undefined": true}], "ok": ["a..b  padded  "]}
+{"fn": "split_message", "args": ["ΣΊΣΥΦΟΣhello"], "ok": ["ΣΊΣΥΦΟΣhello"]}
+{"fn": "split_message", "args": ["./x/**/*.json"], "ok": ["./x/**/*.json"]}
+{"fn": "split_message", "args": ["hello world", -2147483648], "ok": ["...", "..."]}
+{"fn": "split_message", "args": ["abcns:key.path", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["é", 0], "ok": ["..."]}
+{"fn": "split_message", "args": ["ünïcödé", 1], "ok": ["ünïcö..."]}
+{"fn": "split_message", "args": ["{name} has {count} itemskey_name-1"], "ok": ["{name} has {count} itemskey_name-1"]}
+{"fn": "split_message", "args": ["Hello Worlda..b", {"$undefined": true}], "ok": ["Hello Worlda..b"]}
+{"fn": "split_message", "args": ["😀", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["😀", 100], "ok": ["😀"]}
+{"fn": "split_message", "args": ["a😀b😀cünïcödé", 42], "ok": ["a😀b😀cünïcödé"]}
+{"fn": "split_message", "args": [":", 2147483647], "ok": [":"]}
+{"fn": "split_message", "args": ["key_name-1", 100], "ok": ["key_name-1"]}
+{"fn": "split_message", "args": ["Hello World", 42], "ok": ["Hello World"]}
+{"fn": "split_message", "args": ["a.b.cline1\nline2"], "ok": ["a.b.cline1\nline2"]}
+{"fn": "split_message", "args": ["a:b:c:", 2147483647], "ok": ["a:b:c:"]}
+{"fn": "split_message", "args": ["ΣΊΣΥΦΟΣ", 100], "ok": ["ΣΊΣΥΦΟΣ"]}
+{"fn": "split_message", "args": ["straßeHello World", 2147483647], "ok": ["straßeHello World"]}
+{"fn": "split_message", "args": ["  padded  a", 100], "ok": ["  padded  a"]}
+{"fn": "split_message", "args": ["İstanbulab"], "ok": ["İstanbulab"]}
+{"fn": "split_message", "args": ["a:b:c", {"$undefined": true}], "ok": ["a:b:c"]}
+{"fn": "split_message", "args": ["a", -100], "ok": ["..."]}
+{"fn": "split_message", "args": ["key_name-1", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["tab\tseparatedhello world", 0], "ok": ["tab\tseparatedhe...", "wo..."]}
+{"fn": "split_message", "args": ["ünïcödé", -2147483648], "ok": ["..."]}
+{"fn": "split_message", "args": ["tab\tseparateda", 0], "ok": ["tab\tseparat..."]}
+{"fn": "split_message", "args": ["héllo wörld", 255], "ok": ["héllo wörld"]}
+{"fn": "split_message", "args": ["👍🏽 thumbs", 255], "ok": ["👍🏽 thumbs"]}
+{"fn": "split_message", "args": ["日本語", 255], "ok": ["日本語"]}
+{"fn": "split_message", "args": ["", 255], "ok": [""]}
+{"fn": "split_message", "args": ["é", 255], "ok": ["é"]}
+{"fn": "split_message", "args": ["straße", 255], "ok": ["straße"]}
+{"fn": "split_message", "args": ["ılık ırmak", 255], "ok": ["ılık ırmak"]}
+{"fn": "split_message", "args": ["👨‍👩‍👧 family", 255], "ok": ["👨‍👩‍👧 family"]}
+{"fn": "split_message", "args": ["a b", 255], "ok": ["a b"]}
+{"fn": "split_message", "args": ["a😀b", 255], "ok": ["a😀b"]}
+{"fn": "split_message", "args": ["a²b x½ y①", 255], "ok": ["a²b x½ y①"]}
+{"fn": "split_message", "args": ["aⅠb Ⅻ", 255], "ok": ["aⅠb Ⅻ"]}
+{"fn": "split_message", "args": ["a𐐀b 𝐀bc", 255], "ok": ["a𐐀b 𝐀bc"]}
+{"fn": "split_message", "args": ["कि ٣٤", 255], "ok": ["कि ٣٤"]}
+{"fn": "split_message", "args": ["﻿bom", {"$undefined": true}], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["﻿bom", -7], "ok": ["..."]}
+{"fn": "split_message", "args": ["﻿bom", 0], "ok": ["﻿..."]}
+{"fn": "split_message", "args": ["﻿bom", 2147483648], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["﻿bom", -2147483649], "ok": ["..."]}
+{"fn": "split_message", "args": ["﻿bom", 9007199254740993], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["﻿bom", 9223372036854775807], "ok": ["﻿bom"]}
+{"fn": "split_message", "args": ["﻿bom", -9223372036854775808], "ok": ["..."]}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["", "HELLO", "abc"], "a..b", "😀"], "ok": "a..b\nHELLO\nabc"}
+{"fn": "truncate_message_list", "args": [[], "./x/**/*.json", {"$undefined": true}, 0], "ok": "./x/**/*.json"}
+{"fn": "truncate_message_list", "args": [["ünïcödé", "{name} has {count} items"], "ab", "AB", 42], "ok": "abünïcödé\n{name} has {count} items"}
+{"fn": "truncate_message_list", "args": [["a..b", "line1\nline2"], {"$undefined": true}, "é", 255], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["a.b.c", "ΣΊΣΥΦΟΣ", "a😀b😀c"], "src/a/b.ts", "a.b.c", 0], "ok": ""}
+{"fn": "truncate_message_list", "args": [["﻿bom"], "a:b:ckey_name-1", "key_name-1"], "ok": "a:b:ckey_name-1﻿bom"}
+{"fn": "truncate_message_list", "args": [["a:b:c日本語のテキスト", "emoji 👍🏽 mix", "a.b.c"], ":", ":", 2147483647], "ok": ":a:b:c日本語のテキスト\nemoji 👍🏽 mix\na.b.c"}
+{"fn": "truncate_message_list", "args": [["hello", "HELLO"], {"$undefined": true}, ".leading", 0], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["", "tab\tseparated"], {"$undefined": true}, "line1\nline2﻿bom", -1], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], "./x/**/*.json", "so", 2147483647], "ok": "./x/**/*.json"}
+{"fn": "truncate_message_list", "args": [["ünïcödé", "ΣΊΣΥΦΟΣ﻿bom", "ΣΊΣΥΦΟΣ"], "hello world", {"$undefined": true}, {"$undefined": true}], "ok": "hello worldünïcödé\nΣΊΣΥΦΟΣ﻿bom\nΣΊΣΥΦΟΣ"}
+{"fn": "truncate_message_list", "args": [["hello world", "./x/**/*.json"], {"$undefined": true}, {"$undefined": true}, 255], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["HELLO", "ΣΊΣΥΦΟΣ"], {"$undefined": true}, "line1\nline2./x/**/*.json", 2147483647], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], "abc😀", "key_name-1"], "ok": "abc😀"}
+{"fn": "truncate_message_list", "args": [["a:b:c", "a😀b😀csrc/a/b.ts"], {"$undefined": true}, "a", 1], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["ünïcödé", "ünïcödé", "ab"], {"$undefined": true}, "hello", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[".leading😀", ":"], {"$undefined": true}, "key_name-1ab", 255], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["ab", "ünïcödéHello World"], "﻿bom", {"$undefined": true}, {"$undefined": true}], "ok": "﻿bomab\nünïcödéHello World"}
+{"fn": "truncate_message_list", "args": [[":", "emoji 👍🏽 mix"], "HELLO", ".leading", 2], "ok": "HE"}
+{"fn": "truncate_message_list", "args": [["İstanbul", "HELLO", "ns:key.path"], {"$undefined": true}, {"$undefined": true}, {"$undefined": true}], "ok": "İstanbul\nHELLO\nns:key.path"}
+{"fn": "truncate_message_list", "args": [[":", "ΣΊΣΥΦΟΣ", "tab\tseparated"], "  padded  ./x/**/*.json"], "ok": "  padded  ./x/**/*.json:\nΣΊΣΥΦΟΣ\ntab\tseparated"}
+{"fn": "truncate_message_list", "args": [["emoji 👍🏽 mix", "a..ba😀b😀c", "src/a/b.ts"], "日本語のテキストstraße", {"$undefined": true}, 9223372036854775807], "ok": "日本語のテキストstraßeemoji 👍🏽 mix\na..ba😀b😀c\nsrc/a/b.ts"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, {"$undefined": true}, {"$undefined": true}], "ok": ""}
+{"fn": "truncate_message_list", "args": [["./x/**/*.json", "hellosrc/a/b.ts", "{name} has {count} items"], "{name} has {count} items", "hello", 100], "ok": "{name} has {count} items./x/**/*.json\nhellosrc/a/b.ts\n{name} has {count} items"}
+{"fn": "truncate_message_list", "args": [["ab"], ":B", "a:b:c", 255], "ok": ":Bab"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "HELLOtrailing.", 42], "ok": null}
+{"fn": "truncate_message_list", "args": [["ns:key.path", "key_name-1"], "./x/**/*.json", "hello", {"$undefined": true}], "ok": "./x/**/*.jsonns:key.path\nkey_name-1"}
+{"fn": "truncate_message_list", "args": [["trailing."], "a:b:c", "C", 42], "ok": "a:b:ctrailing."}
+{"fn": "truncate_message_list", "args": [["ünïcödé"], "./x/**/*.json", {"$undefined": true}, 100], "ok": "./x/**/*.jsonünïcödé"}
+{"fn": "truncate_message_list", "args": [["line1\nline2", "ab"], "emoji 👍🏽 mix", "X", 2], "ok": "em"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "ns:key.path", "{name} has {count} items", {"$undefined": true}], "ok": "ns:key.pathİstanbul"}
+{"fn": "truncate_message_list", "args": [[".leading", "Hello World"], {"$undefined": true}, {"$undefined": true}, 255], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], "a:b:c", "straße"], "ok": "a:b:c"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, {"$undefined": true}, 7], "ok": null}
+{"fn": "truncate_message_list", "args": [["aba", "src/a/b.ts", "key_name-1"], "ahello world", "﻿bom", 100], "ok": "ahello worldaba\nsrc/a/b.ts\nkey_name-1"}
+{"fn": "truncate_message_list", "args": [["key_name-1", "ΣΊΣΥΦΟΣ"], "{name} has {count} items", {"$undefined": true}, {"$undefined": true}], "ok": "{name} has {count} itemskey_name-1\nΣΊΣΥΦΟΣ"}
+{"fn": "truncate_message_list", "args": [["{name} has {count} items", "ab"], "key_name-1", "AME-1", -1], "ok": "key_name-"}
+{"fn": "truncate_message_list", "args": [["a.b.c"], {"$undefined": true}, ".leading"], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["", ".leading", "src/a/b.tsa:b:c"], {"$undefined": true}, "  padded  "], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["straße", "key_name-1a:b:c"], ".leadinga..b", "key_name-1", 42], "ok": ".leadinga..bstraße\nkey_name-1a:b:c"}
+{"fn": "truncate_message_list", "args": [["﻿bom﻿bom"], {"$undefined": true}, "a😀b😀c", {"$undefined": true}], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["src/a/b.ts", "trailing."], "tab\tseparateda..b", {"$undefined": true}, 100], "ok": "tab\tseparateda..bsrc/a/b.ts\ntrailing."}
+{"fn": "truncate_message_list", "args": [["hello", "﻿bom", "a"], "ΣΊΣΥΦΟΣ{name} has {count} items", "", 42], "ok": "ΣΊΣΥΦΟΣ{name} has {count} itemshello\n﻿bom"}
+{"fn": "truncate_message_list", "args": [["ünïcödé"], "日本語のテキスト", "a", 2], "ok": "日本"}
+{"fn": "truncate_message_list", "args": [["a"], "hello", {"$undefined": true}, 7], "ok": "helloa"}
+{"fn": "truncate_message_list", "args": [[""], "a:b:c", ".leading", 1], "ok": "a"}
+{"fn": "truncate_message_list", "args": [["a:b:c日本語のテキスト"], "a:b:c", "HELLO", {"$undefined": true}], "ok": "a:b:ca:b:c日本語のテキスト"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "./x/**/*.json", {"$undefined": true}], "ok": null}
+{"fn": "truncate_message_list", "args": [["./x/**/*.json"], "😀", "İstanbulHELLO", 2], "ok": "😀"}
+{"fn": "truncate_message_list", "args": [["  padded  ", ":", "ΣΊΣΥΦΟΣ"], {"$undefined": true}, {"$undefined": true}, {"$undefined": true}], "ok": "  padded  \n:\nΣΊΣΥΦΟΣ"}
+{"fn": "truncate_message_list", "args": [[], "a:b:c", "Hello World", 1], "ok": "a:b:c"}
+{"fn": "truncate_message_list", "args": [[], "İstanbul", {"$undefined": true}, 9223372036854775807], "ok": "İstanbul"}
+{"fn": "truncate_message_list", "args": [[], "trailing.", "i", {"$undefined": true}], "ok": "trailing."}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣ", "a..b"], "ΣΊΣΥΦΟΣa:b:c", "src/a/b.ts日本語のテキスト", {"$undefined": true}], "ok": "ΣΊΣΥΦΟΣa:b:cΣΊΣΥΦΟΣ\na..b"}
+{"fn": "truncate_message_list", "args": [["é", "hello world"], "b", "a.b.c", 2147483647], "ok": "bé\nhello world"}
+{"fn": "truncate_message_list", "args": [["İstanbul", "é", "ünïcödé"], {"$undefined": true}, {"$undefined": true}, {"$undefined": true}], "ok": "İstanbul\né\nünïcödé"}
+{"fn": "truncate_message_list", "args": [["emoji 👍🏽 mix"], {"$undefined": true}, "HELLO", 1], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["a.b.ckey_name-1"], "a", ":", 0], "ok": ""}
+{"fn": "truncate_message_list", "args": [["hello", "a..bsrc/a/b.ts", "ns:key.path"], "Hello World", "emoji 👍🏽 mix😀", -2147483648], "ok": ""}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣabc"], {"$undefined": true}, "İstanbul", {"$undefined": true}], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["HELLO"], "tab\tseparated", "aba", 7], "ok": "tab\tsep"}
+{"fn": "truncate_message_list", "args": [["a.b.ckey_name-1", ".leading", ":  padded  "], {"$undefined": true}, "a.b.cline1\nline2", 7], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["a.b.c", ":"], {"$undefined": true}, "İstanbul", 100], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["﻿bom"], ":", "ns:key.path", 9223372036854775807], "ok": ":﻿bom"}
+{"fn": "truncate_message_list", "args": [["é", "﻿bomns:key.path"], "hello world", "é", 0], "ok": ""}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "tab\tseparated", -1], "ok": null}
+{"fn": "truncate_message_list", "args": [["a😀b😀c", "a😀b😀cİstanbul"], "ünïcödé", "a", 7], "ok": "ünïcödé"}
+{"fn": "truncate_message_list", "args": [["./x/**/*.json", "a", "a.b.c"], {"$undefined": true}, "a.b.c", -2147483648], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["", "İstanbul"], {"$undefined": true}, "a.b.c", 42], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["emoji 👍🏽 mix", "Hello World"], "İstanbul", "hello world"], "ok": "İstanbulemoji 👍🏽 mix\nHello World"}
+{"fn": "truncate_message_list", "args": [["{name} has {count} itemsHELLO", "  padded  "]], "ok": "{name} has {count} itemsHELLO\n  padded  "}
+{"fn": "truncate_message_list", "args": [[], ":hello world", "a:b:c", 1], "ok": ":hello world"}
+{"fn": "truncate_message_list", "args": [["ns:key.path"], ".leadingemoji 👍🏽 mix", {"$undefined": true}], "ok": ".leadingemoji 👍🏽 mixns:key.path"}
+{"fn": "truncate_message_list", "args": [[":"], "trailing..leading", "ünïcödé", 100], "ok": "trailing..leading:"}
+{"fn": "truncate_message_list", "args": [["a..bHELLO", "a..b", "İstanbul"], "a😀b😀c", {"$undefined": true}, -2147483648], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["日本語のテキスト", "a..b"], "line1\nline2.leading", "ünïcödétrailing.", 7], "ok": "line1\nl"}
+{"fn": "truncate_message_list", "args": [["ünïcödé", "日本語のテキスト", "./x/**/*.json"], "é", "{name} has {count} items", {"$undefined": true}], "ok": "éünïcödé\n日本語のテキスト\n./x/**/*.json"}
+{"fn": "truncate_message_list", "args": [[], "hello world", "a", -2147483648], "ok": "hello world"}
+{"fn": "truncate_message_list", "args": [["hello world", ":", "{name} has {count} items"], "a😀b😀c", {"$undefined": true}, 1], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["ünïcödé", "straße", "helloé"], "ünïcödé", "tab\tseparated", 2], "ok": "ün"}
+{"fn": "truncate_message_list", "args": [["trailing.", "﻿bom"], "tab\tseparated", "ünïcödé", 2147483647], "ok": "tab\tseparatedtrailing.\n﻿bom"}
+{"fn": "truncate_message_list", "args": [["helloa", "﻿bomns:key.path", "ab"], "😀", "HELLO", 1], "ok": "😀"}
+{"fn": "truncate_message_list", "args": [["a.b.c"], "emoji 👍🏽 mixa.b.c", "ji 👍🏽 ", 0], "ok": ""}
+{"fn": "truncate_message_list", "args": [[], "key_name-1", "src/a/b.tsstraße", 2], "ok": "key_name-1"}
+{"fn": "truncate_message_list", "args": [["a😀b😀cünïcödé", "😀"], "hello", "a..b", {"$undefined": true}], "ok": "helloa😀b😀cünïcödé\n😀"}
+{"fn": "truncate_message_list", "args": [["./x/**/*.json", ":"], "İstanbultrailing.", {"$undefined": true}, {"$undefined": true}], "ok": "İstanbultrailing../x/**/*.json\n:"}
+{"fn": "truncate_message_list", "args": [[], "{name} has {count} items", {"$undefined": true}, 1], "ok": "{name} has {count} items"}
+{"fn": "truncate_message_list", "args": [[], "İstanbul", "HELLO", 255], "ok": "İstanbul"}
+{"fn": "truncate_message_list", "args": [["ns:key.pathHELLO", "Hello Worlda😀b😀c", "a:b:c﻿bom"], "ab", "ab", 2147483647], "ok": "abns:key.pathHELLO\nHello Worlda😀b😀c\na:b:c﻿bom"}
+{"fn": "truncate_message_list", "args": [["Hello World", "Hello World"], "src/a/b.tstrailing.", {"$undefined": true}, -2147483648], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["hello worldHello World", "ns:key.path", "a:b:cns:key.path"], {"$undefined": true}, "  padded  ", {"$undefined": true}], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "key_name-1hello", -2147483648], "ok": null}
+{"fn": "truncate_message_list", "args": [["src/a/b.ts"], "a..b"], "ok": "a..bsrc/a/b.ts"}
+{"fn": "truncate_message_list", "args": [[], "a", "İstanbul", 42], "ok": "a"}
+{"fn": "truncate_message_list", "args": [["abc", "😀"], "rl", "Hello World", 255], "ok": "rlabc\n😀"}
+{"fn": "truncate_message_list", "args": [[], "İstanbul", "  padded  ", 42], "ok": "İstanbul"}
+{"fn": "truncate_message_list", "args": [["trailing.", "abc"], "emoji 👍🏽 mixhello world", "a.b.c", -2147483648], "ok": ""}
+{"fn": "truncate_message_list", "args": [["a..bhello world", "src/a/b.ts"], "key_name-1", "abc", {"$undefined": true}], "ok": "key_name-1a..bhello world\nsrc/a/b.ts"}
+{"fn": "truncate_message_list", "args": [["﻿bom﻿bom", "src/a/b.ts", "line1\nline2"], "hello", "./x/**/*.json", 255], "ok": "hello﻿bom﻿bom\nsrc/a/b.ts\nline1\nline2"}
+{"fn": "truncate_message_list", "args": [[], "abc", "", 9223372036854775807], "ok": "abc"}
+{"fn": "truncate_message_list", "args": [["key_name-1", "hello{name} has {count} items", "﻿bom"], "é", "hello", 2], "ok": "é"}
+{"fn": "truncate_message_list", "args": [[], "😀abc", "😀ABC", -2147483648], "ok": "😀abc"}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣ", "emoji 👍🏽 mix"], {"$undefined": true}, "😀", {"$undefined": true}], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["ünïcödé  padded  ", "Hello WorldHELLO", "straße"], "aße", "straße", 9223372036854775807], "ok": "aßeünïcödé  padded  \nHello WorldHELLO\nstraße"}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣ./x/**/*.json", "straße", "é"], "o", "﻿bom", 1], "ok": "o"}
+{"fn": "truncate_message_list", "args": [["a..bHELLO"], {"$undefined": true}, "ab", -2147483648], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["hello"], "ns:key.patha:b:c", ":key.pat"], "ok": "ns:key.patha:b:chello"}
+{"fn": "truncate_message_list", "args": [[], "tab\tseparated", "日本語のテキスト", 7], "ok": "tab\tseparated"}
+{"fn": "truncate_message_list", "args": [["emoji 👍🏽 mix", "hello worldtrailing."], "", {"$undefined": true}, 2147483647], "ok": "emoji 👍🏽 mix\nhello worldtrailing."}
+{"fn": "truncate_message_list", "args": [["日本語のテキスト", "ünïcödé", "ünïcödé"], "ab", "ab", 2147483647], "ok": "ab日本語のテキスト\nünïcödé\nünïcödé"}
+{"fn": "truncate_message_list", "args": [[":"], "a😀b😀c", "a😀b😀", 255], "ok": "a😀b😀c:"}
+{"fn": "truncate_message_list", "args": [["éab", "  padded  a.b.c", "straße"], "é", "́", 100], "ok": "ééab\n  padded  a.b.c\nstraße"}
+{"fn": "truncate_message_list", "args": [["😀", "aİstanbul", "😀"], "  padded  ", "d ", 0], "ok": ""}
+{"fn": "truncate_message_list", "args": [[], "é", "́", {"$undefined": true}], "ok": "é"}
+{"fn": "truncate_message_list", "args": [["trailing.", "a", "HELLO"], {"$undefined": true}, {"$undefined": true}, 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["line1\nline2"], {"$undefined": true}, "  padded  ", 255], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["a", "😀"], "straße", {"$undefined": true}, -2147483648], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["a:b:c"], {"$undefined": true}, "{name} has {count} items", -100], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], "a", "A", {"$undefined": true}], "ok": "a"}
+{"fn": "truncate_message_list", "args": [["a😀b😀c"], "a:b:c", "HELLO", 1], "ok": "a"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], ":ab", "a:b:c"], "ok": ":abİstanbul"}
+{"fn": "truncate_message_list", "args": [["key_name-1", "a😀b😀c"], {"$undefined": true}, {"$undefined": true}, 42], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["a  padded  ", "src/a/b.ts", "İstanbul.leading"], "日本語のテキスト", "😀", 42], "ok": "日本語のテキストa  padded  \nsrc/a/b.ts😀"}
+{"fn": "truncate_message_list", "args": [["straße./x/**/*.json"], "hello world", {"$undefined": true}, -1], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["key_name-1", "ünïcödé"], ".leading", "a:b:c", 7], "ok": ".leadin"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, ":﻿bom", 42], "ok": null}
+{"fn": "truncate_message_list", "args": [["./x/**/*.json"], {"$undefined": true}, {"$undefined": true}, {"$undefined": true}], "ok": "./x/**/*.json"}
+{"fn": "truncate_message_list", "args": [["{name} has {count} items"], "emoji 👍🏽 mix", "👍🏽 mi", -100], "ok": ""}
+{"fn": "truncate_message_list", "args": [["{name} has {count} items", "hello worldé"], "{name} has {count} itemsHello World", "日本語のテキスト", 255], "ok": "{name} has {count} itemsHello World{name} has {count} items\nhello worldé"}
+{"fn": "truncate_message_list", "args": [["Hello World", "hello.leading"], "", "{name} has {count} items", 1], "error": "KeyError: 'name'"}
+{"fn": "truncate_message_list", "args": [[".leading", "line1\nline2"], "﻿bom", "ünïcödé", 100], "ok": "﻿bom.leading\nline1\nline2"}
+{"fn": "truncate_message_list", "args": [[], "key_name-1", "😀"], "ok": "key_name-1"}
+{"fn": "truncate_message_list", "args": [["a😀b😀c", "HELLO", "emoji 👍🏽 mix"], "helloab", "﻿bom", 7], "ok": "helloab"}
+{"fn": "truncate_message_list", "args": [[], "a😀b😀ca.b.c", "./x/**/*.jsonİstanbul"], "ok": "a😀b😀ca.b.c"}
+{"fn": "truncate_message_list", "args": [["abc", "HELLO"], {"$undefined": true}, "é😀", 100], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["a😀b😀c", "😀"], "a.b.c", ".", -1], "ok": "a.b."}
+{"fn": "truncate_message_list", "args": [["line1\nline2a", "a.b.c", "ΣΊΣΥΦΟΣ"], "a.b.c", {"$undefined": true}], "ok": "a.b.cline1\nline2a\na.b.c\nΣΊΣΥΦΟΣ"}
+{"fn": "truncate_message_list", "args": [[""], {"$undefined": true}, "﻿bom", {"$undefined": true}], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[":a..b", ":"], "HELLOHello World", {"$undefined": true}, 100], "ok": "HELLOHello World:a..b\n:"}
+{"fn": "truncate_message_list", "args": [[], "﻿bo", "﻿bom", 42], "ok": "﻿bo"}
+{"fn": "truncate_message_list", "args": [["a.b.c", "key_name-1", "{name} has {count} items"], "hello", "Hello World", -100], "ok": ""}
+{"fn": "truncate_message_list", "args": [[".leading", "a😀b😀c", "ΣΊΣΥΦΟΣ"], ".leading", "straße", 2], "ok": ".l"}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣ"], {"$undefined": true}, {"$undefined": true}, 255], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["straße"], "aa..b", "😀", 1], "ok": "a"}
+{"fn": "truncate_message_list", "args": [["{name} has {count} items"], {"$undefined": true}, "./x/**/*.json", -1], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["emoji 👍🏽 mix", "a😀b😀c"], "hello:", "emoji 👍🏽 mix", 0], "ok": ""}
+{"fn": "truncate_message_list", "args": [[], "{name} has {count} items", "", 1], "ok": "{name} has {count} items"}
+{"fn": "truncate_message_list", "args": [[], "tab\tseparated", "{name} has {count} items", 100], "ok": "tab\tseparated"}
+{"fn": "truncate_message_list", "args": [["./x/**/*.json", ".leading"], "{name} has {count} itemsa..b"], "ok": "{name} has {count} itemsa..b./x/**/*.json\n.leading"}
+{"fn": "truncate_message_list", "args": [["é", "./x/**/*.json", "abc"], "straße", "raß", -1], "ok": "straß"}
+{"fn": "truncate_message_list", "args": [["straße", "  padded  "], "İstanbul", "emoji 👍🏽 mixa:b:c", {"$undefined": true}], "ok": "İstanbulstraße\n  padded  "}
+{"fn": "truncate_message_list", "args": [["a😀b😀chello world"], "ünïcödé", "tab\tseparated"], "ok": "ünïcödéa😀b😀chello world"}
+{"fn": "truncate_message_list", "args": [[], "a.b.c", "Hello World", 100], "ok": "a.b.c"}
+{"fn": "truncate_message_list", "args": [["HELLO", "hello world", "HELLOa:b:c"], "src/a/b.ts", ".", 42], "ok": "src/a/b.tsHELLO\nhello world\nHELLOa:b:c"}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣ"], "ΣΊΣΥΦΟΣ", "😀ab", 255], "ok": "ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"}
+{"fn": "truncate_message_list", "args": [["src/a/b.ts", "tab\tseparated", "emoji 👍🏽 mixİstanbul"], "日本語のテキスト", "line1\nline2", 100], "ok": "日本語のテキストsrc/a/b.ts\ntab\tseparated\nemoji 👍🏽 mixİstanbul"}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣ", "ab"], "straße", "ße", {"$undefined": true}], "ok": "straßeΣΊΣΥΦΟΣ\nab"}
+{"fn": "truncate_message_list", "args": [["ns:key.path"], "ΣΊΣΥΦΟΣ", {"$undefined": true}, 1], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["hello world", "hello"], ":", ":"], "ok": ":hello world\nhello"}
+{"fn": "truncate_message_list", "args": [["line1\nline2"], {"$undefined": true}, "Hello World", 255], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[".leading"], "emoji 👍🏽 mix", "tab\tseparated", 2], "ok": "em"}
+{"fn": "truncate_message_list", "args": [["a..b", "src/a/b.tsemoji 👍🏽 mix", "ünïcödé"], ".leading", "{name} has {count} items"], "ok": ".leadinga..b\nsrc/a/b.tsemoji 👍🏽 mix\nünïcödé"}
+{"fn": "truncate_message_list", "args": [["İstanbul", "emoji 👍🏽 mix", "HELLO"], "epar", "tab\tseparated", 255], "ok": "eparİstanbul\nemoji 👍🏽 mix\nHELLO"}
+{"fn": "truncate_message_list", "args": [[], "{name} has {count} itemshello", "日本語のテキスト", 1], "ok": "{name} has {count} itemshello"}
+{"fn": "truncate_message_list", "args": [["﻿bom"], "Hello World", "Wor", 255], "ok": "Hello World﻿bom"}
+{"fn": "truncate_message_list", "args": [["tab\tseparated", "ünïcödé", "abcsrc/a/b.ts"], "a:b:c", {"$undefined": true}, 2], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [[], "ünïcödé", "  padded  tab\tseparated", {"$undefined": true}], "ok": "ünïcödé"}
+{"fn": "truncate_message_list", "args": [[], "日本語のテキスト", {"$undefined": true}, -100], "ok": "日本語のテキスト"}
+{"fn": "truncate_message_list", "args": [[":", "İstanbul", ":"], ".leadingHELLO", "./x/**/*.json", 7], "ok": ".leadin"}
+{"fn": "truncate_message_list", "args": [[], "ns:key.path", "HELLO", 9223372036854775807], "ok": "ns:key.path"}
+{"fn": "truncate_message_list", "args": [["straße", "a😀b😀c"], "﻿bomHELLO", {"$undefined": true}, 9223372036854775807], "ok": "﻿bomHELLOstraße\na😀b😀c"}
+{"fn": "truncate_message_list", "args": [["ns:key.path", "./x/**/*.json"], {"$undefined": true}, ":.leading", 1], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], "日本語のテキスト", "a..b", 42], "ok": "日本語のテキスト"}
+{"fn": "truncate_message_list", "args": [["ünïcödé"], "Hello World./x/**/*.json", {"$undefined": true}, 2147483647], "ok": "Hello World./x/**/*.jsonünïcödé"}
+{"fn": "truncate_message_list", "args": [[], "ab", {"$undefined": true}, 7], "ok": "ab"}
+{"fn": "truncate_message_list", "args": [["ünïcödé", "line1\nline2", "é"], "hello world", {"$undefined": true}, 255], "ok": "hello worldünïcödé\nline1\nline2\né"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "a:b:c", 2], "ok": null}
+{"fn": "truncate_message_list", "args": [["  padded  ", "ünïcödé"], "Hello World", {"$undefined": true}, 1], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["abc", ":", "src/a/b.tshello world"], "ünïcödé日本語のテキスト", "😀", 0], "ok": ""}
+{"fn": "truncate_message_list", "args": [[], "hello world", ":{name} has {count} items", -1], "ok": "hello world"}
+{"fn": "truncate_message_list", "args": [[], "a", {"$undefined": true}, 100], "ok": "a"}
+{"fn": "truncate_message_list", "args": [["straße"], "a.b.c", "İstanbul", 42], "ok": "a.b.cstraße"}
+{"fn": "truncate_message_list", "args": [["emoji 👍🏽 mix", ":", "﻿bom"], "ns:key.path", "./x/**/*.jsonhello", 42], "ok": "ns:key.pathemoji 👍🏽 mix\n:\n﻿bom"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "abc", 42], "ok": null}
+{"fn": "truncate_message_list", "args": [["日本語のテキスト"], "abca..b", {"$undefined": true}, 0], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["helloa.b.c", "./x/**/*.json", "key_name-1"], "line1\nline2", "e1", 2], "ok": "li"}
+{"fn": "truncate_message_list", "args": [["a"], {"$undefined": true}, "ns:key.path", 42], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["hello", "hello"], "HELLO", "emoji 👍🏽 mix"], "ok": "HELLOhello\nhello"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "a..b"], "ok": null}
+{"fn": "truncate_message_list", "args": [["ab", "", "ns:key.path"], {"$undefined": true}, "akey_name-1"], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["hello world"], "emoji 👍🏽 mix", "﻿bom", -1], "ok": "emoji 👍🏽 mi"}
+{"fn": "truncate_message_list", "args": [["日本語のテキスト", "tab\tseparated", "﻿bomünïcödé"], {"$undefined": true}, "ΣΊΣΥΦΟΣab", 1], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], "src/a/b.ts", "/a"], "ok": "src/a/b.ts"}
+{"fn": "truncate_message_list", "args": [["ΣΊΣΥΦΟΣ"], "", {"$undefined": true}, -2147483648], "error": "AttributeError: 'NoneType' object has no attribute 'format'"}
+{"fn": "truncate_message_list", "args": [["tab\tseparated"], {"$undefined": true}, {"$undefined": true}, -100], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["ns:key.path"], "  padded  ", "src/a/b.ts", 2147483647], "ok": "  padded  ns:key.path"}
+{"fn": "truncate_message_list", "args": [["a..bİstanbul", "  padded  ", "key_name-1"], "src/a/b.ts", ":tab\tseparated", 7], "ok": "src/a/b"}
+{"fn": "truncate_message_list", "args": [[], "😀日本語のテキスト", "İstanbul.leading", 2], "ok": "😀日本語のテキスト"}
+{"fn": "truncate_message_list", "args": [["line1\nline2", "src/a/b.ts", "﻿bom"], {"$undefined": true}, "﻿bomabc", 2], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [[], {"$undefined": true}, "a😀b😀c", 9223372036854775807], "ok": null}
+{"fn": "truncate_message_list", "args": [["b", "a", "B", "é", "10", "9", "a"], {"$undefined": true}, "a😀b😀c", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "héllo wörld", "a😀b😀c", 9223372036854775807], "ok": "héllo wörldİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "👍🏽 thumbs", "a😀b😀c", 9223372036854775807], "ok": "👍🏽 thumbsİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "日本語", "a😀b😀c", 9223372036854775807], "ok": "日本語İstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "", "a😀b😀c", 9223372036854775807], "ok": "İstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "é", "a😀b😀c", 9223372036854775807], "ok": "éİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "İstanbul", "a😀b😀c", 9223372036854775807], "ok": "İstanbulİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "straße", "a😀b😀c", 9223372036854775807], "ok": "straßeİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "ılık ırmak", "a😀b😀c", 9223372036854775807], "ok": "ılık ırmakİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "👨‍👩‍👧 family", "a😀b😀c", 9223372036854775807], "ok": "👨‍👩‍👧 familyİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "a b", "a😀b😀c", 9223372036854775807], "ok": "a bİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "ΣΊΣΥΦΟΣ", "a😀b😀c", 9223372036854775807], "ok": "ΣΊΣΥΦΟΣİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "a😀b", "a😀b😀c", 9223372036854775807], "ok": "a😀bİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "﻿bom", "a😀b😀c", 9223372036854775807], "ok": "﻿bomİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "a²b x½ y①", "a😀b😀c", 9223372036854775807], "ok": "a²b x½ y①İstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "aⅠb Ⅻ", "a😀b😀c", 9223372036854775807], "ok": "aⅠb Ⅻİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "a𐐀b 𝐀bc", "a😀b😀c", 9223372036854775807], "ok": "a𐐀b 𝐀bcİstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], "कि ٣٤", "a😀b😀c", 9223372036854775807], "ok": "कि ٣٤İstanbul"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, {"$undefined": true}, 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "héllo wörld", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "👍🏽 thumbs", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "日本語", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "é", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "İstanbul", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "straße", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "ılık ırmak", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "👨‍👩‍👧 family", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a b", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "ΣΊΣΥΦΟΣ", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "﻿bom", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a²b x½ y①", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "aⅠb Ⅻ", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a𐐀b 𝐀bc", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "कि ٣٤", 9223372036854775807], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", {"$undefined": true}], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", -7], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", -1], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", 0], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", 2147483648], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", -2147483649], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", 9007199254740993], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "truncate_message_list", "args": [["İstanbul"], {"$undefined": true}, "a😀b😀c", -9223372036854775808], "error": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'"}
+{"fn": "extract_steam_id", "args": ["  padded  Hello World"], "ok": null}
+{"fn": "extract_steam_id", "args": ["﻿bom"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a:b:c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["{name} has {count} items"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["HELLO"], "ok": null}
+{"fn": "extract_steam_id", "args": ["line1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["{name} has {count} itemsHello World"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a..b"], "ok": null}
+{"fn": "extract_steam_id", "args": [".leadinghello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキスト"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello worldkey_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ns:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["abc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["trailing."], "ok": null}
+{"fn": "extract_steam_id", "args": ["  padded  "], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello Worldünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["./x/**/*.json"], "ok": null}
+{"fn": "extract_steam_id", "args": [".leading"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": [""], "ok": null}
+{"fn": "extract_steam_id", "args": [":"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödéhello"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a.b.c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödé﻿bom"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello Worldstraße"], "ok": null}
+{"fn": "extract_steam_id", "args": ["key_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello./x/**/*.json"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.ts"], "ok": null}
+{"fn": "extract_steam_id", "args": ["é"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ΣΊΣΥΦΟΣns:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["  padded  日本語のテキスト"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straße"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello Worldé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hellosrc/a/b.ts"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.ts﻿bom"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello world  padded  "], "ok": null}
+{"fn": "extract_steam_id", "args": ["emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a.b.cabc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["😀ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀c😀"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ab"], "ok": null}
+{"fn": "extract_steam_id", "args": ["astraße"], "ok": null}
+{"fn": "extract_steam_id", "args": ["😀"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.tsline1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["trailing.hello"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["emoji 👍🏽 mixhello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["trailing../x/**/*.json"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.tsa😀b😀c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello World"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straßea..b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["  padded  HELLO"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキスト:"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.tstrailing."], "ok": null}
+{"fn": "extract_steam_id", "args": ["hellokey_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straßens:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_steam_id", "args": ["abc日本語のテキスト"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.ts{name} has {count} items"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbula.b.c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straße日本語のテキスト"], "ok": null}
+{"fn": "extract_steam_id", "args": ["helloa:b:c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["key_name-1:"], "ok": null}
+{"fn": "extract_steam_id", "args": [".leadingé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello worldünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキストa"], "ok": null}
+{"fn": "extract_steam_id", "args": ["HELLOé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparated  padded  "], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparated:"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbulstraße"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀cHello World"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ns:key.path:"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbulabc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["trailing.line1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["aba..b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a..bHello World"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparatedhello"], "ok": null}
+{"fn": "extract_steam_id", "args": ["😀line1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello Worlda..b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀chello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbula"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparatedsrc/a/b.ts"], "ok": null}
+{"fn": "extract_steam_id", "args": ["key_name-1ns:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a:b:ca.b.c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["{name} has {count} items./x/**/*.json"], "ok": null}
+{"fn": "extract_steam_id", "args": ["helloé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["line1\nline2tab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキストHello World"], "ok": null}
+{"fn": "extract_steam_id", "args": ["./x/**/*.jsonünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀ctab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a:b:cabc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ns:key.pathline1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straße﻿bom"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a:b:chello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["emoji 👍🏽 mixHELLO"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a:b:ca"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödéabc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["  padded  src/a/b.ts"], "ok": null}
+{"fn": "extract_steam_id", "args": ["aemoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ΣΊΣΥΦΟΣkey_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["aİstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキストhello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbulline1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_steam_id", "args": ["HELLOa..b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a..ba😀b😀c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödéİstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbulab"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀ca:b:c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキストtab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀ca..b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["﻿bomkey_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["helloa😀b😀c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["﻿boma😀b😀c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["😀ns:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["étrailing."], "ok": null}
+{"fn": "extract_steam_id", "args": ["emoji 👍🏽 mixsrc/a/b.ts"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello worldab"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a..babc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["trailing.  padded  "], "ok": null}
+{"fn": "extract_steam_id", "args": ["a./x/**/*.json"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödé.leading"], "ok": null}
+{"fn": "extract_steam_id", "args": ["é{name} has {count} items"], "ok": null}
+{"fn": "extract_steam_id", "args": ["key_name-1é"], "ok": null}
+{"fn": "extract_steam_id", "args": ["emoji 👍🏽 mix日本語のテキスト"], "ok": null}
+{"fn": "extract_steam_id", "args": ["line1\nline2a..b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.ts./x/**/*.json"], "ok": null}
+{"fn": "extract_steam_id", "args": ["{name} has {count} itemsünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["😀İstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["  padded  trailing."], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparatedtrailing."], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello Worlda"], "ok": null}
+{"fn": "extract_steam_id", "args": ["HELLOa:b:c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["HELLOabc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ababc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello worldhello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ns:key.patha.b.c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["akey_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["{name} has {count} itemsHELLO"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀c:"], "ok": null}
+{"fn": "extract_steam_id", "args": ["HELLOns:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["helloa"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキストİstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello WorldHELLO"], "ok": null}
+{"fn": "extract_steam_id", "args": ["﻿bomtab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödéhello world"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hello worldİstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparatedabc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straßeline1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["😀ünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["helloHELLO"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語のテキスト./x/**/*.json"], "ok": null}
+{"fn": "extract_steam_id", "args": [".leading:"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a..bstraße"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straße{name} has {count} items"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ns:key.pathns:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["  padded  {name} has {count} items"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ns:key.pathabc"], "ok": null}
+{"fn": "extract_steam_id", "args": [":İstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": [":{name} has {count} items"], "ok": null}
+{"fn": "extract_steam_id", "args": ["😀emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbulé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["helloab"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ünïcödétrailing."], "ok": null}
+{"fn": "extract_steam_id", "args": ["key_name-1ünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a.b.cstraße"], "ok": null}
+{"fn": "extract_steam_id", "args": ["abcemoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_steam_id", "args": ["emoji 👍🏽 mixabc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["abtab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a.b.cHello World"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparatedemoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_steam_id", "args": [":src/a/b.ts"], "ok": null}
+{"fn": "extract_steam_id", "args": ["key_name-1﻿bom"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b😀cline1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["abİstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["abcstraße"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbula😀b😀c"], "ok": null}
+{"fn": "extract_steam_id", "args": ["straßetrailing."], "ok": null}
+{"fn": "extract_steam_id", "args": ["ΣΊΣΥΦΟΣab"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello World😀"], "ok": null}
+{"fn": "extract_steam_id", "args": ["hellons:key.path"], "ok": null}
+{"fn": "extract_steam_id", "args": ["HELLOsrc/a/b.ts"], "ok": null}
+{"fn": "extract_steam_id", "args": ["éünïcödé"], "ok": null}
+{"fn": "extract_steam_id", "args": ["é﻿bom"], "ok": null}
+{"fn": "extract_steam_id", "args": ["./x/**/*.jsonkey_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["src/a/b.tshello"], "ok": null}
+{"fn": "extract_steam_id", "args": ["tab\tseparatedtab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["{name} has {count} itemsa..b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["abkey_name-1"], "ok": null}
+{"fn": "extract_steam_id", "args": ["İstanbulİstanbul"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Hello Worldtab\tseparated"], "ok": null}
+{"fn": "extract_steam_id", "args": ["trailing.:"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a..bline1\nline2"], "ok": null}
+{"fn": "extract_steam_id", "args": ["héllo wörld"], "ok": null}
+{"fn": "extract_steam_id", "args": ["👍🏽 thumbs"], "ok": null}
+{"fn": "extract_steam_id", "args": ["日本語"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ılık ırmak"], "ok": null}
+{"fn": "extract_steam_id", "args": ["👨‍👩‍👧 family"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a😀b"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a²b x½ y①"], "ok": null}
+{"fn": "extract_steam_id", "args": ["aⅠb Ⅻ"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a𐐀b 𝐀bc"], "ok": null}
+{"fn": "extract_steam_id", "args": ["कि ٣٤"], "ok": null}
+{"fn": "extract_steam_id", "args": ["Iı İi"], "ok": null}
+{"fn": "extract_steam_id", "args": ["K K k"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ſ s S"], "ok": null}
+{"fn": "extract_steam_id", "args": ["x‍y 👨‍👩‍👧"], "ok": null}
+{"fn": "extract_steam_id", "args": ["a b c　d"], "ok": null}
+{"fn": "extract_steam_id", "args": ["١٢٣ ٤٥"], "ok": null}
+{"fn": "extract_steam_id", "args": ["𝟘𝟙 ²³"], "ok": null}
+{"fn": "extract_steam_id", "args": ["snake_case foo-bar o'neil"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ǅungla Ǆ"], "ok": null}
+{"fn": "extract_steam_id", "args": ["one\r\ntwothreefour"], "ok": null}
+{"fn": "extract_steam_id", "args": ["café café"], "ok": null}
+{"fn": "extract_steam_id", "args": ["ΣΑΣ σας ς"], "ok": null}
+{"fn": "url_domain", "args": ["hello worlda.b.c"], "ok": ""}
+{"fn": "url_domain", "args": [""], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["ünïcödé"], "ok": ""}
+{"fn": "url_domain", "args": ["hello"], "ok": ""}
+{"fn": "url_domain", "args": ["😀"], "ok": ""}
+{"fn": "url_domain", "args": ["line1\nline2"], "ok": ""}
+{"fn": "url_domain", "args": ["a:b:c"], "ok": ""}
+{"fn": "url_domain", "args": [".leading"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing."], "ok": ""}
+{"fn": "url_domain", "args": ["abcsrc/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": ["{name} has {count} items{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["HELLO"], "ok": ""}
+{"fn": "url_domain", "args": ["ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "url_domain", "args": ["日本語のテキスト"], "ok": ""}
+{"fn": "url_domain", "args": ["Hello World"], "ok": ""}
+{"fn": "url_domain", "args": [".leadinga..b"], "ok": ""}
+{"fn": "url_domain", "args": ["hello worldhello world"], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["abc"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bom"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀c"], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["abtrailing."], "ok": ""}
+{"fn": "url_domain", "args": ["a"], "ok": ""}
+{"fn": "url_domain", "args": ["ns:key.patha.b.c"], "ok": ""}
+{"fn": "url_domain", "args": ["é"], "ok": ""}
+{"fn": "url_domain", "args": ["İstanbul"], "ok": ""}
+{"fn": "url_domain", "args": [":"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["./x/**/*.json"], "ok": ""}
+{"fn": "url_domain", "args": ["Hello Worldabc"], "ok": ""}
+{"fn": "url_domain", "args": ["src/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": ["a.b.c"], "ok": ""}
+{"fn": "url_domain", "args": ["a..b"], "ok": ""}
+{"fn": "url_domain", "args": ["aİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["hellohello"], "ok": ""}
+{"fn": "url_domain", "args": ["ns:key.pathünïcödé"], "ok": ""}
+{"fn": "url_domain", "args": ["ünïcödéa😀b😀c"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparated  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["hello world"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.:"], "ok": ""}
+{"fn": "url_domain", "args": ["ns:key.path"], "ok": ""}
+{"fn": "url_domain", "args": ["a:b:ctab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["a.b.c日本語のテキスト"], "ok": ""}
+{"fn": "url_domain", "args": ["straße"], "ok": ""}
+{"fn": "url_domain", "args": ["hello world{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": ""}
+{"fn": "url_domain", "args": ["é😀"], "ok": ""}
+{"fn": "url_domain", "args": ["ab"], "ok": ""}
+{"fn": "url_domain", "args": ["  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mix./x/**/*.json"], "ok": ""}
+{"fn": "url_domain", "args": ["ns:key.pathhello world"], "ok": ""}
+{"fn": "url_domain", "args": ["a.b.ckey_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["{name} has {count} itemsab"], "ok": ""}
+{"fn": "url_domain", "args": ["{name} has {count} itemstab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["ΣΊΣΥΦΟΣline1\nline2"], "ok": ""}
+{"fn": "url_domain", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀cstraße"], "ok": ""}
+{"fn": "url_domain", "args": [":😀"], "ok": ""}
+{"fn": "url_domain", "args": ["Hello Worldhello world"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bom{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bomhello world"], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mixΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "url_domain", "args": ["helloİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["İstanbula"], "ok": ""}
+{"fn": "url_domain", "args": ["straßetab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["  padded  key_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["straßehello"], "ok": ""}
+{"fn": "url_domain", "args": ["ab日本語のテキスト"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.ünïcödé"], "ok": ""}
+{"fn": "url_domain", "args": ["a.b.ca:b:c"], "ok": ""}
+{"fn": "url_domain", "args": ["aline1\nline2"], "ok": ""}
+{"fn": "url_domain", "args": [":line1\nline2"], "ok": ""}
+{"fn": "url_domain", "args": ["  padded  ns:key.path"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bomé"], "ok": ""}
+{"fn": "url_domain", "args": ["straße./x/**/*.json"], "ok": ""}
+{"fn": "url_domain", "args": ["src/a/b.tsemoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["hello world:"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀cİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["a:b:c./x/**/*.json"], "ok": ""}
+{"fn": "url_domain", "args": ["{name} has {count} itemsa..b"], "ok": ""}
+{"fn": "url_domain", "args": [":tab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["straße日本語のテキスト"], "ok": ""}
+{"fn": "url_domain", "args": [":trailing."], "ok": ""}
+{"fn": "url_domain", "args": ["ünïcödéline1\nline2"], "ok": ""}
+{"fn": "url_domain", "args": ["./x/**/*.jsona..b"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bomsrc/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": ["😀{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿boma..b"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparatedns:key.path"], "ok": ""}
+{"fn": "url_domain", "args": ["hellosrc/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": ["abca.b.c"], "ok": ""}
+{"fn": "url_domain", "args": ["straße  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bom  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["hellotab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["hellokey_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["日本語のテキスト:"], "ok": ""}
+{"fn": "url_domain", "args": [":straße"], "ok": ""}
+{"fn": "url_domain", "args": ["ab{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["abns:key.path"], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1ab"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparateda:b:c"], "ok": ""}
+{"fn": "url_domain", "args": [".leadinga"], "ok": ""}
+{"fn": "url_domain", "args": ["abc﻿bom"], "ok": ""}
+{"fn": "url_domain", "args": [":ab"], "ok": ""}
+{"fn": "url_domain", "args": ["éHello World"], "ok": ""}
+{"fn": "url_domain", "args": ["line1\nline2src/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": ["hello world  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1a..b"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀ca😀b😀c"], "ok": ""}
+{"fn": "url_domain", "args": ["aünïcödé"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparatedhello"], "ok": ""}
+{"fn": "url_domain", "args": ["Hello Worldsrc/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": [":a"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.é"], "ok": ""}
+{"fn": "url_domain", "args": ["ünïcödé{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀chello world"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.emoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.hello"], "ok": ""}
+{"fn": "url_domain", "args": ["a..bé"], "ok": ""}
+{"fn": "url_domain", "args": ["HELLOsrc/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bomabc"], "ok": ""}
+{"fn": "url_domain", "args": ["HELLOtab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["line1\nline2Hello World"], "ok": ""}
+{"fn": "url_domain", "args": ["ns:key.pathİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bom﻿bom"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bomab"], "ok": ""}
+{"fn": "url_domain", "args": ["HELLOemoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["a:b:cabc"], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mix日本語のテキスト"], "ok": ""}
+{"fn": "url_domain", "args": ["line1\nline2{name} has {count} items"], "ok": ""}
+{"fn": "url_domain", "args": ["日本語のテキストa..b"], "ok": ""}
+{"fn": "url_domain", "args": ["hello worldhello"], "ok": ""}
+{"fn": "url_domain", "args": [".leadinga:b:c"], "ok": ""}
+{"fn": "url_domain", "args": ["éemoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["Hello Worldemoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["straße﻿bom"], "ok": ""}
+{"fn": "url_domain", "args": ["﻿bomemoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["a..bstraße"], "ok": ""}
+{"fn": "url_domain", "args": ["ns:key.patha..b"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparatedé"], "ok": ""}
+{"fn": "url_domain", "args": ["abhello world"], "ok": ""}
+{"fn": "url_domain", "args": ["ünïcödé﻿bom"], "ok": ""}
+{"fn": "url_domain", "args": ["  padded  a:b:c"], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1a:b:c"], "ok": ""}
+{"fn": "url_domain", "args": ["a..bkey_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1a😀b😀c"], "ok": ""}
+{"fn": "url_domain", "args": ["ns:key.patha😀b😀c"], "ok": ""}
+{"fn": "url_domain", "args": ["日本語のテキストHello World"], "ok": ""}
+{"fn": "url_domain", "args": ["a..bİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["a:b:csrc/a/b.ts"], "ok": ""}
+{"fn": "url_domain", "args": ["aba..b"], "ok": ""}
+{"fn": "url_domain", "args": ["src/a/b.tskey_name-1"], "ok": ""}
+{"fn": "url_domain", "args": [".leading  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["İstanbulé"], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mixa"], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparatedünïcödé"], "ok": ""}
+{"fn": "url_domain", "args": ["ünïcödéa"], "ok": ""}
+{"fn": "url_domain", "args": ["Hello Worldtab\tseparated"], "ok": ""}
+{"fn": "url_domain", "args": ["{name} has {count} items./x/**/*.json"], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1é"], "ok": ""}
+{"fn": "url_domain", "args": [":a.b.c"], "ok": ""}
+{"fn": "url_domain", "args": ["abHello World"], "ok": ""}
+{"fn": "url_domain", "args": ["日本語のテキストΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "url_domain", "args": ["a..ba.b.c"], "ok": ""}
+{"fn": "url_domain", "args": ["helloa..b"], "ok": ""}
+{"fn": "url_domain", "args": [".leadingé"], "ok": ""}
+{"fn": "url_domain", "args": ["./x/**/*.jsonkey_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.key_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["İstanbulİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["hello worldHELLO"], "ok": ""}
+{"fn": "url_domain", "args": ["  padded  İstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["ΣΊΣΥΦΟΣtrailing."], "ok": ""}
+{"fn": "url_domain", "args": ["key_name-1abc"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀c﻿bom"], "ok": ""}
+{"fn": "url_domain", "args": ["  padded  Hello World"], "ok": ""}
+{"fn": "url_domain", "args": ["line1\nline2key_name-1"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀ca..b"], "ok": ""}
+{"fn": "url_domain", "args": ["emoji 👍🏽 mix  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.HELLO"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "url_domain", "args": ["  padded  HELLO"], "ok": ""}
+{"fn": "url_domain", "args": ["a日本語のテキスト"], "ok": ""}
+{"fn": "url_domain", "args": ["ünïcödéİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["ΣΊΣΥΦΟΣemoji 👍🏽 mix"], "ok": ""}
+{"fn": "url_domain", "args": ["abca😀b😀c"], "ok": ""}
+{"fn": "url_domain", "args": ["trailing.Hello World"], "ok": ""}
+{"fn": "url_domain", "args": ["HELLOa..b"], "ok": ""}
+{"fn": "url_domain", "args": ["a:b:ca:b:c"], "ok": ""}
+{"fn": "url_domain", "args": ["abcİstanbul"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b😀c日本語のテキスト"], "ok": ""}
+{"fn": "url_domain", "args": ["Hello Worldtrailing."], "ok": ""}
+{"fn": "url_domain", "args": ["tab\tseparated.leading"], "ok": ""}
+{"fn": "url_domain", "args": ["a:b:cHELLO"], "ok": ""}
+{"fn": "url_domain", "args": ["HELLO  padded  "], "ok": ""}
+{"fn": "url_domain", "args": ["./x/**/*.json:"], "ok": ""}
+{"fn": "url_domain", "args": ["héllo wörld"], "ok": ""}
+{"fn": "url_domain", "args": ["👍🏽 thumbs"], "ok": ""}
+{"fn": "url_domain", "args": ["日本語"], "ok": ""}
+{"fn": "url_domain", "args": ["ılık ırmak"], "ok": ""}
+{"fn": "url_domain", "args": ["👨‍👩‍👧 family"], "ok": ""}
+{"fn": "url_domain", "args": ["a b"], "ok": ""}
+{"fn": "url_domain", "args": ["a😀b"], "ok": ""}
+{"fn": "url_domain", "args": ["a²b x½ y①"], "ok": ""}
+{"fn": "url_domain", "args": ["aⅠb Ⅻ"], "ok": ""}
+{"fn": "url_domain", "args": ["a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "url_domain", "args": ["कि ٣٤"], "ok": ""}
+{"fn": "url_domain", "args": ["Iı İi"], "ok": ""}
+{"fn": "url_domain", "args": ["K K k"], "ok": ""}
+{"fn": "url_domain", "args": ["ſ s S"], "ok": ""}
+{"fn": "url_domain", "args": ["x‍y 👨‍👩‍👧"], "ok": ""}
+{"fn": "url_domain", "args": ["a b c　d"], "ok": ""}
+{"fn": "url_domain", "args": ["١٢٣ ٤٥"], "ok": ""}
+{"fn": "url_domain", "args": ["𝟘𝟙 ²³"], "ok": ""}
+{"fn": "url_domain", "args": ["snake_case foo-bar o'neil"], "ok": ""}
+{"fn": "url_domain", "args": ["ǅungla Ǆ"], "ok": ""}
+{"fn": "url_domain", "args": ["one\r\ntwothreefour"], "ok": ""}
+{"fn": "url_domain", "args": ["café café"], "ok": ""}
+{"fn": "url_domain", "args": ["ΣΑΣ σας ς"], "ok": ""}
+{"fn": "sanitize_log_message", "args": ["hello"], "ok": "hello"}
+{"fn": "sanitize_log_message", "args": ["  padded  abc"], "ok": "  padded  abc"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mix"], "ok": "emoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["ünïcödé"], "ok": "ünïcödé"}
+{"fn": "sanitize_log_message", "args": [":"], "ok": ":"}
+{"fn": "sanitize_log_message", "args": ["abé"], "ok": "abé"}
+{"fn": "sanitize_log_message", "args": ["  padded  "], "ok": "  padded  "}
+{"fn": "sanitize_log_message", "args": ["line1\nline2hello"], "ok": "line1\nline2hello"}
+{"fn": "sanitize_log_message", "args": ["hello world"], "ok": "hello world"}
+{"fn": "sanitize_log_message", "args": [".leading"], "ok": ".leading"}
+{"fn": "sanitize_log_message", "args": ["﻿bom"], "ok": "﻿bom"}
+{"fn": "sanitize_log_message", "args": ["İstanbul"], "ok": "İstanbul"}
+{"fn": "sanitize_log_message", "args": ["{name} has {count} items"], "ok": "{name} has {count} items"}
+{"fn": "sanitize_log_message", "args": ["  padded  é"], "ok": "  padded  é"}
+{"fn": "sanitize_log_message", "args": ["key_name-1"], "ok": "key_name-1"}
+{"fn": "sanitize_log_message", "args": ["é"], "ok": "é"}
+{"fn": "sanitize_log_message", "args": ["😀"], "ok": "😀"}
+{"fn": "sanitize_log_message", "args": ["a.b.c"], "ok": "a.b.c"}
+{"fn": "sanitize_log_message", "args": ["Hello World"], "ok": "Hello World"}
+{"fn": "sanitize_log_message", "args": ["./x/**/*.json"], "ok": "./x/**/*.json"}
+{"fn": "sanitize_log_message", "args": ["trailing."], "ok": "trailing."}
+{"fn": "sanitize_log_message", "args": ["a😀b😀c"], "ok": "a😀b😀c"}
+{"fn": "sanitize_log_message", "args": ["﻿bomtab\tseparated"], "ok": "﻿bomtab\tseparated"}
+{"fn": "sanitize_log_message", "args": ["HELLO"], "ok": "HELLO"}
+{"fn": "sanitize_log_message", "args": ["ΣΊΣΥΦΟΣ"], "ok": "ΣΊΣΥΦΟΣ"}
+{"fn": "sanitize_log_message", "args": ["a"], "ok": "a"}
+{"fn": "sanitize_log_message", "args": ["key_name-1emoji 👍🏽 mix"], "ok": "key_name-1emoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["a:b:c"], "ok": "a:b:c"}
+{"fn": "sanitize_log_message", "args": ["abc"], "ok": "abc"}
+{"fn": "sanitize_log_message", "args": ["tab\tseparated"], "ok": "tab\tseparated"}
+{"fn": "sanitize_log_message", "args": ["line1\nline2hello world"], "ok": "line1\nline2hello world"}
+{"fn": "sanitize_log_message", "args": ["﻿boma.b.c"], "ok": "﻿boma.b.c"}
+{"fn": "sanitize_log_message", "args": ["a..btrailing."], "ok": "a..btrailing."}
+{"fn": "sanitize_log_message", "args": ["İstanbultrailing."], "ok": "İstanbultrailing."}
+{"fn": "sanitize_log_message", "args": ["ns:key.pathsrc/a/b.ts"], "ok": "ns:key.pathsrc/a/b.ts"}
+{"fn": "sanitize_log_message", "args": ["line1\nline2"], "ok": "line1\nline2"}
+{"fn": "sanitize_log_message", "args": ["日本語のテキストünïcödé"], "ok": "日本語のテキストünïcödé"}
+{"fn": "sanitize_log_message", "args": ["😀İstanbul"], "ok": "😀İstanbul"}
+{"fn": "sanitize_log_message", "args": ["tab\tseparatedsrc/a/b.ts"], "ok": "tab\tseparatedsrc/a/b.ts"}
+{"fn": "sanitize_log_message", "args": ["src/a/b.ts"], "ok": "src/a/b.ts"}
+{"fn": "sanitize_log_message", "args": ["a😀b😀cé"], "ok": "a😀b😀cé"}
+{"fn": "sanitize_log_message", "args": ["abc:"], "ok": "abc:"}
+{"fn": "sanitize_log_message", "args": [""], "ok": ""}
+{"fn": "sanitize_log_message", "args": ["  padded  ΣΊΣΥΦΟΣ"], "ok": "  padded  ΣΊΣΥΦΟΣ"}
+{"fn": "sanitize_log_message", "args": ["日本語のテキスト"], "ok": "日本語のテキスト"}
+{"fn": "sanitize_log_message", "args": ["  padded  ab"], "ok": "  padded  ab"}
+{"fn": "sanitize_log_message", "args": ["ab"], "ok": "ab"}
+{"fn": "sanitize_log_message", "args": [".leading﻿bom"], "ok": ".leading﻿bom"}
+{"fn": "sanitize_log_message", "args": ["straße"], "ok": "straße"}
+{"fn": "sanitize_log_message", "args": [":trailing."], "ok": ":trailing."}
+{"fn": "sanitize_log_message", "args": ["line1\nline2é"], "ok": "line1\nline2é"}
+{"fn": "sanitize_log_message", "args": ["a😀b😀cabc"], "ok": "a😀b😀cabc"}
+{"fn": "sanitize_log_message", "args": ["a:b:ctrailing."], "ok": "a:b:ctrailing."}
+{"fn": "sanitize_log_message", "args": ["a..b"], "ok": "a..b"}
+{"fn": "sanitize_log_message", "args": ["ΣΊΣΥΦΟΣns:key.path"], "ok": "ΣΊΣΥΦΟΣns:key.path"}
+{"fn": "sanitize_log_message", "args": ["a😀b😀chello world"], "ok": "a😀b😀chello world"}
+{"fn": "sanitize_log_message", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": "ΣΊΣΥΦΟΣ.leading"}
+{"fn": "sanitize_log_message", "args": ["ns:key.path"], "ok": "ns:key.path"}
+{"fn": "sanitize_log_message", "args": ["﻿bomstraße"], "ok": "﻿bomstraße"}
+{"fn": "sanitize_log_message", "args": [":src/a/b.ts"], "ok": ":src/a/b.ts"}
+{"fn": "sanitize_log_message", "args": ["tab\tseparateda.b.c"], "ok": "tab\tseparateda.b.c"}
+{"fn": "sanitize_log_message", "args": ["日本語のテキスト:"], "ok": "日本語のテキスト:"}
+{"fn": "sanitize_log_message", "args": ["src/a/b.tsns:key.path"], "ok": "src/a/b.tsns:key.path"}
+{"fn": "sanitize_log_message", "args": ["straßehello"], "ok": "straßehello"}
+{"fn": "sanitize_log_message", "args": ["./x/**/*.jsonline1\nline2"], "ok": "./x/**/*.jsonline1\nline2"}
+{"fn": "sanitize_log_message", "args": ["abca"], "ok": "abca"}
+{"fn": "sanitize_log_message", "args": ["a.b.cabc"], "ok": "a.b.cabc"}
+{"fn": "sanitize_log_message", "args": ["line1\nline2{name} has {count} items"], "ok": "line1\nline2{name} has {count} items"}
+{"fn": "sanitize_log_message", "args": ["aemoji 👍🏽 mix"], "ok": "aemoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": [".leading  padded  "], "ok": ".leading  padded  "}
+{"fn": "sanitize_log_message", "args": ["src/a/b.tsa😀b😀c"], "ok": "src/a/b.tsa😀b😀c"}
+{"fn": "sanitize_log_message", "args": ["hello worldkey_name-1"], "ok": "hello worldkey_name-1"}
+{"fn": "sanitize_log_message", "args": ["😀abc"], "ok": "😀abc"}
+{"fn": "sanitize_log_message", "args": ["İstanbula..b"], "ok": "İstanbula..b"}
+{"fn": "sanitize_log_message", "args": ["trailing.emoji 👍🏽 mix"], "ok": "trailing.emoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["İstanbul.leading"], "ok": "İstanbul.leading"}
+{"fn": "sanitize_log_message", "args": ["﻿bom.leading"], "ok": "﻿bom.leading"}
+{"fn": "sanitize_log_message", "args": [".leading😀"], "ok": ".leading😀"}
+{"fn": "sanitize_log_message", "args": ["line1\nline2ns:key.path"], "ok": "line1\nline2ns:key.path"}
+{"fn": "sanitize_log_message", "args": ["HELLOHello World"], "ok": "HELLOHello World"}
+{"fn": "sanitize_log_message", "args": ["ns:key.path日本語のテキスト"], "ok": "ns:key.path日本語のテキスト"}
+{"fn": "sanitize_log_message", "args": ["HELLO😀"], "ok": "HELLO😀"}
+{"fn": "sanitize_log_message", "args": ["key_name-1  padded  "], "ok": "key_name-1  padded  "}
+{"fn": "sanitize_log_message", "args": ["日本語のテキスト😀"], "ok": "日本語のテキスト😀"}
+{"fn": "sanitize_log_message", "args": ["éns:key.path"], "ok": "éns:key.path"}
+{"fn": "sanitize_log_message", "args": [":a..b"], "ok": ":a..b"}
+{"fn": "sanitize_log_message", "args": ["hello worlda:b:c"], "ok": "hello worlda:b:c"}
+{"fn": "sanitize_log_message", "args": [".leadingline1\nline2"], "ok": ".leadingline1\nline2"}
+{"fn": "sanitize_log_message", "args": [":key_name-1"], "ok": ":key_name-1"}
+{"fn": "sanitize_log_message", "args": ["a😀b😀c.leading"], "ok": "a😀b😀c.leading"}
+{"fn": "sanitize_log_message", "args": ["line1\nline2.leading"], "ok": "line1\nline2.leading"}
+{"fn": "sanitize_log_message", "args": ["a..bab"], "ok": "a..bab"}
+{"fn": "sanitize_log_message", "args": ["HELLOstraße"], "ok": "HELLOstraße"}
+{"fn": "sanitize_log_message", "args": ["tab\tseparatedstraße"], "ok": "tab\tseparatedstraße"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mixstraße"], "ok": "emoji 👍🏽 mixstraße"}
+{"fn": "sanitize_log_message", "args": ["hello worldİstanbul"], "ok": "hello worldİstanbul"}
+{"fn": "sanitize_log_message", "args": ["a{name} has {count} items"], "ok": "a{name} has {count} items"}
+{"fn": "sanitize_log_message", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": "ünïcödéemoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mixé"], "ok": "emoji 👍🏽 mixé"}
+{"fn": "sanitize_log_message", "args": ["hellostraße"], "ok": "hellostraße"}
+{"fn": "sanitize_log_message", "args": ["line1\nline2İstanbul"], "ok": "line1\nline2İstanbul"}
+{"fn": "sanitize_log_message", "args": ["  padded  a😀b😀c"], "ok": "  padded  a😀b😀c"}
+{"fn": "sanitize_log_message", "args": ["abc  padded  "], "ok": "abc  padded  "}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mix./x/**/*.json"], "ok": "emoji 👍🏽 mix./x/**/*.json"}
+{"fn": "sanitize_log_message", "args": ["key_name-1:"], "ok": "key_name-1:"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mixHELLO"], "ok": "emoji 👍🏽 mixHELLO"}
+{"fn": "sanitize_log_message", "args": [".leadingsrc/a/b.ts"], "ok": ".leadingsrc/a/b.ts"}
+{"fn": "sanitize_log_message", "args": ["hello worldé"], "ok": "hello worldé"}
+{"fn": "sanitize_log_message", "args": ["helloa"], "ok": "helloa"}
+{"fn": "sanitize_log_message", "args": ["trailing.ünïcödé"], "ok": "trailing.ünïcödé"}
+{"fn": "sanitize_log_message", "args": ["İstanbulİstanbul"], "ok": "İstanbulİstanbul"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mixΣΊΣΥΦΟΣ"], "ok": "emoji 👍🏽 mixΣΊΣΥΦΟΣ"}
+{"fn": "sanitize_log_message", "args": [".leading{name} has {count} items"], "ok": ".leading{name} has {count} items"}
+{"fn": "sanitize_log_message", "args": ["key_name-1HELLO"], "ok": "key_name-1HELLO"}
+{"fn": "sanitize_log_message", "args": ["a😀"], "ok": "a😀"}
+{"fn": "sanitize_log_message", "args": ["a.b.cé"], "ok": "a.b.cé"}
+{"fn": "sanitize_log_message", "args": ["a:b:c./x/**/*.json"], "ok": "a:b:c./x/**/*.json"}
+{"fn": "sanitize_log_message", "args": ["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"], "ok": "ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"}
+{"fn": "sanitize_log_message", "args": [".leadinghello"], "ok": ".leadinghello"}
+{"fn": "sanitize_log_message", "args": [".leadingHELLO"], "ok": ".leadingHELLO"}
+{"fn": "sanitize_log_message", "args": ["abcHello World"], "ok": "abcHello World"}
+{"fn": "sanitize_log_message", "args": ["Hello Worlda😀b😀c"], "ok": "Hello Worlda😀b😀c"}
+{"fn": "sanitize_log_message", "args": ["straße日本語のテキスト"], "ok": "straße日本語のテキスト"}
+{"fn": "sanitize_log_message", "args": ["  padded  日本語のテキスト"], "ok": "  padded  日本語のテキスト"}
+{"fn": "sanitize_log_message", "args": ["ns:key.patha:b:c"], "ok": "ns:key.patha:b:c"}
+{"fn": "sanitize_log_message", "args": ["ΣΊΣΥΦΟΣ😀"], "ok": "ΣΊΣΥΦΟΣ😀"}
+{"fn": "sanitize_log_message", "args": ["./x/**/*.jsonab"], "ok": "./x/**/*.jsonab"}
+{"fn": "sanitize_log_message", "args": ["ΣΊΣΥΦΟΣHello World"], "ok": "ΣΊΣΥΦΟΣHello World"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mixemoji 👍🏽 mix"], "ok": "emoji 👍🏽 mixemoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["ababc"], "ok": "ababc"}
+{"fn": "sanitize_log_message", "args": ["ünïcödéa:b:c"], "ok": "ünïcödéa:b:c"}
+{"fn": "sanitize_log_message", "args": ["hello worldab"], "ok": "hello worldab"}
+{"fn": "sanitize_log_message", "args": ["Hello World日本語のテキスト"], "ok": "Hello World日本語のテキスト"}
+{"fn": "sanitize_log_message", "args": ["{name} has {count} itemskey_name-1"], "ok": "{name} has {count} itemskey_name-1"}
+{"fn": "sanitize_log_message", "args": ["éhello"], "ok": "éhello"}
+{"fn": "sanitize_log_message", "args": ["éHELLO"], "ok": "éHELLO"}
+{"fn": "sanitize_log_message", "args": ["日本語のテキストab"], "ok": "日本語のテキストab"}
+{"fn": "sanitize_log_message", "args": ["hello worldns:key.path"], "ok": "hello worldns:key.path"}
+{"fn": "sanitize_log_message", "args": ["﻿bomHello World"], "ok": "﻿bomHello World"}
+{"fn": "sanitize_log_message", "args": ["tab\tseparated.leading"], "ok": "tab\tseparated.leading"}
+{"fn": "sanitize_log_message", "args": ["a:b:c﻿bom"], "ok": "a:b:c﻿bom"}
+{"fn": "sanitize_log_message", "args": ["a..b./x/**/*.json"], "ok": "a..b./x/**/*.json"}
+{"fn": "sanitize_log_message", "args": ["abcab"], "ok": "abcab"}
+{"fn": "sanitize_log_message", "args": ["ünïcödéΣΊΣΥΦΟΣ"], "ok": "ünïcödéΣΊΣΥΦΟΣ"}
+{"fn": "sanitize_log_message", "args": ["Hello World  padded  "], "ok": "Hello World  padded  "}
+{"fn": "sanitize_log_message", "args": ["ab﻿bom"], "ok": "ab﻿bom"}
+{"fn": "sanitize_log_message", "args": ["{name} has {count} itemsemoji 👍🏽 mix"], "ok": "{name} has {count} itemsemoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["﻿bomİstanbul"], "ok": "﻿bomİstanbul"}
+{"fn": "sanitize_log_message", "args": ["  padded  trailing."], "ok": "  padded  trailing."}
+{"fn": "sanitize_log_message", "args": ["::"], "ok": "::"}
+{"fn": "sanitize_log_message", "args": ["﻿bom日本語のテキスト"], "ok": "﻿bom日本語のテキスト"}
+{"fn": "sanitize_log_message", "args": ["hellotab\tseparated"], "ok": "hellotab\tseparated"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mixa"], "ok": "emoji 👍🏽 mixa"}
+{"fn": "sanitize_log_message", "args": ["  padded  a.b.c"], "ok": "  padded  a.b.c"}
+{"fn": "sanitize_log_message", "args": ["HELLOline1\nline2"], "ok": "HELLOline1\nline2"}
+{"fn": "sanitize_log_message", "args": ["line1\nline2😀"], "ok": "line1\nline2😀"}
+{"fn": "sanitize_log_message", "args": ["helloab"], "ok": "helloab"}
+{"fn": "sanitize_log_message", "args": ["src/a/b.ts  padded  "], "ok": "src/a/b.ts  padded  "}
+{"fn": "sanitize_log_message", "args": ["a.b.ckey_name-1"], "ok": "a.b.ckey_name-1"}
+{"fn": "sanitize_log_message", "args": ["a..bkey_name-1"], "ok": "a..bkey_name-1"}
+{"fn": "sanitize_log_message", "args": ["éünïcödé"], "ok": "éünïcödé"}
+{"fn": "sanitize_log_message", "args": ["trailing.İstanbul"], "ok": "trailing.İstanbul"}
+{"fn": "sanitize_log_message", "args": ["abca😀b😀c"], "ok": "abca😀b😀c"}
+{"fn": "sanitize_log_message", "args": ["é:"], "ok": "é:"}
+{"fn": "sanitize_log_message", "args": ["İstanbulabc"], "ok": "İstanbulabc"}
+{"fn": "sanitize_log_message", "args": [":abc"], "ok": ":abc"}
+{"fn": "sanitize_log_message", "args": [".leadingemoji 👍🏽 mix"], "ok": ".leadingemoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["a..b  padded  "], "ok": "a..b  padded  "}
+{"fn": "sanitize_log_message", "args": ["ns:key.path﻿bom"], "ok": "ns:key.path﻿bom"}
+{"fn": "sanitize_log_message", "args": ["a..ba"], "ok": "a..ba"}
+{"fn": "sanitize_log_message", "args": ["  padded  straße"], "ok": "  padded  straße"}
+{"fn": "sanitize_log_message", "args": ["ahello"], "ok": "ahello"}
+{"fn": "sanitize_log_message", "args": ["Hello Worldkey_name-1"], "ok": "Hello Worldkey_name-1"}
+{"fn": "sanitize_log_message", "args": ["aba:b:c"], "ok": "aba:b:c"}
+{"fn": "sanitize_log_message", "args": ["trailing.é"], "ok": "trailing.é"}
+{"fn": "sanitize_log_message", "args": ["a😀b😀cHello World"], "ok": "a😀b😀cHello World"}
+{"fn": "sanitize_log_message", "args": ["ns:key.pathkey_name-1"], "ok": "ns:key.pathkey_name-1"}
+{"fn": "sanitize_log_message", "args": ["a:b:c.leading"], "ok": "a:b:c.leading"}
+{"fn": "sanitize_log_message", "args": ["  padded  İstanbul"], "ok": "  padded  İstanbul"}
+{"fn": "sanitize_log_message", "args": ["straßeab"], "ok": "straßeab"}
+{"fn": "sanitize_log_message", "args": ["ns:key.path  padded  "], "ok": "ns:key.path  padded  "}
+{"fn": "sanitize_log_message", "args": ["ns:key.pathns:key.path"], "ok": "ns:key.pathns:key.path"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mix:"], "ok": "emoji 👍🏽 mix:"}
+{"fn": "sanitize_log_message", "args": ["emoji 👍🏽 mixhello"], "ok": "emoji 👍🏽 mixhello"}
+{"fn": "sanitize_log_message", "args": ["a.b.cünïcödé"], "ok": "a.b.cünïcödé"}
+{"fn": "sanitize_log_message", "args": ["src/a/b.tshello world"], "ok": "src/a/b.tshello world"}
+{"fn": "sanitize_log_message", "args": ["src/a/b.tsemoji 👍🏽 mix"], "ok": "src/a/b.tsemoji 👍🏽 mix"}
+{"fn": "sanitize_log_message", "args": ["a:b:cns:key.path"], "ok": "a:b:cns:key.path"}
+{"fn": "sanitize_log_message", "args": ["日本語のテキストsrc/a/b.ts"], "ok": "日本語のテキストsrc/a/b.ts"}
+{"fn": "sanitize_log_message", "args": ["src/a/b.tsab"], "ok": "src/a/b.tsab"}
+{"fn": "sanitize_log_message", "args": ["a..bsrc/a/b.ts"], "ok": "a..bsrc/a/b.ts"}
+{"fn": "sanitize_log_message", "args": ["straße😀"], "ok": "straße😀"}
+{"fn": "sanitize_log_message", "args": ["src/a/b.ts😀"], "ok": "src/a/b.ts😀"}
+{"fn": "sanitize_log_message", "args": ["éstraße"], "ok": "éstraße"}
+{"fn": "sanitize_log_message", "args": ["ab  padded  "], "ok": "ab  padded  "}
+{"fn": "sanitize_log_message", "args": ["日本語のテキストline1\nline2"], "ok": "日本語のテキストline1\nline2"}
+{"fn": "sanitize_log_message", "args": ["a.b.c  padded  "], "ok": "a.b.c  padded  "}
+{"fn": "sanitize_log_message", "args": ["😀ünïcödé"], "ok": "😀ünïcödé"}
+{"fn": "sanitize_log_message", "args": ["hello worldhello"], "ok": "hello worldhello"}
+{"fn": "sanitize_log_message", "args": ["aab"], "ok": "aab"}
+{"fn": "sanitize_log_message", "args": ["héllo wörld"], "ok": "héllo wörld"}
+{"fn": "sanitize_log_message", "args": ["👍🏽 thumbs"], "ok": "👍🏽 thumbs"}
+{"fn": "sanitize_log_message", "args": ["日本語"], "ok": "日本語"}
+{"fn": "sanitize_log_message", "args": ["ılık ırmak"], "ok": "ılık ırmak"}
+{"fn": "sanitize_log_message", "args": ["👨‍👩‍👧 family"], "ok": "👨‍👩‍👧 family"}
+{"fn": "sanitize_log_message", "args": ["a b"], "ok": "a b"}
+{"fn": "sanitize_log_message", "args": ["a😀b"], "ok": "a😀b"}
+{"fn": "sanitize_log_message", "args": ["a²b x½ y①"], "ok": "a²b x½ y①"}
+{"fn": "sanitize_log_message", "args": ["aⅠb Ⅻ"], "ok": "aⅠb Ⅻ"}
+{"fn": "sanitize_log_message", "args": ["a𐐀b 𝐀bc"], "ok": "a𐐀b 𝐀bc"}
+{"fn": "sanitize_log_message", "args": ["कि ٣٤"], "ok": "कि ٣٤"}
+{"fn": "sanitize_log_message", "args": ["Iı İi"], "ok": "Iı İi"}
+{"fn": "sanitize_log_message", "args": ["K K k"], "ok": "K K k"}
+{"fn": "sanitize_log_message", "args": ["ſ s S"], "ok": "ſ s S"}
+{"fn": "sanitize_log_message", "args": ["x‍y 👨‍👩‍👧"], "ok": "x‍y 👨‍👩‍👧"}
+{"fn": "sanitize_log_message", "args": ["a b c　d"], "ok": "a b c　d"}
+{"fn": "sanitize_log_message", "args": ["١٢٣ ٤٥"], "ok": "١٢٣ ٤٥"}
+{"fn": "sanitize_log_message", "args": ["𝟘𝟙 ²³"], "ok": "𝟘𝟙 ²³"}
+{"fn": "sanitize_log_message", "args": ["snake_case foo-bar o'neil"], "ok": "snake_case foo-bar o'neil"}
+{"fn": "sanitize_log_message", "args": ["ǅungla Ǆ"], "ok": "ǅungla Ǆ"}
+{"fn": "sanitize_log_message", "args": ["one\r\ntwothreefour"], "ok": "one\r\ntwothreefour"}
+{"fn": "sanitize_log_message", "args": ["café café"], "ok": "café café"}
+{"fn": "sanitize_log_message", "args": ["ΣΑΣ σας ς"], "ok": "ΣΑΣ σας ς"}
+{"fn": "parse_price_string", "args": ["hello"], "ok": null}
+{"fn": "parse_price_string", "args": ["a..ba"], "ok": null}
+{"fn": "parse_price_string", "args": ["ünïcödéabc"], "ok": null}
+{"fn": "parse_price_string", "args": ["src/a/b.ts"], "ok": null}
+{"fn": "parse_price_string", "args": ["trailing."], "ok": null}
+{"fn": "parse_price_string", "args": ["./x/**/*.json"], "ok": null}
+{"fn": "parse_price_string", "args": ["hello world"], "ok": null}
+{"fn": "parse_price_string", "args": ["a😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["line1\nline2"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["a..bhello world"], "ok": null}
+{"fn": "parse_price_string", "args": ["tab\tseparated"], "ok": null}
+{"fn": "parse_price_string", "args": ["a"], "ok": null}
+{"fn": "parse_price_string", "args": ["İstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["ns:key.pathstraße"], "ok": null}
+{"fn": "parse_price_string", "args": ["é"], "ok": null}
+{"fn": "parse_price_string", "args": ["HELLO"], "ok": null}
+{"fn": "parse_price_string", "args": ["a:b:c"], "ok": null}
+{"fn": "parse_price_string", "args": ["src/a/b.ts  padded  "], "ok": null}
+{"fn": "parse_price_string", "args": [":"], "ok": null}
+{"fn": "parse_price_string", "args": [".leadinga:b:c"], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded  "], "ok": null}
+{"fn": "parse_price_string", "args": ["emoji 👍🏽 mixab"], "ok": null}
+{"fn": "parse_price_string", "args": [":emoji 👍🏽 mix"], "ok": null}
+{"fn": "parse_price_string", "args": ["a..b"], "ok": null}
+{"fn": "parse_price_string", "args": ["emoji 👍🏽 mix"], "ok": null}
+{"fn": "parse_price_string", "args": ["ab"], "ok": null}
+{"fn": "parse_price_string", "args": ["😀"], "ok": null}
+{"fn": "parse_price_string", "args": ["abc"], "ok": null}
+{"fn": "parse_price_string", "args": [".leading"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} items"], "ok": null}
+{"fn": "parse_price_string", "args": ["ns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["Hello World"], "ok": null}
+{"fn": "parse_price_string", "args": ["a.b.c"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣa😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["ünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["straßens:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["straße"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} itemshello"], "ok": null}
+{"fn": "parse_price_string", "args": ["abcsrc/a/b.ts"], "ok": null}
+{"fn": "parse_price_string", "args": ["abHELLO"], "ok": null}
+{"fn": "parse_price_string", "args": ["﻿bom"], "ok": null}
+{"fn": "parse_price_string", "args": ["a.b.cHello World"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["straßea:b:c"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキストa..b"], "ok": null}
+{"fn": "parse_price_string", "args": ["trailing.a:b:c"], "ok": null}
+{"fn": "parse_price_string", "args": ["a.b.c日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["İstanbul😀"], "ok": null}
+{"fn": "parse_price_string", "args": [""], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["tab\tseparatedtab\tseparated"], "ok": null}
+{"fn": "parse_price_string", "args": ["a.b.cİstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} items{name} has {count} items"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} itemsabc"], "ok": null}
+{"fn": "parse_price_string", "args": ["straßea😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["trailing.😀"], "ok": null}
+{"fn": "parse_price_string", "args": ["aba..b"], "ok": null}
+{"fn": "parse_price_string", "args": [".leadingİstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["tab\tseparatedline1\nline2"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["a:b:c  padded  "], "ok": null}
+{"fn": "parse_price_string", "args": ["abHello World"], "ok": null}
+{"fn": "parse_price_string", "args": [":ünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["a😀b😀cHello World"], "ok": null}
+{"fn": "parse_price_string", "args": ["./x/**/*.jsona:b:c"], "ok": null}
+{"fn": "parse_price_string", "args": ["src/a/b.ts😀"], "ok": null}
+{"fn": "parse_price_string", "args": ["a{name} has {count} items"], "ok": null}
+{"fn": "parse_price_string", "args": ["src/a/b.tsns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["Hello Worldé"], "ok": null}
+{"fn": "parse_price_string", "args": ["İstanbul日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1key_name-1"], "ok": {"$float": "11.0"}}
+{"fn": "parse_price_string", "args": ["hello world.leading"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} itemsHello World"], "ok": null}
+{"fn": "parse_price_string", "args": ["ns:key.patha.b.c"], "ok": null}
+{"fn": "parse_price_string", "args": ["ab.leading"], "ok": null}
+{"fn": "parse_price_string", "args": ["abc😀"], "ok": null}
+{"fn": "parse_price_string", "args": ["Hello Worldns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1:"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["key_name-1İstanbul"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["helloa"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} itemsstraße"], "ok": null}
+{"fn": "parse_price_string", "args": ["éa:b:c"], "ok": null}
+{"fn": "parse_price_string", "args": ["hello{name} has {count} items"], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1Hello World"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["日本語のテキストΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["line1\nline2İstanbul"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["straße日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["ns:key.path日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["😀:"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣkey_name-1"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["tab\tseparated:"], "ok": null}
+{"fn": "parse_price_string", "args": ["a..bünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキストHELLO"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキスト日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["Hello Worldstraße"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} items./x/**/*.json"], "ok": null}
+{"fn": "parse_price_string", "args": ["./x/**/*.jsonns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["straßeemoji 👍🏽 mix"], "ok": null}
+{"fn": "parse_price_string", "args": ["hello world﻿bom"], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1tab\tseparated"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["  padded  İstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["﻿boma😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["😀ünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキストa"], "ok": null}
+{"fn": "parse_price_string", "args": ["straßeline1\nline2"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["a.b.ctab\tseparated"], "ok": null}
+{"fn": "parse_price_string", "args": ["Hello Worldtrailing."], "ok": null}
+{"fn": "parse_price_string", "args": ["a:b:ca😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["trailing.:"], "ok": null}
+{"fn": "parse_price_string", "args": ["éünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["Hello Worldkey_name-1"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["ab  padded  "], "ok": null}
+{"fn": "parse_price_string", "args": ["straßetrailing."], "ok": null}
+{"fn": "parse_price_string", "args": ["tab\tseparateda😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["a.b.c﻿bom"], "ok": null}
+{"fn": "parse_price_string", "args": [".leadingsrc/a/b.ts"], "ok": null}
+{"fn": "parse_price_string", "args": ["src/a/b.ts日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["a.leading"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣ﻿bom"], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded  ./x/**/*.json"], "ok": null}
+{"fn": "parse_price_string", "args": ["emoji 👍🏽 mixns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} itemsab"], "ok": null}
+{"fn": "parse_price_string", "args": ["ünïcödéab"], "ok": null}
+{"fn": "parse_price_string", "args": ["line1\nline2ünïcödé"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["a..bstraße"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣstraße"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキスト./x/**/*.json"], "ok": null}
+{"fn": "parse_price_string", "args": ["line1\nline2.leading"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["a😀b😀cünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["abca😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["helloünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["ésrc/a/b.ts"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣé"], "ok": null}
+{"fn": "parse_price_string", "args": ["helloHello World"], "ok": null}
+{"fn": "parse_price_string", "args": [".leadinga..b"], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1😀"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["ab日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["./x/**/*.jsoné"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキストtab\tseparated"], "ok": null}
+{"fn": "parse_price_string", "args": ["./x/**/*.jsonstraße"], "ok": null}
+{"fn": "parse_price_string", "args": ["./x/**/*.jsonhello world"], "ok": null}
+{"fn": "parse_price_string", "args": ["İstanbulünïcödé"], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded  日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["::"], "ok": null}
+{"fn": "parse_price_string", "args": ["İstanbul{name} has {count} items"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": null}
+{"fn": "parse_price_string", "args": ["emoji 👍🏽 mixhello"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣİstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["straße.leading"], "ok": null}
+{"fn": "parse_price_string", "args": ["absrc/a/b.ts"], "ok": null}
+{"fn": "parse_price_string", "args": ["ns:key.path{name} has {count} items"], "ok": null}
+{"fn": "parse_price_string", "args": ["İstanbula:b:c"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキストhello"], "ok": null}
+{"fn": "parse_price_string", "args": ["abcé"], "ok": null}
+{"fn": "parse_price_string", "args": ["trailing.hello"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} itemskey_name-1"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["a..bns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["helloİstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["aba😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["abΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["{name} has {count} itemsİstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["line1\nline2straße"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["日本語のテキストab"], "ok": null}
+{"fn": "parse_price_string", "args": [":line1\nline2"], "ok": {"$float": "12.0"}}
+{"fn": "parse_price_string", "args": ["abchello"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΊΣΥΦΟΣtab\tseparated"], "ok": null}
+{"fn": "parse_price_string", "args": ["éa..b"], "ok": null}
+{"fn": "parse_price_string", "args": [".leadingtrailing."], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded    padded  "], "ok": null}
+{"fn": "parse_price_string", "args": ["key_name-1trailing."], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["😀﻿bom"], "ok": null}
+{"fn": "parse_price_string", "args": ["HELLOkey_name-1"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["﻿bomns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["ab😀"], "ok": null}
+{"fn": "parse_price_string", "args": ["ns:key.pathns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["HELLOa😀b😀c"], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded  ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded  trailing."], "ok": null}
+{"fn": "parse_price_string", "args": ["akey_name-1"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["😀é"], "ok": null}
+{"fn": "parse_price_string", "args": [":trailing."], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded  src/a/b.ts"], "ok": null}
+{"fn": "parse_price_string", "args": ["İstanbulİstanbul"], "ok": null}
+{"fn": "parse_price_string", "args": ["hello日本語のテキスト"], "ok": null}
+{"fn": "parse_price_string", "args": ["😀src/a/b.ts"], "ok": null}
+{"fn": "parse_price_string", "args": ["a😀b😀c.leading"], "ok": null}
+{"fn": "parse_price_string", "args": ["éΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["aba"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語のテキストhello world"], "ok": null}
+{"fn": "parse_price_string", "args": ["  padded  {name} has {count} items"], "ok": null}
+{"fn": "parse_price_string", "args": ["ns:key.path  padded  "], "ok": null}
+{"fn": "parse_price_string", "args": ["😀abc"], "ok": null}
+{"fn": "parse_price_string", "args": ["ünïcödéa..b"], "ok": null}
+{"fn": "parse_price_string", "args": ["emoji 👍🏽 mixHello World"], "ok": null}
+{"fn": "parse_price_string", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "parse_price_string", "args": ["a😀b😀cns:key.path"], "ok": null}
+{"fn": "parse_price_string", "args": ["hello  padded  "], "ok": null}
+{"fn": "parse_price_string", "args": ["héllo wörld"], "ok": null}
+{"fn": "parse_price_string", "args": ["👍🏽 thumbs"], "ok": null}
+{"fn": "parse_price_string", "args": ["日本語"], "ok": null}
+{"fn": "parse_price_string", "args": ["ılık ırmak"], "ok": null}
+{"fn": "parse_price_string", "args": ["👨‍👩‍👧 family"], "ok": null}
+{"fn": "parse_price_string", "args": ["a b"], "ok": null}
+{"fn": "parse_price_string", "args": ["a😀b"], "ok": null}
+{"fn": "parse_price_string", "args": ["a²b x½ y①"], "ok": null}
+{"fn": "parse_price_string", "args": ["aⅠb Ⅻ"], "ok": null}
+{"fn": "parse_price_string", "args": ["a𐐀b 𝐀bc"], "ok": null}
+{"fn": "parse_price_string", "args": ["कि ٣٤"], "ok": {"$float": "34.0"}}
+{"fn": "parse_price_string", "args": ["Iı İi"], "ok": null}
+{"fn": "parse_price_string", "args": ["K K k"], "ok": null}
+{"fn": "parse_price_string", "args": ["ſ s S"], "ok": null}
+{"fn": "parse_price_string", "args": ["x‍y 👨‍👩‍👧"], "ok": null}
+{"fn": "parse_price_string", "args": ["a b c　d"], "ok": null}
+{"fn": "parse_price_string", "args": ["١٢٣ ٤٥"], "ok": {"$float": "12345.0"}}
+{"fn": "parse_price_string", "args": ["𝟘𝟙 ²³"], "ok": {"$float": "1.0"}}
+{"fn": "parse_price_string", "args": ["snake_case foo-bar o'neil"], "ok": null}
+{"fn": "parse_price_string", "args": ["ǅungla Ǆ"], "ok": null}
+{"fn": "parse_price_string", "args": ["one\r\ntwothreefour"], "ok": null}
+{"fn": "parse_price_string", "args": ["café café"], "ok": null}
+{"fn": "parse_price_string", "args": ["ΣΑΣ σας ς"], "ok": null}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": {"b": "c"}}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", null, true]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, "x"]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, {}, 0]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", 0, null]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x"]], "ok": ["x"]}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": {"b": "c"}}, 0]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {}, {"a": {"b": "c"}}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, {"a": {"b": "c"}}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [{}], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], {}, "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [0], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[true, "x", true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, null, {"a": {"b": "c"}}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [true], "error": "TypeError: 'bool' object is not subscriptable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, null, "x"]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [{"a": "b"}], "error": "KeyError: 0"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, {}, ["a", 1]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, {"a": "b"}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], "x", {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [{"a": {"b": "c"}}], "error": "KeyError: 0"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, "x", ["a", 1]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [null], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, null, {"a": "b"}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, ["a", 1], null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", [], null]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": {"b": "c"}}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[true, {"a": {"b": "c"}}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[0, {}, {"a": "b"}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, 0, {"a": {"b": "c"}}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, {"a": "b"}, {}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, ["a", 1]]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, true, 0]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, null, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, {"a": {"b": "c"}}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, ["a", 1]]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}, [], 0]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[[], "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, 0, {}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": {"b": "c"}}, {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[[], {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, {"a": "b"}, 0]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["a", 1]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, {"a": {"b": "c"}}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, true, ["a", 1]]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], null, true]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", 0, []]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": {"b": "c"}}, null]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[true, ["a", 1], {"a": "b"}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, "x", {"a": "b"}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, {"a": "b"}, "x"]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}, {}, 0]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[true, {"a": {"b": "c"}}, "x"]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": ["x"], "ok": ["x"]}
+{"fn": "get_common_elements_in_lists", "args": [[0, "x"]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], {"a": "b"}, {"a": "b"}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1]]], "error": "TypeError: '<' not supported between instances of 'str' and 'int'"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, null, {}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, {"a": "b"}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, true, true]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, "x", null]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[[], {"a": {"b": "c"}}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[0, true]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": {"b": "c"}}, ["a", 1]]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [["x", ["a", 1]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[0, 0, []]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, [], 0]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": {"b": "c"}}, {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[true, null]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, ["a", 1]]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[null, {"a": "b"}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], 0, {"a": {"b": "c"}}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, {}, ["a", 1]]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, {"a": "b"}, 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[[], {"a": {"b": "c"}}, []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}, "x", {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}, []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[true, true, "x"]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, ["a", 1], {}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, ["a", 1], {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], 0, []]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", ["a", 1], {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, true, 0]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, 0, {"a": {"b": "c"}}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[true, [], {"a": "b"}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], ["a", 1], "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", 0, {"a": {"b": "c"}}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, null, 0]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": "b"}, {"a": {"b": "c"}}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, ["a", 1]]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[[], ["a", 1]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, 0, ["a", 1]]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", null, 0]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, [], 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": {"b": "c"}}, "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, [], {"a": {"b": "c"}}]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, null, ["a", 1]]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, ["a", 1], {"a": {"b": "c"}}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", true, {}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, null]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, null, "x"]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": "b"}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], [], 0]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}, ["a", 1], []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], []]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, [], ["a", 1]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", {}, {"a": {"b": "c"}}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": {"b": "c"}}, {"a": {"b": "c"}}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, []]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, {"a": {"b": "c"}}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": "b"}, ["a", 1]]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [["x", ["a", 1], 0]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", "x"]], "ok": ["x"]}
+{"fn": "get_common_elements_in_lists", "args": [[[], 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, {"a": "b"}, {"a": "b"}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": {"b": "c"}}, 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, {}, {}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[[], {"a": "b"}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[0, 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], [], null]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, true]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], "x", ["a", 1]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, "x", 0]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[0, true, "x"]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, 0, 0]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, [], "x"]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], "x", "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}, null, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, {"a": "b"}, "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, {"a": "b"}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], ["a", 1]]], "error": "TypeError: '<' not supported between instances of 'str' and 'int'"}
+{"fn": "get_common_elements_in_lists", "args": [[true, true, null]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], "x", "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{}, ["a", 1]]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", "x", 0]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, ["a", 1], {"a": "b"}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], 0, {"a": {"b": "c"}}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": "b"}, null]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[0, {"a": "b"}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", true, 0]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], true, []]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, [], "x"]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, {}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], {"a": {"b": "c"}}, {"a": {"b": "c"}}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": "b"}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[[], 0, true]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], [], {"a": "b"}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[0, "x", ["a", 1]]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, "x", {"a": "b"}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], true, {"a": {"b": "c"}}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, true, {}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": {"b": "c"}}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[0, [], {}]], "error": "TypeError: 'int' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[true, true, true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[[], {"a": {"b": "c"}}, null]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": "b"}, {"a": "b"}]], "ok": ["a"]}
+{"fn": "get_common_elements_in_lists", "args": [[true, {"a": {"b": "c"}}, {"a": {"b": "c"}}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[["a", 1], {"a": "b"}, true]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": {"b": "c"}}, true]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[{"a": {"b": "c"}}, true, {"a": {"b": "c"}}]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[{}, true, 0]], "error": "TypeError: 'bool' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, ["a", 1], ["a", 1]]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [[null, 0]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", [], {}]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [[null, "x"]], "error": "TypeError: 'NoneType' object is not iterable"}
+{"fn": "get_common_elements_in_lists", "args": [["x", {"a": "b"}, "x"]], "ok": []}
+{"fn": "get_common_elements_in_lists", "args": [["x", true, {"a": {"b": "c"}}]], "error": "TypeError: 'bool' object is not iterable"}
