@@ -181,12 +181,17 @@ async def process_wishlist_duplicates(
     # Now process the selected games and fetch their details
     duplicate_games_for_display = []
     saved_game_appids = {item[0] for item in get_saved_games()}
+    # Details fetched here are handed to format_message so it does not request the same
+    # app ids a second time.
+    fetched_details: dict[str, dict] = {}
 
     for item in games_to_process:
         app_id = item[0]
 
+        # Same endpoint and locale as family_utils.format_message, so the details cached
+        # below can be reused there verbatim.
         game_url = (
-            f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=en"
+            f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=us&l=fr"
         )
         logger.info(f"Fetching app details for wishlist AppID: {app_id}")
 
@@ -210,6 +215,8 @@ async def process_wishlist_duplicates(
                     f"No game data found for wishlist AppID {app_id} in app details response."
                 )
                 continue
+
+            fetched_details[str(app_id)] = game_data
 
             # Use cached boolean fields for faster performance
             is_family_shared = game_data.get("is_family_shared", False)
@@ -235,7 +242,7 @@ async def process_wishlist_duplicates(
 
     if duplicate_games_for_display:
         wishlist_message_content = await format_message(
-            duplicate_games_for_display, short=False
+            duplicate_games_for_display, short=False, cached_data=fetched_details
         )
         full_message = message_prefix + wishlist_message_content
         return {
