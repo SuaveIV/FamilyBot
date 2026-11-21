@@ -133,7 +133,9 @@ def cache_itad_price(
 ):
     """Cache ITAD price data. If permanent=True, cache never expires (expires_at=NULL, permanent=1).
 
-    If conn is supplied, the caller owns the write lock. Otherwise, acquires it internally.
+    If conn is supplied, the caller owns the write lock *and* the transaction: this
+    function writes the row and returns without committing, so the caller can batch
+    many rows into a single commit. Otherwise it acquires the lock and commits.
     """
     if conn is not None:
         cursor = conn.cursor()
@@ -146,7 +148,6 @@ def cache_itad_price(
             lookup_method,
             steam_game_name,
         )
-        conn.commit()
     else:
         with get_write_connection() as write_conn:
             cursor = write_conn.cursor()

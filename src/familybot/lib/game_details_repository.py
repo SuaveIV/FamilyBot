@@ -144,14 +144,15 @@ def cache_game_details(
 ):
     """Cache game details permanently by default, or for specified hours if permanent=False.
 
-    If conn is supplied, the caller owns the write lock. Otherwise, acquires it internally.
+    If conn is supplied, the caller owns the write lock *and* the transaction: this
+    function writes the row and returns without committing, so the caller can batch
+    many rows into a single commit. Otherwise it acquires the lock and commits.
     """
     if conn is not None:
         cursor = conn.cursor()
         _do_cache_game_details(
             cursor, appid, game_data, permanent, cache_hours, price_source
         )
-        conn.commit()
     else:
         with get_write_connection() as write_conn:
             cursor = write_conn.cursor()
