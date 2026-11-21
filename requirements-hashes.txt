@@ -404,6 +404,7 @@ colorama==0.4.6 ; sys_platform == 'win32' \
     --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
     # via
     #   pylint
+    #   pytest
     #   rich-click
     #   tqdm
 coloredlogs==15.0.1 \
@@ -653,6 +654,10 @@ indexed-zstd==1.7.2 \
     --hash=sha256:ec17d1a9df0665e1d929741bcf04c437c8dded4a2ff81b26c4bef59a9cca04cd \
     --hash=sha256:fd381bfca02d28fa1b676679f061371398e1ee691a54f2736762c161a380f9cd
     # via fpgen
+iniconfig==2.3.1 \
+    --hash=sha256:67f4b9c50da0dedf52af349e7749a80a9057a5031199791b906c3bb3ae878960 \
+    --hash=sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7
+    # via pytest
 inquirer==3.4.1 \
     --hash=sha256:60d169fddffe297e2f8ad54ab33698249ccfc3fc377dafb1e5cf01a0efb9cbe5 \
     --hash=sha256:717bf146d547b595d2495e7285fd55545cff85e5ce01decc7487d2ec6a605412
@@ -1115,7 +1120,9 @@ orjson==3.13.0 \
 packaging==26.3 \
     --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
     --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
-    # via virtualenv
+    # via
+    #   pytest
+    #   virtualenv
 pathspec==1.1.1 \
     --hash=sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a \
     --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
@@ -1139,6 +1146,10 @@ playwright==1.62.0 \
     # via
     #   camoufox
     #   familybot
+pluggy==1.7.0 \
+    --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec \
+    --hash=sha256:d1eaa46ebb595891b860ab086b4d09c8588af65ebd4361b8e8f4bb8920b90ba8
+    # via pytest
 pre-commit==4.0.1 \
     --hash=sha256:80905ac375958c0444c65e9cebebd948b3cdb518f335a091a670a89d652139d2 \
     --hash=sha256:efde913840816312445dc98787724647c65473daefe420785f885e8ed9a06878
@@ -1294,7 +1305,9 @@ pyee==13.0.1 \
 pygments==2.21.0 \
     --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9 \
     --hash=sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c
-    # via rich
+    # via
+    #   pytest
+    #   rich
 pylint==4.1.4 \
     --hash=sha256:4c9176dc6c9f1b98b742195f01899b290369d5a27b4b41d1014c17f2f96b26f1 \
     --hash=sha256:b39fcc762ec4a7fe385d01b8e170fd996847297cdc0e3850bdda1435c74cfd95
@@ -1325,6 +1338,10 @@ pysocks==1.7.1 \
     --hash=sha256:2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5 \
     --hash=sha256:3f8804571ebe159c380ac6de37643bb4685970655d3bba243530d6558b799aa0
     # via camoufox
+pytest==9.2.0 \
+    --hash=sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588 \
+    --hash=sha256:97c4f3b1f3c7414aa36465e09b8220f1d03627993bd51b1282e193753c80557b
+    # via familybot
 python-dateutil==3.0.0 \
     --hash=sha256:3c79630202e4152c6add678446984236efe4f57e84d8e892aab0637bab82e9fd \
     --hash=sha256:7ebcb3c29a92f3ceafe79a7a48a5c45677e9e004bbeec5742ac0bbb00560b7a2

@@ -218,12 +218,12 @@ restore-db:
 # Run ruff linter
 lint:
     @echo "🔍 Running ruff linter..."
-    mise exec -- uv run ruff check src/ scripts/
+    mise exec -- uv run ruff check src/ scripts/ tests/
 
 # Run ruff linter with auto-fix
 lint-fix:
     @echo "🔧 Running ruff linter with auto-fix..."
-    mise exec -- uv run ruff check --fix src/ scripts/
+    mise exec -- uv run ruff check --fix src/ scripts/ tests/
 
 # Format code with ruff
 format:
@@ -320,6 +320,11 @@ lint-legacy:
     mise exec -- uv run familybot-lint
 
 # === DEVELOPMENT TASKS ===
+
+# Run the test suite
+test:
+    @echo "🧪 Running tests..."
+    mise exec -- uv run python -m pytest
 
 # Set up pre-commit hooks
 setup-precommit:

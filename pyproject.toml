@@ -53,6 +53,8 @@ familybot-test = "scripts.test_token_plugin:main"
 
 [project.optional-dependencies]
 dev = [
+  # Floor is 9.0.3: pytest 8.x tmpdir handling carries CVE-2025-71176.
+  "pytest>=9.0.3,<10",
   "ruff~=0.12.5",
   "mypy",
   "types-PyYAML",
@@ -75,6 +77,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "coloredlogs"
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
