@@ -20,7 +20,7 @@ anyio==4.15.1
     #   starlette
 ast-serialize==0.13.1
     # via mypy
-astroid==3.3.11
+astroid==4.3.4
     # via pylint
 attrs==26.1.0
     # via
@@ -179,7 +179,7 @@ pyee==13.0.1
     # via playwright
 pygments==2.21.0
     # via rich
-pylint==3.3.9
+pylint==4.1.4
     # via familybot
 pyobjc-core==12.2.2 ; sys_platform == 'darwin'
     # via pyobjc-framework-cocoa
